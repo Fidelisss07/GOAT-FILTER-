@@ -1,9 +1,10 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App } from "../app/App";
 import { createDemoApi, setNativeForTests } from "../lib/native";
 import { matrixFactor } from "../lib/vibrance";
+import { bindingFromEvent, prettyBinding } from "../components/KeyCapture";
 import { useStore } from "../state/store";
 
 const initial = useStore.getState();
@@ -132,6 +133,51 @@ describe("Monitor pelo cabo (DDC/CI)", () => {
     const saved = JSON.parse(localStorage.getItem("goat-filter:settings")!).profiles[0];
     expect(saved.tuning.monitorBrightness).toBe(100);
     expect(saved.tuning.monitorContrast).toBeNull();
+  });
+});
+
+describe("Desempenho", () => {
+  it("liga ajustes de mouse/energia e salva", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Desempenho" }));
+    expect(await screen.findByText("agora: ligada")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Desligar aceleração do mouse" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Plano de energia Alto desempenho" }));
+    const saved = JSON.parse(localStorage.getItem("goat-filter:settings")!);
+    expect(saved.perf).toEqual({ mouseAccelOff: true, keyboardFast: false, highPerformancePower: true });
+  });
+
+  it("troca a tecla de um atalho e avisa conflito", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Desempenho" }));
+    const toggle = screen.getByRole("button", { name: /Ligar \/ desligar o filtro/ });
+    await userEvent.click(toggle);
+    expect(toggle).toHaveTextContent("Aperte a combinação");
+    fireEvent.keyDown(toggle, { code: "KeyH", ctrlKey: false, altKey: false });
+    expect(screen.getByText("Use Ctrl ou Alt junto com a tecla.")).toBeInTheDocument();
+    fireEvent.keyDown(toggle, { code: "KeyP", ctrlKey: true, altKey: true });
+    expect(toggle).toHaveTextContent("Ctrl + Alt + P");
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("goat-filter:settings") ?? "{}").bindings?.toggle).toBe("Ctrl+Alt+KeyP"),
+    );
+    expect(screen.getAllByText(/Mesma tecla de/).length).toBe(2);
+    await userEvent.click(screen.getByRole("button", { name: "Voltar às teclas padrão" }));
+    expect(screen.queryByText(/Mesma tecla de/)).toBeNull();
+  });
+
+  it("liga o Modo de Jogo do Windows", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Desempenho" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ligar" }));
+    expect(await screen.findByText("Ligado.")).toBeInTheDocument();
+  });
+
+  it("formato das teclas", () => {
+    expect(bindingFromEvent({ code: "KeyG", ctrlKey: true, altKey: true, shiftKey: false })).toBe("Ctrl+Alt+KeyG");
+    expect(bindingFromEvent({ code: "F5", ctrlKey: false, altKey: true, shiftKey: true })).toBe("Alt+Shift+F5");
+    expect(bindingFromEvent({ code: "KeyW", ctrlKey: false, altKey: false, shiftKey: false })).toBeNull();
+    expect(bindingFromEvent({ code: "ControlLeft", ctrlKey: true, altKey: false, shiftKey: false })).toBeNull();
+    expect(prettyBinding("Ctrl+Alt+ArrowUp")).toBe("Ctrl + Alt + ↑");
   });
 });
 

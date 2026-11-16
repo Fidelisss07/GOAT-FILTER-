@@ -48,6 +48,18 @@ export const MonitorGearIcon = (p: P) => (
     <path d="M12 6.5v1M12 12.5v1M8.5 10h1M14.5 10h1M9.6 7.6l.7.7M13.7 11.7l.7.7M9.6 12.4l.7-.7M13.7 8.3l.7-.7" />
   </svg>
 );
+export const BoltIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12l1-8Z" /></svg>
+);
+export const KeyboardIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="2.5" y="6" width="19" height="12" rx="2" />
+    <path d="M6 9.5h.01M9 9.5h.01M12 9.5h.01M15 9.5h.01M18 9.5h.01M6 12.5h.01M9 12.5h.01M12 12.5h.01M15 12.5h.01M18 12.5h.01M8 15.5h8" />
+  </svg>
+);
+export const ListIcon = (p: P) => (
+  <svg {...base} {...p}><path d="m4 6.5 1.5 1.5L8 5.5M4 12.5 5.5 14 8 11.5M4 18.5 5.5 20 8 17.5M11 7h9M11 13h9M11 19h9" /></svg>
+);
 export const SparkIcon = (p: P) => (
   <svg {...base} {...p}><path d="M12 2.5 14 9l6.5 2-6.5 2-2 6.5-2-6.5-6.5-2L10 9z" /><path d="M19 3v3M17.5 4.5h3" /></svg>
 );

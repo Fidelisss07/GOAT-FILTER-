@@ -8,6 +8,7 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_TUNING,
   MonitorHwState,
+  PerfStatus,
   UpdateInfo,
   Tuning,
   GameStatus,
@@ -24,6 +25,8 @@ export interface NativeApi {
   applyTuned(monitorId: string, percent: number, tuning: Tuning): Promise<MonitorInfo>;
   /** Lê o próprio monitor por DDC/CI (lento). */
   monitorHw(monitorId: string): Promise<MonitorHwState>;
+  perfStatus(): Promise<PerfStatus>;
+  setGameMode(on: boolean): Promise<PerfStatus>;
   appVersion(): Promise<string>;
   checkUpdate(): Promise<UpdateInfo>;
   openRelease(url: string | null): Promise<void>;
@@ -71,6 +74,8 @@ async function tauriApi(): Promise<NativeApi> {
       invoke<MonitorInfo>("apply_tuned", { monitorId, percent, tuning }),
     monitorHw: (monitorId) => invoke<MonitorHwState>("monitor_hw", { monitorId }),
     findValorant: () => invoke<string | null>("find_valorant"),
+    perfStatus: () => invoke<PerfStatus>("perf_status"),
+    setGameMode: (on) => invoke<PerfStatus>("set_game_mode", { on }),
     appVersion: () => invoke<string>("app_version"),
     checkUpdate: () => invoke<UpdateInfo>("check_update"),
     openRelease: (url) => invoke<void>("open_release", { url }),
@@ -124,6 +129,8 @@ function loadDemoSettings(): Settings {
     const raw = localStorage.getItem(DEMO_KEY);
     if (raw) {
       const s = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } as Settings;
+      s.bindings = { ...DEFAULT_SETTINGS.bindings, ...s.bindings };
+      s.perf = { ...DEFAULT_SETTINGS.perf, ...s.perf };
       s.profiles = s.profiles.map((p) => ({ ...p, focusOnly: p.focusOnly ?? false, tuning: { ...DEFAULT_TUNING, ...p.tuning } }));
       return s;
     }
@@ -148,6 +155,15 @@ export function createDemoApi(): NativeApi {
       { method: "magnifier", available: true, reason: null },
       { method: "mhc2", available: true, reason: null },
     ],
+  };
+  const demoPerf: PerfStatus = {
+    supported: true,
+    mouseAccel: true,
+    keyboardDelay: 1,
+    keyboardSpeed: 31,
+    powerHigh: false,
+    gameMode: false,
+    applied: false,
   };
   const find = (id: string) => {
     const m = monitors.find((x) => x.id === id);
@@ -174,7 +190,12 @@ export function createDemoApi(): NativeApi {
     },
     monitorHw: async (id) => (find(id).primary ? { brightness: 70, contrast: 50, saturation: null } : { brightness: null, contrast: null, saturation: null }),
     findValorant: async () => null,
-    appVersion: async () => "1.0.0",
+    perfStatus: async () => ({ ...demoPerf }),
+    setGameMode: async (on) => {
+      demoPerf.gameMode = on;
+      return { ...demoPerf };
+    },
+    appVersion: async () => "1.1.0",
     checkUpdate: async () => ({ current: "1.0.0", latest: null, available: false, url: null, notes: null }),
     openRelease: async () => {},
     openLogs: async () => {},

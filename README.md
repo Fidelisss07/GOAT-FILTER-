@@ -42,12 +42,27 @@ Segurança das cores:
 
 Os perfis podem ser **exportados e importados** (arquivo `.goatfilter.json`) para compartilhar.
 
-### Atalhos (funcionam com o jogo aberto)
+### Aba Desempenho
 
-| Atalho | Ação |
+**Enquanto joga** (ligado quando o jogo abre, desfeito quando fecha ou no alt-tab):
+
+| Ajuste | O que faz |
 |---|---|
-| `Ctrl` + `Alt` + `G` | Liga/desliga o filtro (volta às cores originais e depois reaplica) |
+| Desligar aceleração do mouse | Desliga "Aprimorar precisão do ponteiro". Só na sessão: volta sozinho no próximo login se o app travar. |
+| Teclado: repetição mais rápida | Atraso mínimo e velocidade máxima ao segurar uma tecla. |
+| Plano de energia Alto desempenho | Evita a CPU reduzir a velocidade na partida. O plano original volta ao fechar o jogo (e após crash). |
+
+**Teclas:** os atalhos do Goat Filter são configuráveis (sempre com Ctrl ou Alt). Eles **não**
+mudam as teclas do jogo nem simulam teclas, o que mantém o app seguro contra ban.
+
+| Atalho padrão | Ação |
+|---|---|
+| `Ctrl` + `Alt` + `G` | Liga/desliga o filtro |
 | `Ctrl` + `Alt` + `↑` / `↓` | Sobe/desce 10% no monitor padrão |
+| `Ctrl` + `Alt` + `P` | Aplica o próximo perfil |
+
+**O que mais tira delay:** um checklist com o que realmente reduz atraso (NVIDIA Reflex,
+buffer de entrada bruta, polling do mouse, FPS, Modo de Jogo do Windows).
 
 ### Log para diagnóstico
 
@@ -145,6 +160,8 @@ crates/goat-core/    núcleo em Rust, sem interface
   backends/ddc.rs        controles do próprio monitor (DDC/CI)
   color.rs               matrizes de saturação e realce de cor, curvas
   games.rs               encontra onde o Valorant está instalado
+  perf.rs                aba Desempenho (mouse, teclado, energia) com restauração
+  backends/system.rs     ajustes do Windows usados pela aba Desempenho
   engine.rs              junta as camadas e restaura os originais
   session.rs             recuperação após crash
   watcher.rs             detecta o jogo abrindo/fechando

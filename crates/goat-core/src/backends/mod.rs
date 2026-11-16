@@ -17,6 +17,20 @@ pub mod magnifier;
 pub mod mhc2;
 #[cfg(windows)]
 pub mod nvapi;
+#[cfg(windows)]
+pub mod system;
+
+/// Ajustes de desempenho do sistema (só no Windows).
+pub fn system_tweaks() -> Option<Box<dyn crate::perf::SystemTweaks>> {
+    #[cfg(windows)]
+    {
+        Some(Box::new(system::WinSystem))
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
 
 use crate::color::{self, Mat3, Ramp};
 use crate::types::{DriverKind, SuperMethod};

@@ -9,6 +9,7 @@ pub mod engine;
 pub mod games;
 pub mod update;
 pub mod monitors;
+pub mod perf;
 pub mod session;
 pub mod settings;
 pub mod types;

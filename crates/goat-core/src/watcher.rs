@@ -2,6 +2,7 @@
 //! Só lê nomes de processos; nunca abre, injeta ou lê memória do jogo.
 
 use crate::engine::Engine;
+use crate::perf::PerfManager;
 use crate::types::{GameState, GameStatus, Profile, Settings, Tuning};
 use std::collections::HashSet;
 
@@ -63,7 +64,14 @@ impl GameWatcher {
         foreground: Option<&str>,
         settings: &Settings,
         engine: &mut Engine,
+        perf: &mut PerfManager,
     ) -> Option<GameStatus> {
+        // Junta erros das cores e dos ajustes de desempenho numa mensagem só.
+        let join = |a: Option<String>, b: Vec<String>| -> Option<String> {
+            let mut all: Vec<String> = a.into_iter().collect();
+            all.extend(b.into_iter().map(|e| format!("Desempenho: {e}")));
+            (!all.is_empty()).then(|| all.join(" · "))
+        };
         if let Some(a) = self.active.as_mut() {
             let profile = settings.profiles.iter().find(|p| p.id == a.profile_id);
             let names = profile.map(|p| process_names_for(&p.executable)).unwrap_or_default();
@@ -74,6 +82,7 @@ impl GameWatcher {
                 let focused = foreground.map(|f| names.iter().any(|n| n == f)).unwrap_or(true);
                 if p.focus_only && !focused && !a.suspended {
                     restore_before(engine, a);
+                    perf.restore();
                     a.suspended = true;
                     return Some(status(GameState::Paused, p, None));
                 }
@@ -81,7 +90,8 @@ impl GameWatcher {
                     a.suspended = false;
                     a.reapply_in = REAPPLY_AFTER;
                     let msg = engine.apply_with(&a.monitor_id, p.vibrance, p.tuning).err();
-                    return Some(status(GameState::Active, p, msg));
+                    let perf_errs = perf.apply(&settings.perf);
+                    return Some(status(GameState::Active, p, join(msg, perf_errs)));
                 }
                 if !a.suspended && a.reapply_in > 0 {
                     a.reapply_in -= 1;
@@ -99,6 +109,7 @@ impl GameWatcher {
             if restore && !a.suspended {
                 restore_before(engine, &a);
             }
+            perf.restore();
             return Some(GameStatus::idle());
         }
 
@@ -121,6 +132,8 @@ impl GameWatcher {
             return Some(status(GameState::Paused, profile, None));
         }
         let message = engine.apply_with(&monitor_id, profile.vibrance, profile.tuning).err();
+        let perf_errs = perf.apply(&settings.perf);
+        let message = join(message, perf_errs);
         self.active = Some(Active {
             profile_id: profile.id.clone(),
             monitor_id,
@@ -208,12 +221,13 @@ mod tests {
     fn valorant_shipping_process_triggers_profile() {
         let (drv, mut e, s) = setup();
         let mut w = GameWatcher::default();
-        assert!(w.tick(&procs(&["explorer.exe"]), None, &s, &mut e).is_none());
-        let st = w.tick(&procs(&["valorant-win64-shipping.exe"]), None, &s, &mut e).unwrap();
+        let mut pm = PerfManager::new(None, None);
+        assert!(w.tick(&procs(&["explorer.exe"]), None, &s, &mut e, &mut pm).is_none());
+        let st = w.tick(&procs(&["valorant-win64-shipping.exe"]), None, &s, &mut e, &mut pm).unwrap();
         assert_eq!(st.state, GameState::Active);
         assert_eq!(drv.level("D1"), Some(75));
         // fechou → restaura o que estava antes
-        let st = w.tick(&procs(&["explorer.exe"]), None, &s, &mut e).unwrap();
+        let st = w.tick(&procs(&["explorer.exe"]), None, &s, &mut e, &mut pm).unwrap();
         assert_eq!(st.state, GameState::Idle);
         assert_eq!(drv.level("D1"), Some(50));
     }
@@ -223,13 +237,15 @@ mod tests {
         let (drv, mut e, mut s) = setup();
         s.profiles[0].restore_on_close = false;
         let mut w = GameWatcher::default();
-        w.tick(&procs(&["valorant.exe"]), None, &s, &mut e);
-        w.tick(&procs(&[]), None, &s, &mut e);
+        let mut pm = PerfManager::new(None, None);
+        w.tick(&procs(&["valorant.exe"]), None, &s, &mut e, &mut pm);
+        w.tick(&procs(&[]), None, &s, &mut e, &mut pm);
         assert_eq!(drv.level("D1"), Some(75));
 
         s.profiles[0].apply_on_open = false;
         let mut w = GameWatcher::default();
-        assert!(w.tick(&procs(&["valorant.exe"]), None, &s, &mut e).is_none());
+        let mut pm = PerfManager::new(None, None);
+        assert!(w.tick(&procs(&["valorant.exe"]), None, &s, &mut e, &mut pm).is_none());
     }
 
     #[test]
@@ -245,21 +261,22 @@ mod tests {
         s.profiles[0].focus_only = true;
         let game = procs(&["valorant-win64-shipping.exe", "discord.exe"]);
         let mut w = GameWatcher::default();
-        let st = w.tick(&game, Some("valorant-win64-shipping.exe"), &s, &mut e).unwrap();
+        let mut pm = PerfManager::new(None, None);
+        let st = w.tick(&game, Some("valorant-win64-shipping.exe"), &s, &mut e, &mut pm).unwrap();
         assert_eq!(st.state, GameState::Active);
         assert_eq!(drv.level("D1"), Some(75));
         // alt-tab para o Discord
-        let st = w.tick(&game, Some("discord.exe"), &s, &mut e).unwrap();
+        let st = w.tick(&game, Some("discord.exe"), &s, &mut e, &mut pm).unwrap();
         assert_eq!(st.state, GameState::Paused);
         assert_eq!(drv.level("D1"), Some(50));
-        assert!(w.tick(&game, Some("discord.exe"), &s, &mut e).is_none());
+        assert!(w.tick(&game, Some("discord.exe"), &s, &mut e, &mut pm).is_none());
         // volta ao jogo
-        let st = w.tick(&game, Some("valorant-win64-shipping.exe"), &s, &mut e).unwrap();
+        let st = w.tick(&game, Some("valorant-win64-shipping.exe"), &s, &mut e, &mut pm).unwrap();
         assert_eq!(st.state, GameState::Active);
         assert_eq!(drv.level("D1"), Some(75));
         // fecha o jogo estando em segundo plano: já estava restaurado
-        w.tick(&game, Some("discord.exe"), &s, &mut e);
-        let st = w.tick(&procs(&["discord.exe"]), Some("discord.exe"), &s, &mut e).unwrap();
+        w.tick(&game, Some("discord.exe"), &s, &mut e, &mut pm);
+        let st = w.tick(&procs(&["discord.exe"]), Some("discord.exe"), &s, &mut e, &mut pm).unwrap();
         assert_eq!(st.state, GameState::Idle);
         assert_eq!(drv.level("D1"), Some(50));
     }
@@ -269,9 +286,32 @@ mod tests {
         let (_drv, mut e, mut s) = setup();
         s.profiles[0].tuning.gamma = 140;
         let mut w = GameWatcher::default();
-        w.tick(&procs(&["valorant.exe"]), None, &s, &mut e);
+        let mut pm = PerfManager::new(None, None);
+        w.tick(&procs(&["valorant.exe"]), None, &s, &mut e, &mut pm);
         assert_eq!(e.tuning("D1").unwrap().gamma, 140);
-        w.tick(&procs(&[]), None, &s, &mut e);
+        w.tick(&procs(&[]), None, &s, &mut e, &mut pm);
         assert_eq!(e.tuning("D1").unwrap(), Tuning::default());
+    }
+
+    #[test]
+    fn perf_tweaks_follow_the_game() {
+        use crate::perf::MockSystem;
+        let (_drv, mut e, mut s) = setup();
+        s.perf.mouse_accel_off = true;
+        s.profiles[0].focus_only = true;
+        let sys = MockSystem::default();
+        let mut pm = PerfManager::new(Some(Box::new(sys.clone())), None);
+        let mut w = GameWatcher::default();
+        let game = procs(&["valorant-win64-shipping.exe"]);
+        w.tick(&game, Some("valorant-win64-shipping.exe"), &s, &mut e, &mut pm);
+        assert_eq!(sys.state.lock().unwrap().0, [0, 0, 0]);
+        // alt-tab: volta ao normal
+        w.tick(&game, Some("chrome.exe"), &s, &mut e, &mut pm);
+        assert_eq!(sys.state.lock().unwrap().0, [6, 10, 1]);
+        // volta ao jogo e fecha
+        w.tick(&game, Some("valorant-win64-shipping.exe"), &s, &mut e, &mut pm);
+        assert_eq!(sys.state.lock().unwrap().0, [0, 0, 0]);
+        w.tick(&procs(&[]), None, &s, &mut e, &mut pm);
+        assert_eq!(sys.state.lock().unwrap().0, [6, 10, 1]);
     }
 }

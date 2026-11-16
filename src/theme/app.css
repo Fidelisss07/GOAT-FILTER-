@@ -474,6 +474,32 @@ button, input, select { font: inherit; color: inherit; }
 .about-ctl { gap: 12px; align-items: flex-start; }
 .about-links { display: flex; gap: 18px; flex-wrap: wrap; }
 .update-box { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1.5px solid var(--accent); border-radius: 6px; background: rgba(var(--accent-rgb), 0.12); }
+.note.tight { margin: -6px 0 6px; }
+.performance .set-card .ctl .row { min-height: 60px; font-size: 18px; }
+.bind-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 54px; border-top: 1px solid var(--border); }
+.bind-label { font-size: 16px; }
+.bind-ctl { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.bind-key {
+  min-width: 170px; height: 40px; padding: 0 14px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 600;
+  border: 1.5px solid #5a5a68; background: var(--bg); font-variant-numeric: tabular-nums;
+}
+.bind-key:hover:not(:disabled) { border-color: var(--accent); }
+.bind-key.listening { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.16); color: var(--accent); }
+.bind-key.conflict { border-color: var(--danger); }
+.bind-key:disabled { opacity: 0.45; cursor: not-allowed; }
+.checklist { gap: 4px; }
+.check-item { display: flex; align-items: flex-start; gap: 14px; padding: 12px 0; border-top: 1px solid var(--border); }
+.check-item:first-child { border-top: 0; }
+.check-item > div { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.check-item strong { font-size: 16px; }
+.check-item span { color: var(--text-2); font-size: 14px; line-height: 1.4; }
+.check-item em { color: var(--text); font-style: normal; font-weight: 600; }
+.check-item .mark {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid #6a6a78; flex: none; margin-top: 1px;
+  display: grid; place-items: center;
+}
+.check-item .mark.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.check-item .mark svg { width: 13px; height: 13px; }
 .methods { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
 .method {
   display: flex; align-items: flex-start; gap: 14px; text-align: left; padding: 12px 14px;
