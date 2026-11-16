@@ -12,16 +12,13 @@ const base = {
 };
 
 export const HomeIcon = (p: P) => (
-  <svg {...base} {...p}><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9v12h5v-6h4v6h5V9" /></svg>
+  <svg {...base} strokeWidth={1.65} {...p}><path d="M3 10.5 12 3l9 7.5M5.5 9v11h5v-6h3v6h5V9" /></svg>
 );
 export const LayersIcon = (p: P) => (
-  <svg {...base} {...p}><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12.5 9 5 9-5" /><path d="m3 16.5 9 5 9-5" /></svg>
+  <svg {...base} strokeWidth={1.65} {...p}><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" /></svg>
 );
 export const GearIcon = (p: P) => (
-  <svg {...base} {...p}>
-    <circle cx="12" cy="12" r="3.2" />
-    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 8.96 4.6 1.7 1.7 0 0 0 10 3.04V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.25.4-1.51 1Z" />
-  </svg>
+  <svg {...base} strokeWidth={1.65} {...p}><path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0-6v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2M12 5a7 7 0 1 1 0 14 7 7 0 0 1 0-14Z" /></svg>
 );
 export const ChevronDown = (p: P) => (
   <svg {...base} strokeWidth={2.2} {...p}><path d="m6 9 6 6 6-6" /></svg>
@@ -36,7 +33,7 @@ export const FolderIcon = (p: P) => (
   <svg {...base} {...p}><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" /></svg>
 );
 export const MonitorIcon = (p: P) => (
-  <svg {...base} {...p}><rect x="2.5" y="3.5" width="19" height="13" rx="1.5" /><path d="M12 16.5V20M8 20.5h8" /></svg>
+  <svg {...base} strokeWidth={1.65} {...p}><path d="M3 4h18v13H3zM12 17v4m-5 0h10" /></svg>
 );
 export const PowerIcon = (p: P) => (
   <svg {...base} {...p}><path d="M12 3v8" /><path d="M6.3 6.8a8 8 0 1 0 11.4 0" /></svg>
@@ -49,7 +46,7 @@ export const MonitorGearIcon = (p: P) => (
   </svg>
 );
 export const BoltIcon = (p: P) => (
-  <svg {...base} {...p}><path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12l1-8Z" /></svg>
+  <svg {...base} strokeWidth={1.65} {...p}><path d="m13 2-9 12h7l-1 8 10-12h-7l1-8Z" /></svg>
 );
 export const KeyboardIcon = (p: P) => (
   <svg {...base} {...p}>
@@ -62,6 +59,23 @@ export const ListIcon = (p: P) => (
 );
 export const SparkIcon = (p: P) => (
   <svg {...base} {...p}><path d="M12 2.5 14 9l6.5 2-6.5 2-2 6.5-2-6.5-6.5-2L10 9z" /><path d="M19 3v3M17.5 4.5h3" /></svg>
+);
+export const SlidersIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.65} {...p}>
+    <path d="M3 5h5m4 0h9M3 12h10m4 0h4M3 19h2m4 0h12M10 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm5 7a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm-8 7a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" />
+  </svg>
+);
+export const GamepadIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.65} {...p}>
+    <path d="M7.5 7h9a5 5 0 0 1 4.9 6l-.8 4a2.5 2.5 0 0 1-4.3 1.2L14.5 16h-5l-1.8 2.2a2.5 2.5 0 0 1-4.3-1.2l-.8-4A5 5 0 0 1 7.5 7Z" />
+    <path d="M8 10v3M6.5 11.5h3M15.5 11h.01M17.5 12.5h.01" />
+  </svg>
+);
+export const CheckSquareIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.65} {...p}><rect x="3.5" y="3.5" width="17" height="17" rx="3" /><path d="m8 12.5 3 3 5.5-6" /></svg>
+);
+export const DotsIcon = (p: P) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...p}><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
 );
 export const ArrowsLR = (p: P) => (
   <svg {...base} strokeWidth={2.4} {...p}><path d="m9 7-5 5 5 5M15 7l5 5-5 5" /></svg>

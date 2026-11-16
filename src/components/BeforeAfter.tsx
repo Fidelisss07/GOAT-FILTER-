@@ -56,7 +56,7 @@ export function BeforeAfter({ saturation }: { saturation: number }) {
       </div>
       <span className="tag before">Antes</span>
       <span className="tag after">Depois</span>
-      <span className="disclaimer">Prévia ilustrativa — não mede o ajuste real do monitor</span>
+      <span className="disclaimer" title="A cena é ilustrativa e não mede o ajuste real do monitor">Prévia ilustrativa</span>
     </div>
   );
 }

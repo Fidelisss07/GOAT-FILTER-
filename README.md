@@ -4,7 +4,7 @@ Utilitário para Windows que aumenta a intensidade das cores (**Digital Vibrance
 vai **além dos 100% do driver** com a camada **Super Vibrance**. Também ativa sozinho um
 perfil quando o **Valorant** abre e devolve as cores quando o jogo fecha.
 
-![Visão geral](design/telas/01-visao-geral-roxo.png)
+![Visão geral](design/v2/telas/01-visao-geral.png)
 
 ## Como funciona
 

@@ -1,0 +1,17 @@
+:root {
+  --gf-background: #1d1c1d;
+  --gf-sidebar: #222022;
+  --gf-panel: #252325;
+  --gf-border: #4b464b;
+  --gf-text: #f5f3f5;
+  --gf-text-muted: #c4bfc4;
+  --gf-accent: #ff48a8;
+  --gf-accent-text: #180c14;
+  --gf-focus: var(--gf-accent);
+  --gf-mascot-opacity: .23;
+  --gf-radius: 12px;
+  --gf-space: 24px;
+}
+[data-theme="roxo"] { --gf-accent: #ad78ff; }
+[data-theme="amarelo"] { --gf-accent: #ffd629; }
+[data-theme="rosa"] { --gf-accent: #ff48a8; }

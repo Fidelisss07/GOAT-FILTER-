@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import mascot from "../assets/cabrito-lateral.webp";
 import { ThemeSwatches } from "../components/Controls";
 import { BoltIcon, GearIcon, HomeIcon, LayersIcon, WinClose, WinMax, WinMin } from "../components/Icons";
 import { getNative, NativeApi } from "../lib/native";
@@ -43,7 +44,7 @@ export function App() {
   return (
     <div className="app" data-theme={theme}>
       <aside className="sidebar">
-        <div className="brand" aria-label="Goat Filter">
+        <div className="brand" aria-label="Goat Filter" data-tauri-drag-region>
           <img className="symbol" src={logo(theme, "simbolo")} alt="" />
           <img className="wordmark" src={logo(theme, "wordmark")} alt="goat filter" />
         </div>
@@ -62,34 +63,24 @@ export function App() {
           ))}
         </nav>
 
+        {/* Decorativo: não recebe cliques nem é lido por leitores de tela. */}
+        <div className="mascot" aria-hidden>
+          <img src={mascot} alt="" draggable={false} />
+        </div>
+
         <div className="theme-block">
-          <hr />
           <h2 id="tema-label">Tema</h2>
           <ThemeSwatches value={theme} onChange={s.setTheme} />
         </div>
-
-        <svg className="corner-bl" viewBox="0 0 220 34" preserveAspectRatio="none" aria-hidden>
-          <path d="M0 4 L26 30 H220" fill="none" stroke="currentColor" strokeWidth="3" />
-        </svg>
       </aside>
 
       <main className="main">
-        <div className="topframe" aria-hidden>
-          <svg className="seg-up" viewBox="0 0 28 56" preserveAspectRatio="none">
-            <path d="M0 56 L28 27.5" fill="none" stroke="currentColor" strokeWidth="3" />
-          </svg>
-          <div className="seg-top" />
-          <svg className="seg-down" viewBox="0 0 34 56" preserveAspectRatio="none">
-            <path d="M0 27.5 L34 49.5" fill="none" stroke="currentColor" strokeWidth="3" />
-          </svg>
-          <div className="seg-low" />
-        </div>
-        {s.capabilities.demo && s.loaded && (
-          <div className="demo-banner">Modo demonstração — nenhuma cor do sistema é alterada</div>
-        )}
-
         <header className="titlebar" data-tauri-drag-region>
-          <h1 data-tauri-drag-region>{HEADINGS[s.page]}</h1>
+          {s.capabilities.demo && s.loaded && (
+            <span className="demo-banner" data-tauri-drag-region>
+              Modo demonstração — nenhuma cor do sistema é alterada
+            </span>
+          )}
           <div className="winctl">
             <button type="button" aria-label="Minimizar" onClick={() => native?.window.minimize()}><WinMin /></button>
             <button type="button" aria-label="Maximizar" onClick={() => native?.window.toggleMaximize()}><WinMax /></button>
@@ -98,15 +89,14 @@ export function App() {
         </header>
 
         <div className="page">
+          <div className="page-head">
+            <h1>{HEADINGS[s.page]}</h1>
+          </div>
           {s.loaded && s.page === "overview" && <Overview />}
           {s.loaded && s.page === "profiles" && <Profiles />}
           {s.loaded && s.page === "performance" && <PerformancePage />}
           {s.loaded && s.page === "settings" && <SettingsPage />}
         </div>
-
-        <svg className="corner-br" viewBox="0 0 34 34" aria-hidden>
-          <path d="M34 4 L8 30 H0" fill="none" stroke="currentColor" strokeWidth="3" />
-        </svg>
       </main>
 
       {s.toast && (
