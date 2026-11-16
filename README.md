@@ -83,6 +83,11 @@ Baixe a versão mais recente na aba
 
 O app avisa quando sai uma versão nova (Configurações › Sobre).
 
+**Code signing:** Free code signing provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).
+
+**Privacidade:** o Goat Filter não coleta dados pessoais. Veja [PRIVACY.md](PRIVACY.md).
+
 O `.exe` ainda não tem assinatura digital, então o Windows SmartScreen pode avisar na primeira
 vez. Clique em **Mais informações** → **Executar assim mesmo**. Os caminhos gratuitos para
 tirar esse aviso estão em [docs/ASSINATURA.md](docs/ASSINATURA.md).
