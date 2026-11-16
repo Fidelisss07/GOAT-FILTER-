@@ -30,6 +30,17 @@ Segurança das cores:
 | **Matriz do Windows** (padrão) | Qualquer GPU, Windows 10 e 11 | Aplicada pela composição do Windows. No Valorant, use **"Janela em tela cheia"**. Some sozinha se o app fechar. |
 | **Perfil de cor MHC2** (experimental) | Windows 11 | O app gera um perfil de cor com a matriz, e a própria GPU aplica: sem input lag e também em tela cheia exclusiva. É por monitor. Ao desligar, o perfil de cor anterior volta; se o app travar, ele é desfeito na próxima abertura. |
 
+### Ajustes finos por perfil (Perfis → Ajustes finos)
+
+| Ajuste | O que faz |
+|---|---|
+| **Realçar cor do inimigo** | Escolha vermelho, amarelo ou roxo, a mesma cor do contorno configurada no Valorant. Essa cor ganha saturação extra e as outras quase não mudam; o brilho é mantido. Usa a camada Super (qualquer método). |
+| **Brilho / Contraste / Gama** | Curva de gama do Windows, por monitor. Gama acima de 1,00 clareia as sombras. |
+| **Só com o jogo em foco** | No alt-tab, o Discord e o navegador voltam às cores normais; ao voltar para o jogo, o perfil é reaplicado. Não abre o processo do jogo: só compara a janela da frente com a lista de processos. |
+| **Testar agora** | Aplica o perfil no monitor padrão sem precisar abrir o jogo. **Restaurar padrão** volta tudo. |
+
+Os perfis podem ser **exportados e importados** (arquivo `.goatfilter.json`) para compartilhar.
+
 ### Atalhos (funcionam com o jogo aberto)
 
 | Atalho | Ação |
@@ -53,14 +64,18 @@ Segurança das cores:
 5. Abra o Valorant em **tela cheia** e em **janela em tela cheia** com cada método e veja
    onde a faixa acima de 100% aparece.
 6. No jogo, teste `Ctrl+Alt+G` e `Ctrl+Alt+↑/↓`.
-7. Saia pela bandeja (**Sair**) e confira se as cores originais voltaram.
+7. Em **Perfis → Ajustes finos**, escolha a cor do realce e suba a gama. Clique em
+   **Testar agora** e depois em **Restaurar padrão** na Visão geral.
+8. Ligue **Só com o jogo em foco**, abra o Valorant e dê alt-tab: o Windows deve voltar ao
+   normal e o perfil deve voltar quando você retornar ao jogo.
+9. Saia pela bandeja (**Sair**) e confira se as cores originais voltaram.
 
 ## Baixar o `.exe`
 
 A cada push, o GitHub Actions compila no Windows e publica o artefato
 **goat-filter-windows** (aba *Actions* → execução mais recente → *Artifacts*). Ele contém:
 
-- `Goat Filter_0.2.0_x64-setup.exe`: o instalador
+- `Goat Filter_0.3.0_x64-setup.exe`: o instalador
 - `goat-filter.exe`: a versão portátil
 
 O `.exe` ainda não tem assinatura digital, então o Windows SmartScreen pode avisar.
@@ -100,6 +115,8 @@ crates/goat-core/    núcleo em Rust, sem interface
   backends/magnifier.rs  camada Super: matriz de cor do Windows
   backends/mhc2.rs       camada Super: perfil de cor MHC2 (Windows 11)
   backends/icc.rs        gerador do perfil ICC com a tag MHC2
+  backends/gamma.rs      brilho/contraste/gama (gamma ramp)
+  color.rs               matrizes de saturação e realce de cor, curvas
   engine.rs              junta as camadas e restaura os originais
   session.rs             recuperação após crash
   watcher.rs             detecta o jogo abrindo/fechando

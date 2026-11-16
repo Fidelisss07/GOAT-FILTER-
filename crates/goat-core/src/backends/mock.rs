@@ -1,6 +1,7 @@
 //! Backends falsos para testes e para rodar fora do Windows.
 
-use super::{combined_factor, BackendError, DriverVibrance, Result, SuperLayer};
+use super::{combined, BackendError, CurveControl, DriverVibrance, Result, SuperLayer};
+use crate::color::{self, Mat3, Ramp};
 use std::collections::BTreeMap;
 use crate::types::{DriverKind, SuperMethod};
 use std::collections::HashMap;
@@ -57,7 +58,13 @@ impl DriverVibrance for MockDriver {
 #[derive(Clone)]
 pub struct MockSuper {
     pub method: SuperMethod,
-    pub factors: Arc<Mutex<BTreeMap<String, f32>>>,
+    pub factors: Arc<Mutex<BTreeMap<String, Mat3>>>,
+}
+
+/// Recupera o fator de saturação de uma matriz de saturação pura.
+fn factor_of(m: &Mat3) -> f32 {
+    let w = color::LUMA[0];
+    (m[0][0] - w) / (1.0 - w)
 }
 
 impl Default for MockSuper {
@@ -72,11 +79,14 @@ impl MockSuper {
     }
     /// Fator global efetivo.
     pub fn get(&self) -> f32 {
-        combined_factor(&self.factors.lock().unwrap())
+        factor_of(&combined(&self.factors.lock().unwrap()))
     }
     /// Fator de um monitor (camadas por monitor).
     pub fn of(&self, display: &str) -> f32 {
-        self.factors.lock().unwrap().get(display).copied().unwrap_or(1.0)
+        self.factors.lock().unwrap().get(display).map(factor_of).unwrap_or(1.0)
+    }
+    pub fn matrix(&self, display: &str) -> Option<Mat3> {
+        self.factors.lock().unwrap().get(display).copied()
     }
 }
 
@@ -84,8 +94,30 @@ impl SuperLayer for MockSuper {
     fn method(&self) -> SuperMethod {
         self.method
     }
-    fn apply(&mut self, factors: &BTreeMap<String, f32>) -> Result<()> {
-        *self.factors.lock().unwrap() = factors.clone();
+    fn apply(&mut self, matrices: &BTreeMap<String, Mat3>) -> Result<()> {
+        *self.factors.lock().unwrap() = matrices.clone();
+        Ok(())
+    }
+}
+
+/// Gamma ramp falsa.
+#[derive(Clone, Default)]
+pub struct MockCurves {
+    pub ramps: Arc<Mutex<HashMap<String, Ramp>>>,
+}
+
+impl MockCurves {
+    pub fn ramp(&self, display: &str) -> Ramp {
+        self.ramps.lock().unwrap().get(display).copied().unwrap_or_else(color::identity_ramp)
+    }
+}
+
+impl CurveControl for MockCurves {
+    fn get(&mut self, display: &str) -> Result<Ramp> {
+        Ok(self.ramp(display))
+    }
+    fn set(&mut self, display: &str, ramp: &Ramp) -> Result<()> {
+        self.ramps.lock().unwrap().insert(display.into(), *ramp);
         Ok(())
     }
 }

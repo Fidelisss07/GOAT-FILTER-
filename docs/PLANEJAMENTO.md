@@ -26,7 +26,11 @@ Redragon de 144 Hz.
 | Atalhos globais (Ctrl+Alt+G, Ctrl+Alt+↑/↓) | ✅ feito (v0.2) |
 | Log em arquivo para diagnóstico | ✅ feito (v0.2) |
 | Intel via IGCL (vibrance no driver) | ⏳ fase 2 (hoje o Intel usa a camada Super) |
-| DDC/CI do monitor, saturação por cor, assinatura do `.exe` | ⏳ fases 2 e 3 |
+| Realce da cor do inimigo (vermelho/amarelo/roxo) | ✅ feito (v0.3) |
+| Brilho, contraste e gama por perfil | ✅ feito (v0.3) |
+| Só com o jogo em foco (alt-tab volta ao normal) | ✅ feito (v0.3) |
+| Exportar/importar perfis, botão "Testar agora" | ✅ feito (v0.3) |
+| DDC/CI do monitor, Intel IGCL, atualização automática, assinatura do `.exe` | ⏳ próximos |
 
 A Magnification API foi implementada primeiro porque funciona em **qualquer GPU e no
 Windows 10 e 11**. O MHC2 só existe no Windows 11 e o formato precisa ser validado em

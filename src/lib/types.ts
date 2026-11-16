@@ -7,6 +7,33 @@ export const THEMES: { id: ThemeId; label: string; color: string }[] = [
   { id: "amarelo", label: "Amarelo", color: "#FFD629" },
 ];
 
+export type EmphasisColor = "none" | "red" | "yellow" | "purple";
+
+export const EMPHASIS: { id: EmphasisColor; label: string; color: string | null }[] = [
+  { id: "none", label: "Nenhum", color: null },
+  { id: "red", label: "Vermelho", color: "#EB3B3B" },
+  { id: "yellow", label: "Amarelo", color: "#EDED0D" },
+  { id: "purple", label: "Roxo", color: "#B838E6" },
+];
+
+/** Ajustes finos além do vibrance. */
+export interface Tuning {
+  emphasis: EmphasisColor;
+  /** 0–100: quanto a mais a cor escolhida ganha (100 = 2×). */
+  emphasisStrength: number;
+  /** −50..50 */
+  brightness: number;
+  /** 50..150 (%) */
+  contrast: number;
+  /** 50..200 (= 0,5..2,0). Acima de 100 clareia as sombras. */
+  gamma: number;
+}
+
+export const DEFAULT_TUNING: Tuning = { emphasis: "none", emphasisStrength: 50, brightness: 0, contrast: 100, gamma: 100 };
+
+export const hasCurve = (t: Tuning) => t.brightness !== 0 || t.contrast !== 100 || t.gamma !== 100;
+export const isNeutral = (t: Tuning) => t.emphasis === "none" && !hasCurve(t);
+
 export interface Profile {
   id: string;
   name: string;
@@ -16,6 +43,9 @@ export interface Profile {
   vibrance: number;
   applyOnOpen: boolean;
   restoreOnClose: boolean;
+  tuning: Tuning;
+  /** Só aplica com o jogo em primeiro plano (alt-tab volta ao normal). */
+  focusOnly: boolean;
 }
 
 export interface Settings {
@@ -46,6 +76,7 @@ export interface MonitorInfo {
   driverDefault: number | null;
   /** Valor que estava antes de o Goat Filter mexer (0–200). */
   original: number | null;
+  tuning: Tuning;
 }
 
 export type SuperMethod = "magnifier" | "mhc2" | "none";
@@ -64,6 +95,8 @@ export interface Capabilities {
   /** Motivo quando Super Vibrance não está disponível. */
   superReason: string | null;
   methods: MethodInfo[];
+  /** Brilho/contraste/gama disponíveis. */
+  curves: boolean;
 }
 
 export const METHOD_LABEL: Record<Exclude<SuperMethod, "none">, { title: string; detail: string }> = {
@@ -82,7 +115,7 @@ export interface Notice {
   text: string;
 }
 
-export type GameState = "idle" | "active" | "unavailable";
+export type GameState = "idle" | "active" | "paused" | "unavailable";
 
 export interface GameStatus {
   state: GameState;
@@ -115,6 +148,8 @@ export const DEFAULT_SETTINGS: Settings = {
       vibrance: 75,
       applyOnOpen: true,
       restoreOnClose: true,
+      tuning: DEFAULT_TUNING,
+      focusOnly: false,
     },
   ],
 };

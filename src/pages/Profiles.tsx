@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { Toggle } from "../components/Controls";
 import { CheckIcon, FolderIcon, GameIcon, PlusIcon, TrashIcon, ValorantMark } from "../components/Icons";
+import { TuningEditor } from "../components/TuningEditor";
 import { VibranceSlider } from "../components/VibranceSlider";
 import { getNative } from "../lib/native";
 import { VALORANT_ID } from "../lib/types";
@@ -40,6 +41,10 @@ export function Profiles() {
             <span className="ico plus"><PlusIcon /></span>
             <span className="name">Novo perfil</span>
           </button>
+        </div>
+        <div className="share">
+          <button type="button" className="btn small" onClick={s.exportProfiles}>Exportar perfis</button>
+          <button type="button" className="btn small" onClick={s.importProfiles}>Importar perfis</button>
         </div>
       </section>
 
@@ -98,6 +103,15 @@ export function Profiles() {
               label="Digital Vibrance do perfil"
             />
 
+            <details className="advanced" open={d.tuning.emphasis !== "none" || d.tuning.gamma !== 100 || d.tuning.brightness !== 0 || d.tuning.contrast !== 100}>
+              <summary>Ajustes finos</summary>
+              <TuningEditor
+                tuning={d.tuning}
+                onChange={(tuning) => s.updateDraft({ tuning })}
+                capabilities={s.capabilities}
+              />
+            </details>
+
             <div className="toggles">
               <div className="row">
                 <span>Aplicar ao abrir</span>
@@ -107,9 +121,19 @@ export function Profiles() {
                 <span>Restaurar ao fechar</span>
                 <Toggle label="Restaurar ao fechar" checked={d.restoreOnClose} onChange={(v) => s.updateDraft({ restoreOnClose: v })} />
               </div>
+              <div className="row">
+                <span>
+                  Só com o jogo em foco
+                  <span className="pill">alt-tab volta ao normal</span>
+                </span>
+                <Toggle label="Só com o jogo em foco" checked={d.focusOnly} onChange={(v) => s.updateDraft({ focusOnly: v })} />
+              </div>
             </div>
 
-            <button type="submit" className="btn primary save">Salvar perfil</button>
+            <div className="save-row">
+              <button type="button" className="btn test" onClick={s.testDraft}>Testar agora</button>
+              <button type="submit" className="btn primary save">Salvar perfil</button>
+            </div>
             {!isNew && d.id !== VALORANT_ID && (
               <div className="foot">
                 <button type="button" className="btn link" onClick={() => s.deleteProfile(d.id)}>

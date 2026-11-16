@@ -95,6 +95,28 @@ describe("Perfis", () => {
   });
 });
 
+describe("Ajustes finos", () => {
+  it("realce, gama e foco são salvos no perfil e testados no monitor", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Perfis" }));
+    await userEvent.click(screen.getByText("Ajustes finos"));
+    await userEvent.click(screen.getByRole("radio", { name: /Vermelho/ }));
+    const gamma = screen.getByRole("slider", { name: "Gama" });
+    fireEvent.keyDown(gamma, { key: "PageUp" });
+    fireEvent.keyDown(gamma, { key: "PageUp" });
+    await userEvent.click(screen.getByRole("switch", { name: "Só com o jogo em foco" }));
+    await userEvent.click(screen.getByRole("button", { name: "Testar agora" }));
+    const mon = useStore.getState().monitors.find((m) => m.primary)!;
+    expect(mon.tuning.gamma).toBe(120);
+    expect(mon.tuning.emphasis).toBe("red");
+
+    await userEvent.click(screen.getByRole("button", { name: "Salvar perfil" }));
+    const saved = JSON.parse(localStorage.getItem("goat-filter:settings")!).profiles[0];
+    expect(saved.tuning).toMatchObject({ emphasis: "red", gamma: 120 });
+    expect(saved.focusOnly).toBe(true);
+  });
+});
+
 describe("Configurações", () => {
   it("troca o método do Super Vibrance e persiste", async () => {
     await renderApp();

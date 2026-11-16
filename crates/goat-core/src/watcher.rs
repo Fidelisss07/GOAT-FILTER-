@@ -2,18 +2,33 @@
 //! Só lê nomes de processos; nunca abre, injeta ou lê memória do jogo.
 
 use crate::engine::Engine;
-use crate::types::{GameState, GameStatus, Settings};
+use crate::types::{GameState, GameStatus, Profile, Settings, Tuning};
 use std::collections::HashSet;
 
-/// Ticks (de ~1 s) até reaplicar depois que o jogo abre: a tela cheia
-/// às vezes reseta as cores durante a inicialização.
-const REAPPLY_AFTER: u8 = 4;
+/// Ticks (de ~0,5 s) até reaplicar depois que o jogo abre/volta ao foco: a
+/// tela cheia às vezes reseta as cores durante a inicialização.
+const REAPPLY_AFTER: u8 = 8;
 
 struct Active {
     profile_id: String,
     monitor_id: String,
-    before: Option<u8>,
+    before: (Option<u8>, Tuning),
     reapply_in: u8,
+    /// Perfil desfeito porque o jogo saiu do foco.
+    suspended: bool,
+}
+
+fn status(state: GameState, profile: &Profile, message: Option<String>) -> GameStatus {
+    GameStatus { state, profile_id: Some(profile.id.clone()), message }
+}
+
+fn restore_before(engine: &mut Engine, a: &Active) {
+    let target = a.before.0.or_else(|| engine.monitors().into_iter().find(|m| m.id == a.monitor_id).and_then(|m| m.original));
+    if let Some(v) = target {
+        if let Err(e) = engine.apply_with(&a.monitor_id, v, a.before.1) {
+            log::warn!("Restaurar cores do jogo falhou: {e}");
+        }
+    }
 }
 
 #[derive(Default)]
@@ -40,21 +55,39 @@ impl GameWatcher {
         self.active.as_ref().map(|a| a.profile_id.as_str())
     }
 
-    /// Chamado a cada ~1 s. Devolve `Some` quando o estado muda.
-    pub fn tick(&mut self, running: &HashSet<String>, settings: &Settings, engine: &mut Engine) -> Option<GameStatus> {
+    /// Chamado a cada ~0,5 s. `foreground` é o executável da janela em primeiro
+    /// plano (minúsculo), quando conhecido. Devolve `Some` quando o estado muda.
+    pub fn tick(
+        &mut self,
+        running: &HashSet<String>,
+        foreground: Option<&str>,
+        settings: &Settings,
+        engine: &mut Engine,
+    ) -> Option<GameStatus> {
         if let Some(a) = self.active.as_mut() {
             let profile = settings.profiles.iter().find(|p| p.id == a.profile_id);
-            let still_running = profile
-                .map(|p| process_names_for(&p.executable).iter().any(|n| running.contains(n)))
-                .unwrap_or(false);
+            let names = profile.map(|p| process_names_for(&p.executable)).unwrap_or_default();
+            let still_running = names.iter().any(|n| running.contains(n));
             if still_running {
-                if a.reapply_in > 0 {
+                let p = profile.unwrap();
+                // Desconhecido = considera em foco (nunca desliga à toa).
+                let focused = foreground.map(|f| names.iter().any(|n| n == f)).unwrap_or(true);
+                if p.focus_only && !focused && !a.suspended {
+                    restore_before(engine, a);
+                    a.suspended = true;
+                    return Some(status(GameState::Paused, p, None));
+                }
+                if a.suspended && (focused || !p.focus_only) {
+                    a.suspended = false;
+                    a.reapply_in = REAPPLY_AFTER;
+                    let msg = engine.apply_with(&a.monitor_id, p.vibrance, p.tuning).err();
+                    return Some(status(GameState::Active, p, msg));
+                }
+                if !a.suspended && a.reapply_in > 0 {
                     a.reapply_in -= 1;
                     if a.reapply_in == 0 {
-                        if let Some(p) = profile {
-                            if let Err(e) = engine.apply(&a.monitor_id, p.vibrance) {
-                                log::warn!("Reaplicar perfil falhou: {e}");
-                            }
+                        if let Err(e) = engine.apply_with(&a.monitor_id, p.vibrance, p.tuning) {
+                            log::warn!("Reaplicar perfil falhou: {e}");
                         }
                     }
                 }
@@ -63,13 +96,8 @@ impl GameWatcher {
             // Jogo fechou.
             let a = self.active.take().unwrap();
             let restore = profile.map(|p| p.restore_on_close).unwrap_or(true);
-            if restore {
-                let target = a.before.or_else(|| engine.monitors().into_iter().find(|m| m.id == a.monitor_id).and_then(|m| m.original));
-                if let Some(v) = target {
-                    if let Err(e) = engine.apply(&a.monitor_id, v) {
-                        log::warn!("Restaurar ao fechar falhou: {e}");
-                    }
-                }
+            if restore && !a.suspended {
+                restore_before(engine, &a);
             }
             return Some(GameStatus::idle());
         }
@@ -85,33 +113,54 @@ impl GameWatcher {
             .clone()
             .filter(|id| engine.has_monitor(id))
             .or_else(|| engine.primary_id())?;
-        let before = engine.current(&monitor_id);
-        let message = engine.apply(&monitor_id, profile.vibrance).err();
+        let before = (engine.current(&monitor_id), engine.tuning(&monitor_id).unwrap_or_default());
+        let names = process_names_for(&profile.executable);
+        let focused = foreground.map(|f| names.iter().any(|n| n == f)).unwrap_or(true);
+        if profile.focus_only && !focused {
+            self.active = Some(Active { profile_id: profile.id.clone(), monitor_id, before, reapply_in: 0, suspended: true });
+            return Some(status(GameState::Paused, profile, None));
+        }
+        let message = engine.apply_with(&monitor_id, profile.vibrance, profile.tuning).err();
         self.active = Some(Active {
             profile_id: profile.id.clone(),
             monitor_id,
             before,
             reapply_in: REAPPLY_AFTER,
+            suspended: false,
         });
-        Some(GameStatus { state: GameState::Active, profile_id: Some(profile.id.clone()), message })
+        Some(status(GameState::Active, profile, message))
     }
 }
 
-/// Nomes (minúsculos) dos processos em execução.
+/// Processos em execução (nomes minúsculos) e o executável da janela em
+/// primeiro plano. Não abre handle de nenhum processo: só compara o PID da
+/// janela da frente com a lista do sistema.
 #[cfg(windows)]
-pub fn running_processes() -> HashSet<String> {
+pub fn process_snapshot() -> (HashSet<String>, Option<String>) {
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
     };
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+
     let mut set = HashSet::new();
+    let mut fg_name = None;
     unsafe {
-        let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return set };
+        let mut fg_pid = 0u32;
+        let hwnd = GetForegroundWindow();
+        if !hwnd.0.is_null() {
+            GetWindowThreadProcessId(hwnd, Some(&mut fg_pid));
+        }
+        let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return (set, None) };
         let mut e = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
         if Process32FirstW(snap, &mut e).is_ok() {
             loop {
                 let end = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
-                set.insert(String::from_utf16_lossy(&e.szExeFile[..end]).to_lowercase());
+                let name = String::from_utf16_lossy(&e.szExeFile[..end]).to_lowercase();
+                if fg_pid != 0 && e.th32ProcessID == fg_pid {
+                    fg_name = Some(name.clone());
+                }
+                set.insert(name);
                 if Process32NextW(snap, &mut e).is_err() {
                     break;
                 }
@@ -119,12 +168,12 @@ pub fn running_processes() -> HashSet<String> {
         }
         let _ = CloseHandle(snap);
     }
-    set
+    (set, fg_name)
 }
 
 #[cfg(not(windows))]
-pub fn running_processes() -> HashSet<String> {
-    HashSet::new()
+pub fn process_snapshot() -> (HashSet<String>, Option<String>) {
+    (HashSet::new(), None)
 }
 
 #[cfg(test)]
@@ -141,6 +190,7 @@ mod tests {
                 drivers: vec![Box::new(drv.clone())],
                 super_layers: vec![Box::new(MockSuper::default()) as Box<dyn SuperLayer>],
                 super_reasons: vec![],
+                curves: None,
             },
             vec![Display { id: "D1".into(), name: "M".into(), primary: true }],
             None,
@@ -157,12 +207,12 @@ mod tests {
     fn valorant_shipping_process_triggers_profile() {
         let (drv, mut e, s) = setup();
         let mut w = GameWatcher::default();
-        assert!(w.tick(&procs(&["explorer.exe"]), &s, &mut e).is_none());
-        let st = w.tick(&procs(&["valorant-win64-shipping.exe"]), &s, &mut e).unwrap();
+        assert!(w.tick(&procs(&["explorer.exe"]), None, &s, &mut e).is_none());
+        let st = w.tick(&procs(&["valorant-win64-shipping.exe"]), None, &s, &mut e).unwrap();
         assert_eq!(st.state, GameState::Active);
         assert_eq!(drv.level("D1"), Some(75));
         // fechou → restaura o que estava antes
-        let st = w.tick(&procs(&["explorer.exe"]), &s, &mut e).unwrap();
+        let st = w.tick(&procs(&["explorer.exe"]), None, &s, &mut e).unwrap();
         assert_eq!(st.state, GameState::Idle);
         assert_eq!(drv.level("D1"), Some(50));
     }
@@ -172,13 +222,13 @@ mod tests {
         let (drv, mut e, mut s) = setup();
         s.profiles[0].restore_on_close = false;
         let mut w = GameWatcher::default();
-        w.tick(&procs(&["valorant.exe"]), &s, &mut e);
-        w.tick(&procs(&[]), &s, &mut e);
+        w.tick(&procs(&["valorant.exe"]), None, &s, &mut e);
+        w.tick(&procs(&[]), None, &s, &mut e);
         assert_eq!(drv.level("D1"), Some(75));
 
         s.profiles[0].apply_on_open = false;
         let mut w = GameWatcher::default();
-        assert!(w.tick(&procs(&["valorant.exe"]), &s, &mut e).is_none());
+        assert!(w.tick(&procs(&["valorant.exe"]), None, &s, &mut e).is_none());
     }
 
     #[test]
@@ -186,5 +236,41 @@ mod tests {
         assert_eq!(process_names_for(r"C:\Riot Games\VALORANT\live\VALORANT.exe").len(), 2);
         assert_eq!(process_names_for(r"D:\Games\cs2.exe"), vec!["cs2.exe".to_string()]);
         assert!(process_names_for("").is_empty());
+    }
+
+    #[test]
+    fn focus_only_pauses_on_alt_tab() {
+        let (drv, mut e, mut s) = setup();
+        s.profiles[0].focus_only = true;
+        let game = procs(&["valorant-win64-shipping.exe", "discord.exe"]);
+        let mut w = GameWatcher::default();
+        let st = w.tick(&game, Some("valorant-win64-shipping.exe"), &s, &mut e).unwrap();
+        assert_eq!(st.state, GameState::Active);
+        assert_eq!(drv.level("D1"), Some(75));
+        // alt-tab para o Discord
+        let st = w.tick(&game, Some("discord.exe"), &s, &mut e).unwrap();
+        assert_eq!(st.state, GameState::Paused);
+        assert_eq!(drv.level("D1"), Some(50));
+        assert!(w.tick(&game, Some("discord.exe"), &s, &mut e).is_none());
+        // volta ao jogo
+        let st = w.tick(&game, Some("valorant-win64-shipping.exe"), &s, &mut e).unwrap();
+        assert_eq!(st.state, GameState::Active);
+        assert_eq!(drv.level("D1"), Some(75));
+        // fecha o jogo estando em segundo plano: já estava restaurado
+        w.tick(&game, Some("discord.exe"), &s, &mut e);
+        let st = w.tick(&procs(&["discord.exe"]), Some("discord.exe"), &s, &mut e).unwrap();
+        assert_eq!(st.state, GameState::Idle);
+        assert_eq!(drv.level("D1"), Some(50));
+    }
+
+    #[test]
+    fn profile_tuning_is_applied_and_reverted() {
+        let (_drv, mut e, mut s) = setup();
+        s.profiles[0].tuning.gamma = 140;
+        let mut w = GameWatcher::default();
+        w.tick(&procs(&["valorant.exe"]), None, &s, &mut e);
+        assert_eq!(e.tuning("D1").unwrap().gamma, 140);
+        w.tick(&procs(&[]), None, &s, &mut e);
+        assert_eq!(e.tuning("D1").unwrap(), Tuning::default());
     }
 }

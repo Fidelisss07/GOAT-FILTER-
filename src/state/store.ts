@@ -3,6 +3,7 @@ import { getNative } from "../lib/native";
 import {
   Capabilities,
   DEFAULT_SETTINGS,
+  DEFAULT_TUNING,
   GameStatus,
   MonitorInfo,
   Profile,
@@ -54,6 +55,10 @@ interface State {
   updateDraft(patch: Partial<Profile>): void;
   saveDraft(): Promise<boolean>;
   deleteProfile(id: string): Promise<void>;
+  /** Aplica o rascunho do perfil no monitor padrão, sem salvar. */
+  testDraft(): Promise<void>;
+  exportProfiles(): Promise<void>;
+  importProfiles(): Promise<void>;
   showToast(t: Toast): void;
   monitorsChanged(list: MonitorInfo[]): void;
 }
@@ -65,7 +70,7 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export const useStore = create<State>((set, get) => ({
   loaded: false,
   page: "overview",
-  capabilities: { demo: true, superMethod: "none", superReason: null, methods: [] },
+  capabilities: { demo: true, superMethod: "none", superReason: null, methods: [], curves: false },
   monitors: [],
   settings: DEFAULT_SETTINGS,
   game: { state: "idle", profileId: null, message: null },
@@ -206,6 +211,8 @@ export const useStore = create<State>((set, get) => ({
         vibrance: 75,
         applyOnOpen: true,
         restoreOnClose: true,
+        tuning: { ...DEFAULT_TUNING },
+        focusOnly: false,
       },
       draftErrors: {},
     });
@@ -251,6 +258,47 @@ export const useStore = create<State>((set, get) => ({
     const profiles = get().settings.profiles.filter((p) => p.id !== id);
     await get().updateSettings({ profiles });
     get().selectProfile(VALORANT_ID);
+  },
+
+  async testDraft() {
+    const d = get().draft;
+    const s = get();
+    const id =
+      s.monitors.find((m) => m.id === s.settings.defaultMonitor)?.id ??
+      s.monitors.find((m) => m.primary)?.id ??
+      s.monitors[0]?.id;
+    if (!d || !id) return;
+    try {
+      const n = await getNative();
+      const m = await n.applyTuned(id, d.vibrance, d.tuning);
+      set({ monitors: get().monitors.map((x) => (x.id === m.id ? m : x)), edited: { ...get().edited, [id]: m.current ?? d.vibrance } });
+      get().showToast({ kind: "ok", text: `Testando "${d.name || "perfil"}" no monitor padrão. Use Restaurar padrão para voltar.` });
+    } catch (e) {
+      get().showToast({ kind: "error", text: errMsg(e) });
+    }
+  },
+
+  async exportProfiles() {
+    try {
+      const n = await getNative();
+      const count = await n.exportProfiles();
+      if (count != null) get().showToast({ kind: "ok", text: `${count} perfil(is) exportado(s).` });
+    } catch (e) {
+      get().showToast({ kind: "error", text: errMsg(e) });
+    }
+  },
+
+  async importProfiles() {
+    try {
+      const n = await getNative();
+      const s = await n.importProfiles();
+      if (!s) return;
+      set({ settings: s });
+      get().selectProfile(get().selectedProfileId ?? VALORANT_ID);
+      get().showToast({ kind: "ok", text: "Perfis importados." });
+    } catch (e) {
+      get().showToast({ kind: "error", text: errMsg(e) });
+    }
   },
 
   showToast(t) {

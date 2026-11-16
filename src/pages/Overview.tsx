@@ -112,6 +112,13 @@ function GameBadge() {
   const valorant = useStore(valorantProfile);
   if (game.state === "unavailable")
     return <span className="pill warn" title={game.message ?? undefined}>Detecção indisponível</span>;
+  if (game.state === "paused")
+    return (
+      <span className="pill">
+        <span className="dot" />
+        Valorant em segundo plano · cores normais
+      </span>
+    );
   if (game.state === "active")
     return (
       <span className="pill accent">

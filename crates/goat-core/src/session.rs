@@ -13,6 +13,9 @@ use std::path::PathBuf;
 pub struct SessionData {
     /// Nome GDI do monitor → porcentagem do driver antes do Goat Filter.
     pub originals: BTreeMap<String, u8>,
+    /// Nome GDI → gamma ramp original (3 × 256 valores).
+    #[serde(default)]
+    pub ramps: BTreeMap<String, Vec<u16>>,
 }
 
 pub struct Session {
@@ -50,18 +53,45 @@ impl Session {
         }
     }
 
+    pub fn remember_ramp(&mut self, display: &str, ramp: Vec<u16>) {
+        if self.data.ramps.contains_key(display) {
+            return;
+        }
+        self.data.ramps.insert(display.to_string(), ramp);
+        self.flush();
+    }
+
+    pub fn ramp(&self, display: &str) -> Option<&Vec<u16>> {
+        self.data.ramps.get(display)
+    }
+
+    pub fn ramps(&self) -> Vec<(String, Vec<u16>)> {
+        self.data.ramps.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+
+    pub fn forget_ramp(&mut self, display: &str) {
+        if self.data.ramps.remove(display).is_some() {
+            self.flush();
+        }
+    }
+
     pub fn originals(&self) -> Vec<(String, u8)> {
         self.data.originals.iter().map(|(k, v)| (k.clone(), *v)).collect()
     }
 
     pub fn clear(&mut self) {
         self.data.originals.clear();
+        self.data.ramps.clear();
         self.flush();
+    }
+
+    fn is_empty(&self) -> bool {
+        self.data.originals.is_empty() && self.data.ramps.is_empty()
     }
 
     fn flush(&self) {
         let Some(p) = &self.path else { return };
-        if self.data.originals.is_empty() {
+        if self.is_empty() {
             let _ = std::fs::remove_file(p);
             return;
         }

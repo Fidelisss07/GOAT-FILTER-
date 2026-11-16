@@ -1,8 +1,8 @@
 //! Aplicativo Tauri: janela, bandeja, comandos da interface e o loop de detecção.
 
 use goat_core::engine::Engine;
-use goat_core::types::{GameState, GameStatus, MonitorInfo, Settings, Snapshot, SuperMethod, DRIVER_MAX, SUPER_MAX};
-use goat_core::watcher::{running_processes, GameWatcher};
+use goat_core::types::{GameState, GameStatus, MonitorInfo, Settings, Snapshot, SuperMethod, Tuning, DRIVER_MAX, SUPER_MAX};
+use goat_core::watcher::{process_snapshot, GameWatcher};
 use goat_core::{backends, monitors, settings as store};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -69,6 +69,29 @@ fn get_snapshot(app: AppHandle, state: Shared) -> Snapshot {
 #[tauri::command]
 fn apply_vibrance(state: Shared, monitor_id: String, percent: u8) -> Result<MonitorInfo, String> {
     lock(&state.engine).apply(&monitor_id, percent)
+}
+
+/// "Testar agora" do editor de perfis: vibrance + ajustes finos.
+#[tauri::command]
+fn apply_tuned(state: Shared, monitor_id: String, percent: u8, tuning: Tuning) -> Result<MonitorInfo, String> {
+    lock(&state.engine).apply_with(&monitor_id, percent, tuning)
+}
+
+#[tauri::command]
+fn export_profiles(state: Shared, path: String) -> Result<usize, String> {
+    let profiles = lock(&state.settings).profiles.clone();
+    std::fs::write(&path, store::export_profiles(&profiles)).map_err(|e| format!("não foi possível salvar: {e}"))?;
+    Ok(profiles.len())
+}
+
+#[tauri::command]
+fn import_profiles(state: Shared, path: String) -> Result<Settings, String> {
+    let raw = std::fs::read_to_string(&path).map_err(|e| format!("não foi possível ler: {e}"))?;
+    let mut s = lock(&state.settings).clone();
+    store::import_profiles(&raw, &mut s)?;
+    store::save(&state.settings_path, &s).map_err(|e| format!("não foi possível gravar: {e}"))?;
+    *lock(&state.settings) = s.clone();
+    Ok(s)
 }
 
 #[tauri::command]
@@ -241,15 +264,15 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
         .spawn(move || {
             let mut tick: u64 = 0;
             loop {
-                std::thread::sleep(Duration::from_secs(1));
+                std::thread::sleep(Duration::from_millis(500));
                 tick += 1;
 
                 if cfg!(windows) {
-                    let procs = running_processes();
+                    let (procs, foreground) = process_snapshot();
                     let settings = lock(&state.settings).clone();
                     let changed = {
                         let mut engine = lock(&state.engine);
-                        lock(&state.watcher).tick(&procs, &settings, &mut engine)
+                        lock(&state.watcher).tick(&procs, foreground.as_deref(), &settings, &mut engine)
                     };
                     if let Some(status) = changed {
                         *lock(&state.game) = status.clone();
@@ -259,7 +282,7 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                     }
                 }
 
-                if tick % 3 == 0 {
+                if tick % 6 == 0 {
                     let displays = monitors::enumerate();
                     let mut engine = lock(&state.engine);
                     if engine.refresh(displays) {
@@ -367,6 +390,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_snapshot,
             apply_vibrance,
+            apply_tuned,
+            export_profiles,
+            import_profiles,
             restore_monitor,
             save_settings,
             executable_exists

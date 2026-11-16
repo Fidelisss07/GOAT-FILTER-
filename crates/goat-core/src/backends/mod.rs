@@ -8,12 +8,15 @@ pub mod mock;
 #[cfg(windows)]
 pub mod adl;
 #[cfg(windows)]
+pub mod gamma;
+#[cfg(windows)]
 pub mod magnifier;
 #[cfg(windows)]
 pub mod mhc2;
 #[cfg(windows)]
 pub mod nvapi;
 
+use crate::color::{self, Mat3, Ramp};
 use crate::types::{DriverKind, SuperMethod};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -39,20 +42,26 @@ pub trait DriverVibrance: Send {
     fn default_percent(&mut self, display: &str) -> Option<u8>;
 }
 
-/// Camada 2: matriz de saturação aplicada pelo Windows depois do jogo.
-/// Recebe o fator desejado por monitor (1.0 = sem efeito). Monitores fora do
-/// mapa devem voltar ao normal. Camadas globais combinam os fatores.
+/// Camada 2: matriz de cor (RGB linear) aplicada pelo Windows depois do jogo.
+/// Recebe a matriz desejada por monitor. Monitores fora do mapa devem voltar
+/// ao normal. Camadas globais usam a matriz mais forte.
 pub trait SuperLayer: Send {
     fn method(&self) -> SuperMethod;
-    fn apply(&mut self, factors: &BTreeMap<String, f32>) -> Result<()>;
+    fn apply(&mut self, matrices: &BTreeMap<String, Mat3>) -> Result<()>;
 }
 
-/// Fator mais distante de 1.0 (para camadas que valem para a tela toda).
-pub fn combined_factor(factors: &BTreeMap<String, f32>) -> f32 {
-    factors
+/// Matriz mais forte (para camadas que valem para a tela toda).
+pub fn combined(matrices: &BTreeMap<String, Mat3>) -> Mat3 {
+    matrices
         .values()
         .copied()
-        .fold(1.0f32, |acc, f| if (f - 1.0).abs() > (acc - 1.0).abs() { f } else { acc })
+        .fold(color::IDENTITY, |acc, m| if color::strength(&m) > color::strength(&acc) { m } else { acc })
+}
+
+/// Brilho/contraste/gama por monitor (gamma ramp).
+pub trait CurveControl: Send {
+    fn get(&mut self, display: &str) -> Result<Ramp>;
+    fn set(&mut self, display: &str, ramp: &Ramp) -> Result<()>;
 }
 
 pub struct Detected {
@@ -61,6 +70,7 @@ pub struct Detected {
     pub super_layers: Vec<Box<dyn SuperLayer>>,
     /// Por que cada método ausente não está disponível.
     pub super_reasons: Vec<(SuperMethod, String)>,
+    pub curves: Option<Box<dyn CurveControl>>,
 }
 
 /// Carrega o que existir nesta máquina. Falhas viram "indisponível", nunca pânico.
@@ -86,7 +96,7 @@ pub fn detect(data_dir: &Path) -> Detected {
         Ok(m) => super_layers.push(Box::new(m)),
         Err(e) => super_reasons.push((SuperMethod::Mhc2, e)),
     }
-    Detected { drivers, super_layers, super_reasons }
+    Detected { drivers, super_layers, super_reasons, curves: Some(Box::new(gamma::GdiGamma)) }
 }
 
 #[cfg(not(windows))]
@@ -98,22 +108,27 @@ pub fn detect(_data_dir: &Path) -> Detected {
             (SuperMethod::Magnifier, "disponível apenas no Windows".into()),
             (SuperMethod::Mhc2, "disponível apenas no Windows 11".into()),
         ],
+        curves: None,
     }
 }
 
-/// Matriz de saturação 5×5 no formato do Windows (vetor-linha: linha = canal
-/// de entrada, coluna = canal de saída). Pesos de luminância Rec.709.
-pub fn saturation_matrix(s: f32) -> [[f32; 5]; 5] {
-    const W: [f32; 3] = [0.2126, 0.7152, 0.0722];
-    let mut m = [[0.0f32; 5]; 5];
-    for (i, w) in W.iter().enumerate() {
+/// Converte para a matriz 5×5 da Magnification API (vetor-linha: linha =
+/// canal de entrada, coluna = canal de saída), ou seja, a transposta.
+pub fn to_magnifier(m: &Mat3) -> [[f32; 5]; 5] {
+    let mut o = [[0.0f32; 5]; 5];
+    for i in 0..3 {
         for j in 0..3 {
-            m[i][j] = (1.0 - s) * w + if i == j { s } else { 0.0 };
+            o[i][j] = m[j][i];
         }
     }
-    m[3][3] = 1.0;
-    m[4][4] = 1.0;
-    m
+    o[3][3] = 1.0;
+    o[4][4] = 1.0;
+    o
+}
+
+/// Saturação uniforme no formato da Magnification API.
+pub fn saturation_matrix(s: f32) -> [[f32; 5]; 5] {
+    to_magnifier(&color::saturation(s))
 }
 
 #[cfg(test)]

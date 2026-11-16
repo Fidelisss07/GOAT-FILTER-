@@ -8,7 +8,8 @@
 //! Limitação: é aplicado pela composição do Windows (DWM). Funciona com o jogo
 //! em "Janela em tela cheia"; em tela cheia exclusiva pode não aparecer.
 
-use super::{combined_factor, saturation_matrix, BackendError, Result, SuperLayer};
+use super::{combined, saturation_matrix, to_magnifier, BackendError, Result, SuperLayer};
+use crate::color::{self, Mat3};
 use std::collections::BTreeMap;
 use crate::types::SuperMethod;
 use std::sync::mpsc::{channel, Sender};
@@ -18,13 +19,13 @@ use windows::Win32::UI::Magnification::{
 };
 
 enum Cmd {
-    Set(f32, Sender<Result<()>>),
+    Set(Mat3, Sender<Result<()>>),
     Quit,
 }
 
 pub struct Magnifier {
     tx: Sender<Cmd>,
-    last: f32,
+    last: Mat3,
 }
 
 impl Magnifier {
@@ -42,8 +43,8 @@ impl Magnifier {
                 let _ = ready_tx.send(Ok(()));
                 while let Ok(cmd) = rx.recv() {
                     match cmd {
-                        Cmd::Set(f, reply) => {
-                            let fx = MAGCOLOREFFECT { transform: flatten(saturation_matrix(f)) };
+                        Cmd::Set(m, reply) => {
+                            let fx = MAGCOLOREFFECT { transform: flatten(to_magnifier(&m)) };
                             let ok = MagSetFullscreenColorEffect(&fx).as_bool();
                             let _ = reply.send(if ok {
                                 Ok(())
@@ -60,7 +61,7 @@ impl Magnifier {
             })
             .map_err(|e| e.to_string())?;
         ready_rx.recv().map_err(|e| e.to_string())??;
-        Ok(Self { tx, last: 1.0 })
+        Ok(Self { tx, last: color::IDENTITY })
     }
 }
 
@@ -76,17 +77,17 @@ impl SuperLayer for Magnifier {
     fn method(&self) -> SuperMethod {
         SuperMethod::Magnifier
     }
-    fn apply(&mut self, factors: &BTreeMap<String, f32>) -> Result<()> {
-        let factor = combined_factor(factors);
-        if (factor - self.last).abs() < 1e-4 {
+    fn apply(&mut self, matrices: &BTreeMap<String, Mat3>) -> Result<()> {
+        let m = combined(matrices);
+        if m == self.last {
             return Ok(());
         }
         let (rtx, rrx) = channel();
         self.tx
-            .send(Cmd::Set(factor, rtx))
+            .send(Cmd::Set(m, rtx))
             .map_err(|_| BackendError::Driver("thread da camada Super encerrada".into()))?;
         rrx.recv().map_err(|_| BackendError::Driver("sem resposta da camada Super".into()))??;
-        self.last = factor;
+        self.last = m;
         Ok(())
     }
 }

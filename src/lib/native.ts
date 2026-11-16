@@ -6,6 +6,8 @@
 import {
   Capabilities,
   DEFAULT_SETTINGS,
+  DEFAULT_TUNING,
+  Tuning,
   GameStatus,
   MonitorInfo,
   Notice,
@@ -16,6 +18,12 @@ import {
 export interface NativeApi {
   getSnapshot(): Promise<Snapshot>;
   applyVibrance(monitorId: string, percent: number): Promise<MonitorInfo>;
+  /** Vibrance + ajustes finos (botão "Testar agora" do perfil). */
+  applyTuned(monitorId: string, percent: number, tuning: Tuning): Promise<MonitorInfo>;
+  /** Grava os perfis em um arquivo escolhido pelo usuário. null = cancelado. */
+  exportProfiles(): Promise<number | null>;
+  /** Lê perfis de um arquivo; devolve as preferências atualizadas. null = cancelado. */
+  importProfiles(): Promise<Settings | null>;
   /** Volta ao padrão do driver ou, se não houver, ao valor anterior. */
   restoreMonitor(monitorId: string): Promise<MonitorInfo>;
   /** Persiste e devolve as preferências efetivas (ex.: se autostart falhou). */
@@ -48,6 +56,21 @@ async function tauriApi(): Promise<NativeApi> {
     getSnapshot: () => invoke<Snapshot>("get_snapshot"),
     applyVibrance: (monitorId, percent) =>
       invoke<MonitorInfo>("apply_vibrance", { monitorId, percent }),
+    applyTuned: (monitorId, percent, tuning) =>
+      invoke<MonitorInfo>("apply_tuned", { monitorId, percent, tuning }),
+    exportProfiles: async () => {
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const path = await save({
+        defaultPath: "perfis.goatfilter.json",
+        filters: [{ name: "Perfis do Goat Filter", extensions: ["json"] }],
+      });
+      return path ? invoke<number>("export_profiles", { path }) : null;
+    },
+    importProfiles: async () => {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const path = await open({ multiple: false, filters: [{ name: "Perfis do Goat Filter", extensions: ["json"] }] });
+      return typeof path === "string" ? invoke<Settings>("import_profiles", { path }) : null;
+    },
     restoreMonitor: (monitorId) => invoke<MonitorInfo>("restore_monitor", { monitorId }),
     saveSettings: (settings) => invoke<Settings>("save_settings", { settings }),
     executableExists: (path) => invoke<boolean>("executable_exists", { path }),
@@ -81,7 +104,11 @@ const DEMO_KEY = "goat-filter:settings";
 function loadDemoSettings(): Settings {
   try {
     const raw = localStorage.getItem(DEMO_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (raw) {
+      const s = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } as Settings;
+      s.profiles = s.profiles.map((p) => ({ ...p, focusOnly: p.focusOnly ?? false, tuning: { ...DEFAULT_TUNING, ...p.tuning } }));
+      return s;
+    }
   } catch {
     /* sem storage: segue com o padrão */
   }
@@ -90,13 +117,14 @@ function loadDemoSettings(): Settings {
 
 export function createDemoApi(): NativeApi {
   const monitors: MonitorInfo[] = [
-    { id: "demo-1", name: "Monitor principal", primary: true, driver: "nvidia", current: 50, driverDefault: 50, original: 50 },
-    { id: "demo-2", name: "Monitor 2", primary: false, driver: "none", current: 50, driverDefault: null, original: 50 },
+    { id: "demo-1", name: "Monitor principal", primary: true, driver: "nvidia", current: 50, driverDefault: 50, original: 50, tuning: DEFAULT_TUNING },
+    { id: "demo-2", name: "Monitor 2", primary: false, driver: "none", current: 50, driverDefault: null, original: 50, tuning: DEFAULT_TUNING },
   ];
   const caps: Capabilities = {
     demo: true,
     superMethod: "magnifier",
     superReason: null,
+    curves: true,
     methods: [
       { method: "magnifier", available: true, reason: null },
       { method: "mhc2", available: true, reason: null },
@@ -119,9 +147,18 @@ export function createDemoApi(): NativeApi {
       m.current = percent;
       return { ...m };
     },
+    applyTuned: async (id, percent, tuning) => {
+      const m = find(id);
+      m.current = percent;
+      m.tuning = { ...tuning };
+      return { ...m };
+    },
+    exportProfiles: async () => loadDemoSettings().profiles.length,
+    importProfiles: async () => null,
     restoreMonitor: async (id) => {
       const m = find(id);
       m.current = m.driverDefault ?? m.original;
+      m.tuning = { ...DEFAULT_TUNING };
       return { ...m };
     },
     saveSettings: async (s) => {

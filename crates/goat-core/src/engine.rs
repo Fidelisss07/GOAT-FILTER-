@@ -2,10 +2,11 @@
 //! driver não tem vibrance) e garante a restauração dos valores originais.
 
 use crate::backends::mapping::super_factor;
-use crate::backends::{Detected, DriverVibrance, SuperLayer};
+use crate::backends::{CurveControl, Detected, DriverVibrance, SuperLayer};
+use crate::color::{self, Mat3, Ramp};
 use crate::monitors::Display;
 use crate::session::Session;
-use crate::types::{Capabilities, DriverKind, MethodInfo, MonitorInfo, SuperMethod, DRIVER_MAX, NEUTRAL, SUPER_MAX};
+use crate::types::{Capabilities, DriverKind, MethodInfo, MonitorInfo, SuperMethod, Tuning, DRIVER_MAX, NEUTRAL, SUPER_MAX};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
@@ -14,6 +15,22 @@ struct Mon {
     driver: Option<usize>,
     current: Option<u8>,
     original: Option<u8>,
+    tuning: Tuning,
+}
+
+fn ramp_to_vec(r: &Ramp) -> Vec<u16> {
+    r.iter().flatten().copied().collect()
+}
+
+fn vec_to_ramp(v: &[u16]) -> Option<Ramp> {
+    if v.len() != 768 {
+        return None;
+    }
+    let mut r = [[0u16; 256]; 3];
+    for (i, x) in v.iter().enumerate() {
+        r[i / 256][i % 256] = *x;
+    }
+    Some(r)
 }
 
 pub struct Engine {
@@ -24,7 +41,8 @@ pub struct Engine {
     super_reasons: Vec<(SuperMethod, String)>,
     monitors: Vec<Mon>,
     session: Session,
-    factors: BTreeMap<String, f32>,
+    matrices: BTreeMap<String, Mat3>,
+    curves: Option<Box<dyn CurveControl>>,
     demo: bool,
 }
 
@@ -38,7 +56,8 @@ impl Engine {
             super_reasons: detected.super_reasons,
             monitors: Vec::new(),
             session,
-            factors: BTreeMap::new(),
+            matrices: BTreeMap::new(),
+            curves: detected.curves,
             demo,
         };
         // Sessão anterior não terminou direito (crash/desligamento): devolve as cores.
@@ -47,6 +66,13 @@ impl Engine {
                 match e.drivers[i].set(&display, value) {
                     Ok(()) => log::info!("Restaurado {display} para {value}% após encerramento inesperado"),
                     Err(err) => log::warn!("Falha ao restaurar {display}: {err}"),
+                }
+            }
+        }
+        for (display, ramp) in leftover.ramps {
+            if let (Some(c), Some(r)) = (e.curves.as_mut(), vec_to_ramp(&ramp)) {
+                if let Err(err) = c.set(&display, &r) {
+                    log::warn!("Falha ao restaurar a curva de {display}: {err}");
                 }
             }
         }
@@ -75,11 +101,11 @@ impl Engine {
                 Some(i) => self.drivers[i].get(&d.id).ok(),
                 None => self.active.map(|_| NEUTRAL),
             };
-            next.push(Mon { original: current, current, driver, display: d });
+            next.push(Mon { original: current, current, driver, display: d, tuning: Tuning::default() });
         }
         // Monitores que sumiram não contam mais na camada Super.
         for id in old.keys() {
-            self.factors.remove(id);
+            self.matrices.remove(id);
         }
         self.monitors = next;
         if !old.is_empty() {
@@ -105,7 +131,7 @@ impl Engine {
                 None => "Super Vibrance indisponível".into(),
             }),
         };
-        Capabilities { demo: self.demo, super_method: self.method(), super_reason, methods }
+        Capabilities { demo: self.demo, super_method: self.method(), super_reason, methods, curves: self.curves.is_some() }
     }
 
     pub fn method(&self) -> SuperMethod {
@@ -163,6 +189,7 @@ impl Engine {
             current: m.current,
             driver_default,
             original,
+            tuning: m.tuning,
         }
     }
 
@@ -173,13 +200,25 @@ impl Engine {
             .ok_or_else(|| "Monitor desconectado.".to_string())
     }
 
-    /// Aplica um valor 0–200 do Goat Filter em um monitor.
+    pub fn tuning(&self, id: &str) -> Option<Tuning> {
+        self.monitors.iter().find(|m| m.display.id == id).map(|m| m.tuning)
+    }
+
+    /// Aplica um valor 0–200 do Goat Filter, mantendo os ajustes finos atuais.
     pub fn apply(&mut self, id: &str, percent: u8) -> Result<MonitorInfo, String> {
+        let t = self.tuning(id).unwrap_or_default();
+        self.apply_with(id, percent, t)
+    }
+
+    /// Aplica vibrance + ajustes finos (realce de cor, brilho, contraste, gama).
+    pub fn apply_with(&mut self, id: &str, percent: u8, tuning: Tuning) -> Result<MonitorInfo, String> {
         let i = self.index(id)?;
+        let tuning = tuning.sanitized();
         let p = percent.min(SUPER_MAX);
         let driver = self.monitors[i].driver;
         let factor = super_factor(p, driver.is_some());
-        let needs_super = (factor - 1.0).abs() > 1e-4;
+        let matrix = color::super_matrix(factor, &tuning);
+        let needs_super = !color::is_identity(&matrix);
         if needs_super && self.active.is_none() {
             return Err(match driver {
                 Some(_) => "Super Vibrance indisponível neste PC: o limite é 100%.".into(),
@@ -197,11 +236,11 @@ impl Engine {
             self.drivers[d].set(id, p.min(DRIVER_MAX)).map_err(|e| format!("Driver: {e}"))?;
         }
 
-        let previous = self.factors.insert(id.to_string(), factor);
+        let previous = self.matrices.insert(id.to_string(), matrix);
         if let Err(e) = self.push_super() {
             match previous {
-                Some(f) => self.factors.insert(id.to_string(), f),
-                None => self.factors.remove(id),
+                Some(f) => self.matrices.insert(id.to_string(), f),
+                None => self.matrices.remove(id),
             };
             if driver.is_some() {
                 // A parte do driver já foi aplicada; reflete o valor real.
@@ -210,8 +249,40 @@ impl Engine {
             return Err(format!("Super Vibrance: {e}"));
         }
         self.monitors[i].current = Some(p);
-        log::info!("Aplicado {id}: {p}% (fator Super {factor:.2})");
-        Ok(self.info(i))
+
+        let curve_msg = self.apply_curve(i, &tuning).err();
+        self.monitors[i].tuning = tuning;
+        log::info!("Aplicado {id}: {p}% (fator Super {factor:.2}, ajustes {tuning:?})");
+        match curve_msg {
+            Some(e) => Err(format!("Vibrance aplicado, mas brilho/gama falhou: {e}")),
+            None => Ok(self.info(i)),
+        }
+    }
+
+    fn apply_curve(&mut self, i: usize, tuning: &Tuning) -> Result<(), String> {
+        let id = self.monitors[i].display.id.clone();
+        let want = color::tuning_has_curve(tuning);
+        let had = self.session.ramp(&id).is_some();
+        if !want && !had {
+            return Ok(());
+        }
+        let Some(c) = self.curves.as_mut() else {
+            return if want { Err("indisponível neste PC".into()) } else { Ok(()) };
+        };
+        if want {
+            if !had {
+                let orig = c.get(&id).unwrap_or_else(|_| color::identity_ramp());
+                self.session.remember_ramp(&id, ramp_to_vec(&orig));
+            }
+            c.set(&id, &color::curve(tuning)).map_err(|e| e.to_string())
+        } else {
+            let orig = self.session.ramp(&id).and_then(|v| vec_to_ramp(v)).unwrap_or_else(color::identity_ramp);
+            let r = c.set(&id, &orig).map_err(|e| e.to_string());
+            if r.is_ok() {
+                self.session.forget_ramp(&id);
+            }
+            r
+        }
     }
 
     /// "Restaurar padrão": padrão do driver; sem driver, o valor anterior.
@@ -224,7 +295,7 @@ impl Engine {
         .or(self.session.original(id))
         .or(self.monitors[i].original)
         .unwrap_or(NEUTRAL);
-        self.apply(id, target)
+        self.apply_with(id, target, Tuning::default())
     }
 
     /// Devolve tudo como estava antes do Goat Filter (sair do app).
@@ -240,10 +311,20 @@ impl Engine {
                 let _ = self.drivers[d].set(&display, value);
             }
         }
-        self.factors.clear();
+        if let Some(c) = self.curves.as_mut() {
+            for (display, ramp) in self.session.ramps() {
+                if let Some(r) = vec_to_ramp(&ramp) {
+                    let _ = c.set(&display, &r);
+                }
+            }
+        }
+        self.matrices.clear();
         let _ = self.push_super();
-        for m in self.monitors.iter_mut().filter(|m| m.driver.is_none()) {
-            m.current = Some(NEUTRAL);
+        for m in self.monitors.iter_mut() {
+            m.tuning = Tuning::default();
+            if m.driver.is_none() {
+                m.current = Some(NEUTRAL);
+            }
         }
         self.session.clear();
     }
@@ -255,7 +336,7 @@ impl Engine {
         if restore {
             self.restore_all();
         } else {
-            self.factors.clear();
+            self.matrices.clear();
             let _ = self.push_super();
             self.session.clear();
         }
@@ -264,10 +345,10 @@ impl Engine {
     /// Envia os fatores por monitor para a camada Super ativa.
     fn push_super(&mut self) -> Result<(), String> {
         // Só monitores com efeito de fato entram no mapa.
-        self.factors.retain(|_, f| (*f - 1.0).abs() > 1e-4);
+        self.matrices.retain(|_, m| !color::is_identity(m));
         match self.active {
-            Some(i) => self.layers[i].apply(&self.factors).map_err(|e| e.to_string()),
-            None if !self.factors.is_empty() => Err("indisponível".into()),
+            Some(i) => self.layers[i].apply(&self.matrices).map_err(|e| e.to_string()),
+            None if !self.matrices.is_empty() => Err("indisponível".into()),
             None => Ok(()),
         }
     }
@@ -276,7 +357,8 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backends::mock::{MockDriver, MockSuper};
+    use crate::backends::mock::{MockCurves, MockDriver, MockSuper};
+    use crate::types::EmphasisColor;
 
     fn displays() -> Vec<Display> {
         vec![
@@ -291,6 +373,7 @@ mod tests {
                 drivers: vec![Box::new(drv.clone())],
                 super_layers: sup.map(|s| Box::new(s.clone()) as Box<dyn SuperLayer>).into_iter().collect(),
                 super_reasons: vec![],
+                curves: Some(Box::new(MockCurves::default())),
             },
             displays(),
             path,
@@ -425,6 +508,7 @@ mod tests {
                 drivers: vec![Box::new(drv.clone())],
                 super_layers: vec![Box::new(mag.clone()), Box::new(mhc.clone())],
                 super_reasons: vec![],
+                curves: None,
             },
             displays(),
             None,
@@ -449,6 +533,7 @@ mod tests {
                 drivers: vec![Box::new(drv)],
                 super_layers: vec![Box::new(MockSuper::default())],
                 super_reasons: vec![(SuperMethod::Mhc2, "requer Windows 11".into())],
+                curves: None,
             },
             displays(),
             None,
@@ -459,5 +544,67 @@ mod tests {
         let mhc = caps.methods.iter().find(|m| m.method == SuperMethod::Mhc2).unwrap();
         assert!(!mhc.available);
         assert_eq!(mhc.reason.as_deref(), Some("requer Windows 11"));
+    }
+
+    fn engine_with_curves(drv: &MockDriver, sup: &MockSuper, curves: &MockCurves, path: Option<PathBuf>) -> Engine {
+        Engine::new(
+            Detected {
+                drivers: vec![Box::new(drv.clone())],
+                super_layers: vec![Box::new(sup.clone())],
+                super_reasons: vec![],
+                curves: Some(Box::new(curves.clone())),
+            },
+            displays(),
+            path,
+            false,
+        )
+    }
+
+    #[test]
+    fn emphasis_uses_super_layer_even_below_100() {
+        let drv = MockDriver::with(&[("D1", 50)]);
+        let sup = MockSuper::default();
+        let mut e = engine(&drv, Some(&sup), None);
+        let t = Tuning { emphasis: EmphasisColor::Red, emphasis_strength: 80, ..Tuning::default() };
+        let m = e.apply_with("D1", 80, t).unwrap();
+        assert_eq!(drv.level("D1"), Some(80));
+        assert_eq!(m.tuning.emphasis, EmphasisColor::Red);
+        assert!(!color::is_identity(&sup.matrix("D1").unwrap()));
+        // apply() mantém o realce
+        e.apply("D1", 90).unwrap();
+        assert!(sup.matrix("D1").is_some());
+        // restaurar zera tudo
+        e.restore("D1").unwrap();
+        assert!(sup.matrix("D1").is_none());
+    }
+
+    #[test]
+    fn curves_are_applied_and_restored() {
+        let drv = MockDriver::with(&[("D1", 50)]);
+        let sup = MockSuper::default();
+        let curves = MockCurves::default();
+        let mut e = engine_with_curves(&drv, &sup, &curves, None);
+        let t = Tuning { gamma: 150, brightness: 10, ..Tuning::default() };
+        e.apply_with("D1", 75, t).unwrap();
+        assert_ne!(curves.ramp("D1"), color::identity_ramp());
+        e.apply_with("D1", 75, Tuning::default()).unwrap();
+        assert_eq!(curves.ramp("D1"), color::identity_ramp());
+    }
+
+    #[test]
+    fn curves_recovered_after_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.json");
+        let drv = MockDriver::with(&[("D1", 50)]);
+        let curves = MockCurves::default();
+        {
+            let mut e = engine_with_curves(&drv, &MockSuper::default(), &curves, Some(path.clone()));
+            e.apply_with("D1", 60, Tuning { gamma: 180, ..Tuning::default() }).unwrap();
+            std::mem::forget(e);
+        }
+        assert_ne!(curves.ramp("D1"), color::identity_ramp());
+        let _e = engine_with_curves(&drv, &MockSuper::default(), &curves, Some(path.clone()));
+        assert_eq!(curves.ramp("D1"), color::identity_ramp());
+        assert!(!path.exists());
     }
 }

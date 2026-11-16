@@ -10,7 +10,8 @@
 //! Todas as funções do `mscms.dll` são carregadas dinamicamente para o app
 //! continuar abrindo em versões do Windows que não as têm.
 
-use super::icc::{build_mhc2_profile, saturation_matrix_xyz};
+use super::icc::build_mhc2_profile;
+use crate::color::{self, Mat3};
 use super::{BackendError, Result, SuperLayer};
 use crate::monitors::{display_target, monitor_interface_name, Target};
 use crate::types::SuperMethod;
@@ -145,9 +146,14 @@ impl Mhc2 {
         self.save();
     }
 
-    fn profile_name(display: &str, factor: f32) -> String {
+    fn profile_name(display: &str, m: &Mat3) -> String {
+        use std::hash::{Hash, Hasher};
         let tag: String = display.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
-        format!("GoatFilter_{}_{}.icm", tag, (factor * 100.0).round() as i32)
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for v in m.iter().flatten() {
+            ((v * 10000.0).round() as i32).hash(&mut h);
+        }
+        format!("GoatFilter_{}_{:08x}.icm", tag, h.finish() as u32)
     }
 
     unsafe fn read_default(&self, t: Target) -> Option<String> {
@@ -162,15 +168,21 @@ impl Mhc2 {
         (!s.is_empty()).then_some(s)
     }
 
-    fn set(&mut self, display: &str, factor: f32) -> Result<()> {
+    fn set(&mut self, display: &str, m: &Mat3) -> Result<()> {
         let t = display_target(display).ok_or_else(|| BackendError::Driver("monitor não encontrado".into()))?;
         let iface = monitor_interface_name(display);
-        let name = Self::profile_name(display, factor);
+        let name = Self::profile_name(display, m);
         if self.active.get(display).map(|e| e.ours == name).unwrap_or(false) {
             return Ok(());
         }
 
-        let bytes = build_mhc2_profile(&format!("Goat Filter {}%", (factor * 100.0).round()), saturation_matrix_xyz(factor as f64));
+        let x = color::to_xyz(m);
+        let xyz = [
+            [x[0][0], x[0][1], x[0][2], 0.0],
+            [x[1][0], x[1][1], x[1][2], 0.0],
+            [x[2][0], x[2][1], x[2][2], 0.0],
+        ];
+        let bytes = build_mhc2_profile("Goat Filter", xyz);
         let path = self.dir.join(&name);
         std::fs::write(&path, bytes).map_err(|e| BackendError::Driver(format!("gravar perfil: {e}")))?;
 
@@ -243,16 +255,16 @@ impl SuperLayer for Mhc2 {
         SuperMethod::Mhc2
     }
 
-    fn apply(&mut self, factors: &BTreeMap<String, f32>) -> Result<()> {
+    fn apply(&mut self, matrices: &BTreeMap<String, Mat3>) -> Result<()> {
         let mut first_err = None;
-        let gone: Vec<String> = self.active.keys().filter(|d| !factors.contains_key(*d)).cloned().collect();
+        let gone: Vec<String> = self.active.keys().filter(|d| !matrices.contains_key(*d)).cloned().collect();
         for d in gone {
             if let Err(e) = self.clear(&d) {
                 first_err.get_or_insert(e);
             }
         }
-        for (d, f) in factors {
-            let r = if (f - 1.0).abs() < 1e-3 { self.clear(d) } else { self.set(d, *f) };
+        for (d, m) in matrices {
+            let r = if color::is_identity(m) { self.clear(d) } else { self.set(d, m) };
             if let Err(e) = r {
                 first_err.get_or_insert(e);
             }
