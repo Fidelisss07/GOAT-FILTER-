@@ -49,6 +49,10 @@ jobs:
           New-Item -ItemType Directory release -Force | Out-Null
           Copy-Item (Get-ChildItem target/release/bundle/nsis/*.exe | Select-Object -First 1).FullName "release/GoatFilter-$v-instalador.exe"
           Copy-Item target/release/goat-filter.exe "release/GoatFilter-$v-portatil.exe"
+          # Nomes fixos: o site usa .../releases/latest/download/<nome> e
+          # sempre baixa a versão mais nova.
+          Copy-Item "release/GoatFilter-$v-instalador.exe" "release/GoatFilter-instalador.exe"
+          Copy-Item "release/GoatFilter-$v-portatil.exe" "release/GoatFilter-portatil.exe"
           "VERSION=$v" >> $env:GITHUB_ENV
 
       - name: Enviar para assinatura (opcional)
@@ -85,3 +89,6 @@ jobs:
 
             Windows 10 ou 11. Se aparecer "O Windows protegeu o computador", clique em
             **Mais informações › Executar assim mesmo** (veja docs/ASSINATURA.md).
+
+            Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+            Privacidade: [PRIVACY.md](https://github.com/Fidelisss07/GOAT-FILTER-/blob/main/PRIVACY.md)
