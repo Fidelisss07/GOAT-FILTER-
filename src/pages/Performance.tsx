@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ToggleRow } from "../components/Controls";
-import { BoltIcon, CheckIcon, KeyboardIcon, ListIcon } from "../components/Icons";
+import { Toggle, ToggleRow } from "../components/Controls";
+import { BoltIcon, CheckIcon, CheckSquareIcon, KeyboardIcon } from "../components/Icons";
 import { KeyCapture } from "../components/KeyCapture";
 import { getNative } from "../lib/native";
 import { Bindings, DEFAULT_BINDINGS, PerfStatus, PerfTweaks } from "../lib/types";
@@ -8,8 +8,8 @@ import { useStore } from "../state/store";
 
 const BIND_ROWS: { key: keyof Bindings; label: string }[] = [
   { key: "toggle", label: "Ligar / desligar o filtro" },
-  { key: "vibranceUp", label: "Subir vibrance (+10%)" },
-  { key: "vibranceDown", label: "Descer vibrance (−10%)" },
+  { key: "vibranceUp", label: "Subir vibrância" },
+  { key: "vibranceDown", label: "Descer vibrância" },
   { key: "nextProfile", label: "Próximo perfil" },
 ];
 
@@ -31,6 +31,25 @@ function Now({ children, good }: { children: string; good: boolean | null }) {
   return <span className={`pill ${good ? "accent" : ""}`}>agora: {children}</span>;
 }
 
+const RECOMMENDATIONS: { title: string; detail: React.ReactNode }[] = [
+  {
+    title: "NVIDIA Reflex no Valorant",
+    detail: <>Valorant › Configurações › Vídeo › Gráficos: <em>Ligado + Aumento</em>. É o ajuste que mais reduz o atraso do clique até a tela.</>,
+  },
+  {
+    title: "Buffer de entrada bruta",
+    detail: <>Valorant › Configurações › Geral › Mouse: <em>Ligado</em>. Lê o mouse direto, sem passar pelo Windows.</>,
+  },
+  {
+    title: "Taxa de polling do mouse",
+    detail: <>No programa do fabricante do mouse, use <em>1000 Hz</em> ou mais.</>,
+  },
+  {
+    title: "FPS acima da taxa do monitor",
+    detail: <>Com monitor de 144 Hz, mantenha o FPS acima de 144 e desligue o V-Sync no jogo.</>,
+  },
+];
+
 export function PerformancePage() {
   const s = useStore();
   const perf = s.settings.perf;
@@ -48,47 +67,83 @@ export function PerformancePage() {
   };
 
   return (
-    <div className="settings performance">
-      <section className="card set-card" aria-label="Enquanto o jogo estiver aberto">
-        <div className="ico"><BoltIcon /></div>
-        <div className="txt">
-          <h2>Enquanto joga</h2>
-          <p>Ajustes do Windows ligados quando o jogo abre e desfeitos quando ele fecha (ou no alt-tab, se o perfil usar “Só com o jogo em foco”).</p>
-          {st?.applied && <p className="note"><span className="pill accent">ativos agora</span></p>}
-        </div>
-        <div className="ctl">
-          <ToggleRow
-            label="Desligar aceleração do mouse"
-            checked={perf.mouseAccelOff}
-            onChange={(v) => setPerf({ mouseAccelOff: v })}
-            extra={<Now good={st?.mouseAccel == null ? null : !st.mouseAccel}>{st?.mouseAccel ? "ligada" : "desligada"}</Now>}
-          />
-          <p className="note tight">“Aprimorar precisão do ponteiro” do Windows. O mouse responde igual em qualquer velocidade.</p>
-          <ToggleRow
-            label="Teclado: repetição mais rápida"
-            checked={perf.keyboardFast}
-            onChange={(v) => setPerf({ keyboardFast: v })}
-          />
-          <p className="note tight">Atraso mínimo e velocidade máxima ao segurar uma tecla (menus e chat).</p>
-          <ToggleRow
-            label="Plano de energia Alto desempenho"
-            checked={perf.highPerformancePower}
-            onChange={(v) => setPerf({ highPerformancePower: v })}
-            extra={<Now good={st?.powerHigh ?? null}>{st?.powerHigh ? "alto desempenho" : "outro plano"}</Now>}
-          />
-          <p className="note tight">Evita que a CPU reduza a velocidade durante a partida. Reduz quedas de FPS.</p>
-        </div>
-      </section>
+    <div className="perf-grid">
+      <div className="stack">
+        <section className="panel" aria-label="Checklist de latência">
+          <div className="section-head">
+            <CheckSquareIcon />
+            <h2>Checklist de latência</h2>
+          </div>
+          <div className="rows checklist">
+            <div className="row">
+              <span>Modo de Jogo do Windows</span>
+              {st?.gameMode == null ? (
+                <span className="state muted">Só no Windows</span>
+              ) : st.gameMode ? (
+                <span className="state on"><CheckIcon /> Ligado</span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn small"
+                  onClick={() =>
+                    getNative()
+                      .then((n) => n.setGameMode(true))
+                      .then(setSt)
+                      .catch((e) => s.showToast({ kind: "error", text: String(e) }))
+                  }
+                >
+                  Ligar
+                </button>
+              )}
+            </div>
+            {RECOMMENDATIONS.map((r) => (
+              <details key={r.title} className="row-details">
+                <summary className="row">
+                  <span>{r.title}</span>
+                  <span className="state muted" title="Recomendação: confira no jogo ou no programa do mouse">Verificar</span>
+                </summary>
+                <p className="note">{r.detail}</p>
+              </details>
+            ))}
+          </div>
+          <p className="note">
+            “Verificar” são recomendações: o Goat Filter não altera o jogo nem o mouse. Nenhum programa “zera” os
+            milissegundos; isto é o que reduz o atraso de verdade.
+          </p>
+        </section>
 
-      <section className="card set-card" aria-label="Teclas do Goat Filter">
-        <div className="ico"><KeyboardIcon /></div>
-        <div className="txt">
-          <h2>Teclas</h2>
-          <p>Atalhos do Goat Filter que funcionam com o jogo aberto. Clique numa tecla e aperte a nova combinação (com Ctrl ou Alt).</p>
-          <p className="note">Elas não mudam as teclas do jogo nem simulam teclas — é isso que mantém o Goat Filter seguro contra ban.</p>
+        <section className="panel" aria-label="Enquanto joga">
+          <div className="section-head">
+            <BoltIcon />
+            <h2>Enquanto joga</h2>
+            {st?.applied && <span className="pill accent">ativos agora</span>}
+          </div>
+          <p className="meta">Ligados quando o jogo abre e desfeitos quando ele fecha (ou no alt-tab, com “Só com o jogo em foco”).</p>
+          <div className="rows">
+            <ToggleRow
+              label="Desligar aceleração do mouse"
+              checked={perf.mouseAccelOff}
+              onChange={(v) => setPerf({ mouseAccelOff: v })}
+              extra={<Now good={st?.mouseAccel == null ? null : !st.mouseAccel}>{st?.mouseAccel ? "ligada" : "desligada"}</Now>}
+            />
+            <ToggleRow label="Teclado: repetição mais rápida" checked={perf.keyboardFast} onChange={(v) => setPerf({ keyboardFast: v })} />
+            <ToggleRow
+              label="Plano de energia Alto desempenho"
+              checked={perf.highPerformancePower}
+              onChange={(v) => setPerf({ highPerformancePower: v })}
+              extra={<Now good={st?.powerHigh ?? null}>{st?.powerHigh ? "alto desempenho" : "outro plano"}</Now>}
+            />
+          </div>
+        </section>
+      </div>
+
+      <section className="panel shortcuts" aria-label="Atalhos">
+        <div className="section-head">
+          <KeyboardIcon />
+          <h2>Atalhos</h2>
+          <Toggle label="Atalhos ligados" checked={s.settings.hotkeys} onChange={(v) => s.updateSettings({ hotkeys: v })} />
         </div>
-        <div className="ctl">
-          <ToggleRow label="Atalhos ligados" checked={s.settings.hotkeys} onChange={(v) => s.updateSettings({ hotkeys: v })} />
+        <div className="rows">
           {BIND_ROWS.map((r) => (
             <KeyCapture
               key={r.key}
@@ -99,69 +154,11 @@ export function PerformancePage() {
               onChange={(v) => s.updateSettings({ bindings: { ...b, [r.key]: v } })}
             />
           ))}
-          <button type="button" className="btn link" onClick={() => s.updateSettings({ bindings: { ...DEFAULT_BINDINGS } })}>
-            Voltar às teclas padrão
-          </button>
         </div>
-      </section>
-
-      <section className="card set-card" aria-label="O que mais tira delay">
-        <div className="ico"><ListIcon /></div>
-        <div className="txt">
-          <h2>O que mais tira delay</h2>
-          <p>Nenhum programa “zera” os milissegundos do mouse e do teclado. O que reduz o atraso de verdade é isto:</p>
-        </div>
-        <div className="ctl checklist">
-          <div className="check-item">
-            <span className={`mark ${st?.gameMode ? "on" : ""}`}>{st?.gameMode && <CheckIcon />}</span>
-            <div>
-              <strong>Modo de Jogo do Windows</strong>
-              <span>{st?.gameMode == null ? "Disponível só no Windows." : st.gameMode ? "Ligado." : "Desligado."}</span>
-            </div>
-            {st?.gameMode === false && (
-              <button
-                type="button"
-                className="btn small"
-                onClick={() =>
-                  getNative()
-                    .then((n) => n.setGameMode(true))
-                    .then(setSt)
-                    .catch((e) => s.showToast({ kind: "error", text: String(e) }))
-                }
-              >
-                Ligar
-              </button>
-            )}
-          </div>
-          <div className="check-item">
-            <span className="mark" />
-            <div>
-              <strong>NVIDIA Reflex no Valorant</strong>
-              <span>Configurações › Vídeo › Gráficos: <em>Ligado + Aumento</em>. É o ajuste que mais reduz o atraso do clique até a tela.</span>
-            </div>
-          </div>
-          <div className="check-item">
-            <span className="mark" />
-            <div>
-              <strong>Buffer de entrada bruta</strong>
-              <span>Valorant › Configurações › Geral › Mouse: <em>Ligado</em>. Lê o mouse direto, sem passar pelo Windows.</span>
-            </div>
-          </div>
-          <div className="check-item">
-            <span className="mark" />
-            <div>
-              <strong>Taxa de polling do mouse</strong>
-              <span>No programa do fabricante do mouse, use <em>1000 Hz</em> ou mais.</span>
-            </div>
-          </div>
-          <div className="check-item">
-            <span className="mark" />
-            <div>
-              <strong>FPS acima da taxa do monitor</strong>
-              <span>Com monitor de 144 Hz, tente manter o FPS acima de 144 e desligue o V-Sync no jogo.</span>
-            </div>
-          </div>
-        </div>
+        <button type="button" className="btn block" onClick={() => s.updateSettings({ bindings: { ...DEFAULT_BINDINGS } })}>
+          Voltar às teclas padrão
+        </button>
+        <p className="note">Clique numa tecla e aperte a nova combinação, com Ctrl ou Alt. Os atalhos não mudam as teclas do jogo nem simulam teclas.</p>
       </section>
     </div>
   );

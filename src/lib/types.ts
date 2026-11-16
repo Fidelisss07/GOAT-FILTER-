@@ -3,7 +3,7 @@ export type ThemeId = "rosa" | "roxo" | "amarelo";
 /** Ordem do seletor de tema: rosa, roxo, amarelo. */
 export const THEMES: { id: ThemeId; label: string; color: string }[] = [
   { id: "rosa", label: "Rosa", color: "#FF48A8" },
-  { id: "roxo", label: "Violeta", color: "#AD78FF" },
+  { id: "roxo", label: "Roxo", color: "#AD78FF" },
   { id: "amarelo", label: "Amarelo", color: "#FFD629" },
 ];
 

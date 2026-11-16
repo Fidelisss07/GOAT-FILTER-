@@ -38,6 +38,7 @@ Redragon de 144 Hz.
 | Aba Desempenho: mouse, teclado, energia, checklist de delay | ✅ feito (v1.1) |
 | Teclas dos atalhos configuráveis + atalho "próximo perfil" | ✅ feito (v1.1) |
 | Atualização automática (download + SHA-256 do GitHub + instalação silenciosa) | ✅ feito (v1.2) |
+| Novo visual (design/v2): moldura grafite, cabrito lateral, painéis arredondados | ✅ feito (v1.3) |
 | Remapear teclas do jogo / macros | ❌ descartado: risco de ban (Vanguard) |
 | Assinatura gratuita (SignPath / Microsoft Store / winget) | 🟡 pronta no workflow; depende do dono criar a conta (docs/ASSINATURA.md) |
 

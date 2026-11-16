@@ -82,7 +82,7 @@ describe("Perfis", () => {
     await userEvent.clear(screen.getByLabelText("Executável"));
     await userEvent.type(screen.getByLabelText("Executável"), "C:\\Jogos\\cs2.exe");
     await userEvent.click(screen.getByRole("button", { name: "Salvar perfil" }));
-    const list = screen.getByRole("region", { name: "Gerenciador de perfis" });
+    const list = screen.getByRole("region", { name: "Meus perfis" });
     expect(await within(list).findByText("CS2")).toBeInTheDocument();
     const saved = JSON.parse(localStorage.getItem("goat-filter:settings")!);
     expect(saved.profiles.map((p: { name: string }) => p.name)).toEqual(["Valorant", "CS2"]);
@@ -169,7 +169,7 @@ describe("Desempenho", () => {
     await renderApp();
     await userEvent.click(screen.getByRole("button", { name: "Desempenho" }));
     await userEvent.click(await screen.findByRole("button", { name: "Ligar" }));
-    expect(await screen.findByText("Ligado.")).toBeInTheDocument();
+    expect(await screen.findByText("Ligado", { selector: ".state" })).toBeInTheDocument();
   });
 
   it("formato das teclas", () => {
