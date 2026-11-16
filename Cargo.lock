@@ -1463,12 +1463,13 @@ dependencies = [
 
 [[package]]
 name = "goat-core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "libloading 0.8.9",
  "log",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 1.0.69",
  "windows 0.58.0",
@@ -1476,13 +1477,14 @@ dependencies = [
 
 [[package]]
 name = "goat-filter"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "goat-core",
  "log",
  "native-tls",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",

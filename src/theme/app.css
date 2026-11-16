@@ -471,7 +471,9 @@ button, input, select { font: inherit; color: inherit; }
 .set-card .ctl .label { color: var(--text); font-size: 20px; }
 
 .about-logo { width: 66px; height: 66px; }
-.about-ctl { gap: 12px; align-items: flex-start; }
+.about-ctl { gap: 12px; align-items: stretch; }
+.about-ctl > .btn.small { align-self: flex-start; }
+.about-ctl .row { min-height: 52px; font-size: 17px; }
 .about-links { display: flex; gap: 18px; flex-wrap: wrap; }
 .update-box { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1.5px solid var(--accent); border-radius: 6px; background: rgba(var(--accent-rgb), 0.12); }
 .note.tight { margin: -6px 0 6px; }

@@ -96,7 +96,10 @@ Baixe a versão mais recente na aba
 - `GoatFilter-<versão>-instalador.exe`: instala e cria atalho (recomendado)
 - `GoatFilter-<versão>-portatil.exe`: roda sem instalar
 
-O app avisa quando sai uma versão nova (Configurações › Sobre).
+**Atualização automática** (a partir da v1.2, na versão instalada): o app baixa a versão
+nova em segundo plano, confere o SHA-256 publicado pelo GitHub e instala em silêncio na próxima
+vez que abrir (ou em Configurações › Sobre › **Reiniciar e atualizar agora**). Dá para desligar
+em Configurações › Sobre › **Atualizar sozinho**. A versão portátil só avisa.
 
 ### Links fixos (para sites)
 

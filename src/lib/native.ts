@@ -10,6 +10,7 @@ import {
   MonitorHwState,
   PerfStatus,
   UpdateInfo,
+  UpdaterState,
   Tuning,
   GameStatus,
   MonitorInfo,
@@ -27,6 +28,9 @@ export interface NativeApi {
   monitorHw(monitorId: string): Promise<MonitorHwState>;
   perfStatus(): Promise<PerfStatus>;
   setGameMode(on: boolean): Promise<PerfStatus>;
+  updaterState(): Promise<UpdaterState>;
+  installUpdateNow(): Promise<void>;
+  onUpdateReady(cb: (version: string) => void): Promise<() => void>;
   appVersion(): Promise<string>;
   checkUpdate(): Promise<UpdateInfo>;
   openRelease(url: string | null): Promise<void>;
@@ -76,6 +80,9 @@ async function tauriApi(): Promise<NativeApi> {
     findValorant: () => invoke<string | null>("find_valorant"),
     perfStatus: () => invoke<PerfStatus>("perf_status"),
     setGameMode: (on) => invoke<PerfStatus>("set_game_mode", { on }),
+    updaterState: () => invoke<UpdaterState>("updater_state"),
+    installUpdateNow: () => invoke<void>("install_update_now"),
+    onUpdateReady: (cb) => listen<string>("update-ready", (e) => cb(e.payload)),
     appVersion: () => invoke<string>("app_version"),
     checkUpdate: () => invoke<UpdateInfo>("check_update"),
     openRelease: (url) => invoke<void>("open_release", { url }),
@@ -195,7 +202,10 @@ export function createDemoApi(): NativeApi {
       demoPerf.gameMode = on;
       return { ...demoPerf };
     },
-    appVersion: async () => "1.1.0",
+    updaterState: async () => ({ pending: null, installed: true }),
+    installUpdateNow: async () => {},
+    onUpdateReady: async () => () => {},
+    appVersion: async () => "1.2.0",
     checkUpdate: async () => ({ current: "1.0.0", latest: null, available: false, url: null, notes: null }),
     openRelease: async () => {},
     openLogs: async () => {},

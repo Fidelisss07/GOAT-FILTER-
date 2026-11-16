@@ -10,6 +10,7 @@ import {
   Settings,
   ThemeId,
   UpdateInfo,
+  UpdaterState,
   VALORANT_ID,
 } from "../lib/types";
 
@@ -39,6 +40,7 @@ interface State {
   toast: Toast | null;
   version: string;
   update: UpdateInfo | null;
+  updater: UpdaterState;
   updateState: "idle" | "checking" | "error";
 
   selectedProfileId: string | null;
@@ -85,6 +87,7 @@ export const useStore = create<State>((set, get) => ({
   toast: null,
   version: "",
   update: null,
+  updater: { pending: null, installed: false },
   updateState: "idle",
   selectedProfileId: VALORANT_ID,
   draft: null,
@@ -119,6 +122,8 @@ export const useStore = create<State>((set, get) => ({
     n.onMonitors((list) => get().monitorsChanged(list));
     n.onNotice((t) => get().showToast(t));
     n.onUpdate((update) => set({ update }));
+    n.onUpdateReady((pending) => set({ updater: { ...get().updater, pending } }));
+    n.updaterState().then((updater) => set({ updater })).catch(() => {});
     n.appVersion().then((version) => set({ version })).catch(() => {});
   },
 

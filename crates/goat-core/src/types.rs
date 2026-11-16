@@ -165,6 +165,8 @@ pub struct Settings {
     pub hotkeys: bool,
     pub bindings: Bindings,
     pub perf: PerfTweaks,
+    /// Baixa e instala versões novas sozinho (só na versão instalada).
+    pub auto_update: bool,
     pub start_with_windows: bool,
     pub minimize_to_tray: bool,
     pub default_monitor: Option<String>,
@@ -180,6 +182,7 @@ impl Default for Settings {
             hotkeys: true,
             bindings: Bindings::default(),
             perf: PerfTweaks::default(),
+            auto_update: true,
             start_with_windows: false,
             minimize_to_tray: true,
             default_monitor: None,
