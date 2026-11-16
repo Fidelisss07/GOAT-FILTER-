@@ -134,6 +134,14 @@ export const METHOD_LABEL: Record<Exclude<SuperMethod, "none">, { title: string;
   },
 };
 
+export interface UpdateInfo {
+  current: string;
+  latest: string | null;
+  available: boolean;
+  url: string | null;
+  notes: string | null;
+}
+
 export interface Notice {
   kind: "ok" | "error" | "info";
   text: string;

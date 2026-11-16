@@ -73,16 +73,27 @@ Os perfis podem ser **exportados e importados** (arquivo `.goatfilter.json`) par
    normal e o perfil deve voltar quando você retornar ao jogo.
 10. Saia pela bandeja (**Sair**) e confira se as cores originais voltaram.
 
-## Baixar o `.exe`
+## Baixar
 
-A cada push, o GitHub Actions compila no Windows e publica o artefato
-**goat-filter-windows** (aba *Actions* → execução mais recente → *Artifacts*). Ele contém:
+Baixe a versão mais recente na aba
+[**Releases**](https://github.com/Fidelisss07/GOAT-FILTER-/releases/latest):
 
-- `Goat Filter_0.5.0_x64-setup.exe`: o instalador
-- `goat-filter.exe`: a versão portátil
+- `GoatFilter-<versão>-instalador.exe`: instala e cria atalho (recomendado)
+- `GoatFilter-<versão>-portatil.exe`: roda sem instalar
 
-O `.exe` ainda não tem assinatura digital, então o Windows SmartScreen pode avisar.
-Clique em "Mais informações" → "Executar assim mesmo".
+O app avisa quando sai uma versão nova (Configurações › Sobre).
+
+O `.exe` ainda não tem assinatura digital, então o Windows SmartScreen pode avisar na primeira
+vez. Clique em **Mais informações** → **Executar assim mesmo**. Os caminhos gratuitos para
+tirar esse aviso estão em [docs/ASSINATURA.md](docs/ASSINATURA.md).
+
+### Publicar uma versão nova
+
+1. Suba o número da versão em `package.json`, `src-tauri/tauri.conf.json` e `Cargo.toml`.
+2. Na aba **Actions**, abra **Publicar versão** e clique em **Run workflow**.
+3. O GitHub compila, testa e cria a página da versão com os dois `.exe`.
+
+A cada push, o workflow **Build Windows** também gera os `.exe` como artefato (para testes).
 
 ## Desenvolvimento
 

@@ -9,6 +9,7 @@ import {
   Profile,
   Settings,
   ThemeId,
+  UpdateInfo,
   VALORANT_ID,
 } from "../lib/types";
 
@@ -36,6 +37,9 @@ interface State {
   edited: Record<string, number>;
   busy: boolean;
   toast: Toast | null;
+  version: string;
+  update: UpdateInfo | null;
+  updateState: "idle" | "checking" | "error";
 
   selectedProfileId: string | null;
   draft: Profile | null;
@@ -61,6 +65,7 @@ interface State {
   importProfiles(): Promise<void>;
   showToast(t: Toast): void;
   monitorsChanged(list: MonitorInfo[]): void;
+  checkUpdate(): Promise<void>;
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -78,6 +83,9 @@ export const useStore = create<State>((set, get) => ({
   edited: {},
   busy: false,
   toast: null,
+  version: "",
+  update: null,
+  updateState: "idle",
   selectedProfileId: VALORANT_ID,
   draft: null,
   draftErrors: {},
@@ -110,6 +118,8 @@ export const useStore = create<State>((set, get) => ({
     n.onGameStatus((game) => set({ game }));
     n.onMonitors((list) => get().monitorsChanged(list));
     n.onNotice((t) => get().showToast(t));
+    n.onUpdate((update) => set({ update }));
+    n.appVersion().then((version) => set({ version })).catch(() => {});
   },
 
   setPage: (page) => set({ page }),
@@ -303,6 +313,20 @@ export const useStore = create<State>((set, get) => ({
       get().showToast({ kind: "ok", text: "Perfis importados." });
     } catch (e) {
       get().showToast({ kind: "error", text: errMsg(e) });
+    }
+  },
+
+  async checkUpdate() {
+    set({ updateState: "checking" });
+    try {
+      const n = await getNative();
+      const update = await n.checkUpdate();
+      set({ update, updateState: "idle" });
+      if (!update.available)
+        get().showToast({ kind: "ok", text: update.latest ? "Você já está na versão mais recente." : "Nenhuma versão publicada ainda." });
+    } catch (e) {
+      set({ updateState: "error" });
+      get().showToast({ kind: "error", text: `Não foi possível verificar: ${errMsg(e)}` });
     }
   },
 

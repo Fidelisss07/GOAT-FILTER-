@@ -17,6 +17,37 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 const MINIMIZED_ARG: &str = "--minimized";
+/// Repositório onde as versões são publicadas (aba Releases).
+const REPO: &str = "Fidelisss07/GOAT-FILTER-";
+
+fn fetch_update() -> Result<goat_core::update::UpdateInfo, String> {
+    let current = env!("CARGO_PKG_VERSION");
+    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
+    // TLS nativo do Windows (SChannel): sem dependência em C.
+    let tls = native_tls::TlsConnector::new().map_err(|e| e.to_string())?;
+    let agent = ureq::AgentBuilder::new().tls_connector(Arc::new(tls)).build();
+    match agent
+        .get(&url)
+        .set("User-Agent", "goat-filter-update-check")
+        .set("Accept", "application/vnd.github+json")
+        .timeout(Duration::from_secs(8))
+        .call()
+    {
+        Ok(r) => {
+            let json: serde_json::Value = r.into_json().map_err(|e| e.to_string())?;
+            Ok(goat_core::update::from_release_json(current, &json))
+        }
+        // Nenhuma versão publicada ainda.
+        Err(ureq::Error::Status(404, _)) => Ok(goat_core::update::UpdateInfo {
+            current: current.into(),
+            latest: None,
+            available: false,
+            url: None,
+            notes: None,
+        }),
+        Err(e) => Err(format!("sem conexão com o GitHub ({e})")),
+    }
+}
 
 struct AppState {
     engine: Mutex<Engine>,
@@ -87,6 +118,33 @@ async fn monitor_hw(app: AppHandle, monitor_id: String) -> Result<MonitorHwState
     tauri::async_runtime::spawn_blocking(move || lock(&state.engine).monitor_hw(&monitor_id))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn check_update() -> Result<goat_core::update::UpdateInfo, String> {
+    tauri::async_runtime::spawn_blocking(fetch_update).await.map_err(|e| e.to_string())?
+}
+
+/// Abre a página da versão nova no navegador (só links do GitHub do projeto).
+#[tauri::command]
+fn open_release(app: AppHandle, url: Option<String>) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let fallback = format!("https://github.com/{REPO}/releases/latest");
+    let url = url.filter(|u| u.starts_with(&format!("https://github.com/{REPO}/"))).unwrap_or(fallback);
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_logs(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    let _ = std::fs::create_dir_all(&dir);
+    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn app_version() -> String {
+    env!("CARGO_PKG_VERSION").into()
 }
 
 #[tauri::command]
@@ -328,6 +386,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![MINIMIZED_ARG])))
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
@@ -399,6 +458,21 @@ pub fn run() {
             register_hotkeys(app.handle(), hotkeys);
             spawn_background(app.handle().clone(), state);
 
+            // Verifica atualização uma vez, alguns segundos depois de abrir.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(8));
+                match fetch_update() {
+                    Ok(u) if u.available => {
+                        log::info!("Nova versão disponível: {:?}", u.latest);
+                        notify(&handle, "info", format!("Nova versão {} disponível — veja em Configurações › Sobre", u.latest.clone().unwrap_or_default()));
+                        let _ = handle.emit("update-available", u);
+                    }
+                    Ok(_) => {}
+                    Err(e) => log::info!("Verificação de atualização: {e}"),
+                }
+            });
+
             if !std::env::args().any(|a| a == MINIMIZED_ARG) {
                 show_main(app.handle());
             }
@@ -421,6 +495,10 @@ pub fn run() {
             apply_tuned,
             monitor_hw,
             find_valorant,
+            check_update,
+            open_release,
+            open_logs,
+            app_version,
             export_profiles,
             import_profiles,
             restore_monitor,

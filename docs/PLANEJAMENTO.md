@@ -34,7 +34,8 @@ Redragon de 144 Hz.
 | Valorant encontrado automaticamente em qualquer pasta/disco | ✅ feito (v0.5) |
 | Intel IGCL | ❌ descartado: grava no driver e não dá para testar sem risco; a Intel usa a camada Super |
 | Correções após teste em hardware real | ⏳ v0.4 (depende do teste) |
-| Atualização automática, Releases, assinatura do `.exe` | ⏳ v1.0 |
+| Aviso de nova versão, publicação em Releases, "Sobre" com logs | ✅ feito (v1.0) |
+| Assinatura gratuita (SignPath / Microsoft Store / winget) | 🟡 pronta no workflow; depende do dono criar a conta (docs/ASSINATURA.md) |
 
 A Magnification API foi implementada primeiro porque funciona em **qualquer GPU e no
 Windows 10 e 11**. O MHC2 só existe no Windows 11 e o formato precisa ser validado em

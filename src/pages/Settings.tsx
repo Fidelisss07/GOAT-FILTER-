@@ -1,5 +1,6 @@
 import { MonitorSelect, ToggleRow } from "../components/Controls";
 import { CheckIcon, MonitorGearIcon, MonitorIcon, PowerIcon, SparkIcon } from "../components/Icons";
+import { getNative } from "../lib/native";
 import { METHOD_LABEL, THEMES, ThemeId } from "../lib/types";
 import { useStore } from "../state/store";
 
@@ -127,7 +128,53 @@ export function SettingsPage() {
           </p>
         </div>
       </section>
+
+      <About />
     </div>
+  );
+}
+
+const logos = import.meta.glob<string>("../assets/logo/*-simbolo.svg", { eager: true, query: "?url", import: "default" });
+
+function About() {
+  const s = useStore();
+  const u = s.update;
+  return (
+    <section className="card set-card about" aria-label="Sobre">
+      <div className="ico">
+        <img src={logos[`../assets/logo/${s.settings.theme}-simbolo.svg`]} alt="" className="about-logo" />
+      </div>
+      <div className="txt">
+        <h2>Goat Filter</h2>
+        <p>
+          Versão {s.version || "—"}
+          {u?.latest && !u.available && " · atualizado"}
+        </p>
+      </div>
+      <div className="ctl about-ctl">
+        {u?.available ? (
+          <div className="update-box">
+            <strong>Nova versão {u.latest} disponível</strong>
+            {u.notes && <p className="note">{u.notes}</p>}
+            <button type="button" className="btn primary small" onClick={() => getNative().then((n) => n.openRelease(u.url))}>
+              Baixar nova versão
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="btn small" disabled={s.updateState === "checking"} onClick={s.checkUpdate}>
+            {s.updateState === "checking" ? "Verificando…" : "Verificar atualizações"}
+          </button>
+        )}
+        <div className="about-links">
+          <button type="button" className="btn link" onClick={() => getNative().then((n) => n.openLogs())}>
+            Abrir pasta de logs
+          </button>
+          <button type="button" className="btn link" onClick={() => getNative().then((n) => n.openRelease(null))}>
+            Página de downloads
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

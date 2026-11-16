@@ -7,6 +7,7 @@ pub mod backends;
 pub mod color;
 pub mod engine;
 pub mod games;
+pub mod update;
 pub mod monitors;
 pub mod session;
 pub mod settings;
