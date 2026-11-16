@@ -24,12 +24,34 @@ const MINIMIZED_ARG: &str = "--minimized";
 /// Repositório onde as versões são publicadas (aba Releases).
 const REPO: &str = "Fidelisss07/GOAT-FILTER-";
 
-fn fetch_update() -> Result<goat_core::update::UpdateInfo, String> {
-    let current = env!("CARGO_PKG_VERSION");
-    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
+fn http_agent() -> Result<ureq::Agent, String> {
     // TLS nativo do Windows (SChannel): sem dependência em C.
     let tls = native_tls::TlsConnector::new().map_err(|e| e.to_string())?;
-    let agent = ureq::AgentBuilder::new().tls_connector(Arc::new(tls)).build();
+    Ok(ureq::AgentBuilder::new().tls_connector(Arc::new(tls)).build())
+}
+
+/// Consulta a versão mais nova.
+/// 1º: `latest.json` anexado à versão, pelo link de download normal do GitHub
+///     (sem o limite de 60 consultas por hora da API).
+/// 2º: API do GitHub (versões antigas não têm o `latest.json`).
+fn fetch_update() -> Result<goat_core::update::UpdateInfo, String> {
+    let current = env!("CARGO_PKG_VERSION");
+    let agent = http_agent()?;
+
+    let manifest = format!("https://github.com/{REPO}/releases/latest/download/latest.json");
+    match agent.get(&manifest).set("User-Agent", "goat-filter-update-check").timeout(Duration::from_secs(8)).call() {
+        Ok(r) => {
+            if let Ok(json) = r.into_json::<serde_json::Value>() {
+                if let Some(u) = goat_core::update::from_manifest_json(current, REPO, &json) {
+                    return Ok(u);
+                }
+            }
+            log::info!("latest.json inválido; usando a API do GitHub");
+        }
+        Err(e) => log::info!("latest.json indisponível ({e}); usando a API do GitHub"),
+    }
+
+    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
     match agent
         .get(&url)
         .set("User-Agent", "goat-filter-update-check")
@@ -51,6 +73,9 @@ fn fetch_update() -> Result<goat_core::update::UpdateInfo, String> {
             installer_url: None,
             installer_sha256: None,
         }),
+        Err(ureq::Error::Status(403 | 429, _)) => {
+            Err("o GitHub limitou as consultas por agora; tente de novo em até 1 hora".into())
+        }
         Err(e) => Err(format!("sem conexão com o GitHub ({e})")),
     }
 }

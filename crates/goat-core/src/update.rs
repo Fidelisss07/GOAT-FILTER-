@@ -115,6 +115,34 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
     }
 }
 
+/// Monta o resultado a partir do `latest.json` anexado a cada versão
+/// (baixado pelo link normal do GitHub, sem o limite de consultas da API).
+/// Formato: `{"version": "1.3.1", "tag": "v1.3.1", "installer": "...exe", "sha256": "..."}`.
+pub fn from_manifest_json(current: &str, repo: &str, json: &serde_json::Value) -> Option<UpdateInfo> {
+    let version = json.get("version")?.as_str()?.trim().trim_start_matches(['v', 'V']).to_string();
+    parse(&version)?;
+    let tag = json
+        .get("tag")
+        .and_then(|t| t.as_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("v{version}"));
+    let installer = json.get("installer").and_then(|t| t.as_str()).filter(|n| !n.contains('/') && !n.contains('\\'));
+    let sha = json
+        .get("sha256")
+        .and_then(|t| t.as_str())
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit()));
+    Some(UpdateInfo {
+        current: current.into(),
+        available: is_newer(&version, current),
+        latest: Some(tag.clone()),
+        url: Some(format!("https://github.com/{repo}/releases/tag/{tag}")),
+        notes: None,
+        installer_url: installer.map(|n| format!("https://github.com/{repo}/releases/download/{tag}/{n}")),
+        installer_sha256: sha,
+    })
+}
+
 /// Monta o resultado a partir do JSON de `releases/latest`.
 pub fn from_release_json(current: &str, json: &serde_json::Value) -> UpdateInfo {
     let tag = json.get("tag_name").and_then(|t| t.as_str()).map(str::to_string);
@@ -209,5 +237,27 @@ mod tests {
         let f = t.path().join("a");
         std::fs::write(&f, b"abc").unwrap();
         assert_eq!(sha256_file(&f).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    }
+
+    #[test]
+    fn reads_release_manifest() {
+        let j = serde_json::json!({
+            "version": "1.3.1", "tag": "v1.3.1",
+            "installer": "GoatFilter-1.3.1-instalador.exe",
+            "sha256": "AB".repeat(32)
+        });
+        let u = from_manifest_json("1.3.0", "o/r", &j).unwrap();
+        assert!(u.available);
+        assert_eq!(
+            u.installer_url.as_deref(),
+            Some("https://github.com/o/r/releases/download/v1.3.1/GoatFilter-1.3.1-instalador.exe")
+        );
+        assert_eq!(u.installer_sha256.as_deref(), Some("ab".repeat(32).as_str()));
+        assert!(!from_manifest_json("1.3.1", "o/r", &j).unwrap().available);
+        // nome com caminho ou hash inválido são ignorados
+        let bad = serde_json::json!({"version": "2.0.0", "installer": "../x.exe", "sha256": "123"});
+        let u = from_manifest_json("1.0.0", "o/r", &bad).unwrap();
+        assert!(u.installer_url.is_none() && u.installer_sha256.is_none());
+        assert!(from_manifest_json("1.0.0", "o/r", &serde_json::json!({"version": "lixo"})).is_none());
     }
 }

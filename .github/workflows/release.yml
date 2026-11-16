@@ -75,12 +75,23 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: release
 
+      - name: Gerar latest.json (o app lê para se atualizar)
+        shell: pwsh
+        run: |
+          $file = "GoatFilter-$env:VERSION-instalador.exe"
+          $hash = (Get-FileHash "release/$file" -Algorithm SHA256).Hash.ToLower()
+          @{ version = $env:VERSION; tag = "v$env:VERSION"; installer = $file; sha256 = $hash } |
+            ConvertTo-Json | Set-Content -Encoding utf8NoBOM release/latest.json
+          Get-Content release/latest.json
+
       - name: Criar a versão em Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
           name: Goat Filter ${{ env.VERSION }}
-          files: release/*.exe
+          files: |
+            release/*.exe
+            release/latest.json
           generate_release_notes: true
           body: |
             ## Baixar
