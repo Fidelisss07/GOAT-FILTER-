@@ -13,9 +13,7 @@ A [SignPath Foundation](https://signpath.org) assina de graça projetos **open s
 
 Requisitos:
 - Repositório público (o Goat Filter já é).
-- Uma **licença open source** (por exemplo MIT) no repositório. Hoje o projeto **não tem
-  licença**; adicionar uma é decisão do dono, porque permite que outras pessoas usem e
-  modifiquem o código.
+- Uma **licença open source** no repositório: o projeto usa a licença [MIT](../LICENSE).
 - Pedir a entrada no programa pelo site e esperar a aprovação.
 
 Depois da aprovação, o workflow **Publicar versão** já está pronto:

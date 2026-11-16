@@ -140,3 +140,7 @@ src-tauri/           app Tauri: janela, bandeja, inicialização com o Windows
 design/              kit visual (logos, mockups, especificação)
 docs/PLANEJAMENTO.md planejamento completo
 ```
+
+## Licença
+
+[MIT](LICENSE).
