@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { ThemeSwatches } from "../components/Controls";
-import { GearIcon, HomeIcon, LayersIcon, WinClose, WinMax, WinMin } from "../components/Icons";
+import { BoltIcon, GearIcon, HomeIcon, LayersIcon, WinClose, WinMax, WinMin } from "../components/Icons";
 import { getNative, NativeApi } from "../lib/native";
 import { ThemeId } from "../lib/types";
 import { Overview } from "../pages/Overview";
+import { PerformancePage } from "../pages/Performance";
 import { Profiles } from "../pages/Profiles";
 import { SettingsPage } from "../pages/Settings";
 import { Page, useStore } from "../state/store";
@@ -14,11 +15,13 @@ const logo = (t: ThemeId, kind: "simbolo" | "wordmark") => logos[`../assets/logo
 const PAGES: { id: Page; title: string; Icon: typeof HomeIcon }[] = [
   { id: "overview", title: "Visão geral", Icon: HomeIcon },
   { id: "profiles", title: "Perfis", Icon: LayersIcon },
+  { id: "performance", title: "Desempenho", Icon: BoltIcon },
   { id: "settings", title: "Configurações", Icon: GearIcon },
 ];
 const HEADINGS: Record<Page, string> = {
   overview: "Digital Vibrance",
   profiles: "Perfis",
+  performance: "Desempenho",
   settings: "Configurações",
 };
 
@@ -97,6 +100,7 @@ export function App() {
         <div className="page">
           {s.loaded && s.page === "overview" && <Overview />}
           {s.loaded && s.page === "profiles" && <Profiles />}
+          {s.loaded && s.page === "performance" && <PerformancePage />}
           {s.loaded && s.page === "settings" && <SettingsPage />}
         </div>
 

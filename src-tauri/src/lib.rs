@@ -1,8 +1,9 @@
 //! Aplicativo Tauri: janela, bandeja, comandos da interface e o loop de detecção.
 
 use goat_core::engine::Engine;
+use goat_core::perf::PerfManager;
 use goat_core::types::{
-    GameState, GameStatus, MonitorHwState, MonitorInfo, Settings, Snapshot, SuperMethod, Tuning, DRIVER_MAX, SUPER_MAX,
+    Bindings, GameState, GameStatus, MonitorHwState, MonitorInfo, Settings, Snapshot, SuperMethod, Tuning, DRIVER_MAX, SUPER_MAX,
     VALORANT_ID,
 };
 use goat_core::watcher::{process_snapshot, GameWatcher};
@@ -14,7 +15,8 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use std::str::FromStr;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 const MINIMIZED_ARG: &str = "--minimized";
 /// Repositório onde as versões são publicadas (aba Releases).
@@ -56,7 +58,12 @@ struct AppState {
     game: Mutex<GameStatus>,
     watcher: Mutex<GameWatcher>,
     /// Valores guardados quando o filtro é desligado pelo atalho.
-    paused: Mutex<Option<Vec<(String, u8)>>>,
+    paused: Mutex<Option<Vec<(String, u8, Tuning)>>>,
+    /// Atalhos registrados agora e a ação de cada um.
+    hotkeys: Mutex<Vec<(Shortcut, &'static str)>>,
+    /// Índice do último perfil escolhido pelo atalho "próximo perfil".
+    next_profile: Mutex<usize>,
+    perf: Mutex<PerfManager>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -147,6 +154,20 @@ fn app_version() -> String {
     env!("CARGO_PKG_VERSION").into()
 }
 
+/// Estado atual de mouse, teclado, energia e Modo de Jogo (aba Desempenho).
+#[tauri::command]
+fn perf_status(state: Shared) -> goat_core::types::PerfStatus {
+    lock(&state.perf).status()
+}
+
+/// Liga/desliga o Modo de Jogo do Windows (configuração permanente do usuário).
+#[tauri::command]
+fn set_game_mode(state: Shared, on: bool) -> Result<goat_core::types::PerfStatus, String> {
+    let mut p = lock(&state.perf);
+    p.set_game_mode(on)?;
+    Ok(p.status())
+}
+
 #[tauri::command]
 fn find_valorant() -> Option<String> {
     goat_core::games::find_valorant()
@@ -186,8 +207,11 @@ fn save_settings(app: AppHandle, state: Shared, settings: Settings) -> Result<Se
         }
         emit_monitors(&app, &state);
     }
-    if s.hotkeys != before.hotkeys {
-        register_hotkeys(&app, s.hotkeys);
+    if s.hotkeys != before.hotkeys || s.bindings != before.bindings {
+        let errs = register_hotkeys(&app, &s);
+        if !errs.is_empty() {
+            notify(&app, "error", format!("Atalhos: {}", errs.join(" · ")));
+        }
     }
 
     let auto = app.autolaunch();
@@ -215,23 +239,47 @@ fn executable_exists(path: String) -> bool {
 // Atalhos globais (funcionam com o jogo em foco; usam RegisterHotKey)
 // ---------------------------------------------------------------------------
 
-fn shortcuts() -> [Shortcut; 3] {
-    let m = Some(Modifiers::CONTROL | Modifiers::ALT);
-    [Shortcut::new(m, Code::KeyG), Shortcut::new(m, Code::ArrowUp), Shortcut::new(m, Code::ArrowDown)]
-}
-
-fn register_hotkeys(app: &AppHandle, on: bool) {
-    let gs = app.global_shortcut();
-    let _ = gs.unregister_all();
-    if !on {
-        return;
-    }
-    for sc in shortcuts() {
-        if let Err(e) = gs.register(sc) {
-            log::warn!("Atalho {sc:?} indisponível: {e}");
-            notify(app, "error", "Um atalho já está em uso por outro programa.");
+/// Lê as teclas configuradas. Devolve (atalho, ação) e os erros de leitura.
+fn parse_bindings(b: &Bindings) -> (Vec<(Shortcut, &'static str)>, Vec<String>) {
+    let mut ok = Vec::new();
+    let mut errs = Vec::new();
+    for (action, text) in b.all() {
+        if text.trim().is_empty() {
+            continue;
+        }
+        match Shortcut::from_str(text) {
+            Ok(sc) => ok.push((sc, action)),
+            Err(_) => errs.push(format!("tecla inválida: {text}")),
         }
     }
+    (ok, errs)
+}
+
+/// Registra os atalhos atuais. Devolve as teclas que não puderam ser usadas.
+fn register_hotkeys(app: &AppHandle, settings: &Settings) -> Vec<String> {
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    let state = app.state::<Arc<AppState>>();
+    lock(&state.hotkeys).clear();
+    if !settings.hotkeys {
+        return vec![];
+    }
+    let (list, mut errs) = parse_bindings(&settings.bindings);
+    for (sc, action) in list {
+        match gs.register(sc) {
+            Ok(()) => lock(&state.hotkeys).push((sc, action)),
+            Err(e) => {
+                log::warn!("Atalho {sc:?} indisponível: {e}");
+                errs.push(format!("{} já está em uso por outro programa", shortcut_label(&sc)));
+            }
+        }
+    }
+    errs
+}
+
+fn shortcut_label(sc: &Shortcut) -> String {
+    let s = sc.into_string();
+    s.replace("control", "Ctrl").replace("alt", "Alt").replace("shift", "Shift").replace("Key", "").replace("Arrow", "")
 }
 
 fn target_monitor(state: &AppState) -> Option<String> {
@@ -242,46 +290,69 @@ fn target_monitor(state: &AppState) -> Option<String> {
 
 fn on_hotkey(app: &AppHandle, sc: &Shortcut) {
     let state = app.state::<Arc<AppState>>();
-    let [toggle, up, down] = shortcuts();
-    if sc == &toggle {
-        let mut paused = lock(&state.paused);
-        let mut engine = lock(&state.engine);
-        match paused.take() {
-            Some(values) => {
-                for (id, v) in values {
-                    let _ = engine.apply(&id, v);
+    let Some(action) = lock(&state.hotkeys).iter().find(|(s, _)| s == sc).map(|(_, a)| *a) else { return };
+    match action {
+        "toggle" => {
+            let mut paused = lock(&state.paused);
+            let mut engine = lock(&state.engine);
+            match paused.take() {
+                Some(values) => {
+                    for (id, v, t) in values {
+                        let _ = engine.apply_with(&id, v, t);
+                    }
+                    drop(engine);
+                    notify(app, "ok", "Goat Filter ligado");
                 }
-                drop(engine);
-                notify(app, "ok", "Goat Filter ligado");
-            }
-            None => {
-                let values: Vec<(String, u8)> = engine
-                    .monitors()
-                    .into_iter()
-                    .filter_map(|m| match (m.current, m.original) {
-                        (Some(c), o) if Some(c) != o => Some((m.id, c)),
-                        _ => None,
-                    })
-                    .collect();
-                engine.restore_all();
-                *paused = Some(values);
-                drop(engine);
-                notify(app, "info", "Goat Filter desligado (Ctrl+Alt+G para ligar)");
+                None => {
+                    let values: Vec<(String, u8, Tuning)> = engine
+                        .monitors()
+                        .into_iter()
+                        .filter_map(|m| match (m.current, m.original) {
+                            (Some(c), o) if Some(c) != o || m.tuning != Tuning::default() => Some((m.id, c, m.tuning)),
+                            _ => None,
+                        })
+                        .collect();
+                    engine.restore_all();
+                    *paused = Some(values);
+                    drop(engine);
+                    notify(app, "info", "Goat Filter desligado (aperte o atalho de novo para ligar)");
+                }
             }
         }
-    } else if sc == &up || sc == &down {
-        let Some(id) = target_monitor(&state) else { return };
-        let mut engine = lock(&state.engine);
-        let max = if engine.method() == SuperMethod::None { DRIVER_MAX } else { SUPER_MAX };
-        let cur = engine.current(&id).unwrap_or(50) as i16;
-        let next = (cur + if sc == &up { 10 } else { -10 }).clamp(0, max as i16) as u8;
-        let r = engine.apply(&id, next);
-        drop(engine);
-        *lock(&state.paused) = None;
-        match r {
-            Ok(_) => notify(app, "ok", format!("Vibrance: {next}%")),
-            Err(e) => notify(app, "error", e),
+        "vibranceUp" | "vibranceDown" => {
+            let Some(id) = target_monitor(&state) else { return };
+            let mut engine = lock(&state.engine);
+            let max = if engine.method() == SuperMethod::None { DRIVER_MAX } else { SUPER_MAX };
+            let cur = engine.current(&id).unwrap_or(50) as i16;
+            let next = (cur + if action == "vibranceUp" { 10 } else { -10 }).clamp(0, max as i16) as u8;
+            let r = engine.apply(&id, next);
+            drop(engine);
+            *lock(&state.paused) = None;
+            match r {
+                Ok(_) => notify(app, "ok", format!("Vibrance: {next}%")),
+                Err(e) => notify(app, "error", e),
+            }
         }
+        "nextProfile" => {
+            let Some(id) = target_monitor(&state) else { return };
+            let profiles = lock(&state.settings).profiles.clone();
+            if profiles.is_empty() {
+                return;
+            }
+            let i = {
+                let mut n = lock(&state.next_profile);
+                *n = (*n + 1) % profiles.len();
+                *n
+            };
+            let p = &profiles[i];
+            let r = lock(&state.engine).apply_with(&id, p.vibrance, p.tuning);
+            *lock(&state.paused) = None;
+            match r {
+                Ok(_) => notify(app, "ok", format!("Perfil: {} ({}%)", p.name, p.vibrance)),
+                Err(e) => notify(app, "error", e),
+            }
+        }
+        _ => {}
     }
     emit_monitors(app, &state);
 }
@@ -347,7 +418,8 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                     let settings = lock(&state.settings).clone();
                     let changed = {
                         let mut engine = lock(&state.engine);
-                        lock(&state.watcher).tick(&procs, foreground.as_deref(), &settings, &mut engine)
+                        let mut perf = lock(&state.perf);
+                        lock(&state.watcher).tick(&procs, foreground.as_deref(), &settings, &mut engine, &mut perf)
                     };
                     if let Some(status) = changed {
                         *lock(&state.game) = status.clone();
@@ -426,7 +498,7 @@ pub fn run() {
                     log::warn!("Método preferido indisponível: {e}");
                 }
             }
-            let hotkeys = settings.hotkeys;
+            // (atalhos registrados depois que o estado existe)
             let game = if cfg!(windows) {
                 GameStatus::idle()
             } else {
@@ -443,8 +515,12 @@ pub fn run() {
                 game: Mutex::new(game),
                 watcher: Mutex::new(GameWatcher::default()),
                 paused: Mutex::new(None),
+                hotkeys: Mutex::new(Vec::new()),
+                next_profile: Mutex::new(0),
+                perf: Mutex::new(PerfManager::new(backends::system_tweaks(), Some(dir.join("perf.json")))),
             });
             app.manage(state.clone());
+            let state_for_keys = state.clone();
             build_tray(app)?;
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
@@ -455,7 +531,10 @@ pub fn run() {
                     })
                     .build(),
             )?;
-            register_hotkeys(app.handle(), hotkeys);
+            let errs = register_hotkeys(app.handle(), &lock(&state_for_keys.settings).clone());
+            if !errs.is_empty() {
+                log::warn!("Atalhos: {errs:?}");
+            }
             spawn_background(app.handle().clone(), state);
 
             // Verifica atualização uma vez, alguns segundos depois de abrir.
@@ -494,6 +573,8 @@ pub fn run() {
             apply_vibrance,
             apply_tuned,
             monitor_hw,
+            perf_status,
+            set_game_mode,
             find_valorant,
             check_update,
             open_release,
@@ -513,6 +594,7 @@ pub fn run() {
             let st = app.state::<Arc<AppState>>();
             let restore = lock(&st.settings).restore_on_exit;
             lock(&st.engine).end_session(restore);
+            lock(&st.perf).restore();
         }
     });
 }

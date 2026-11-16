@@ -35,6 +35,9 @@ Redragon de 144 Hz.
 | Intel IGCL | ❌ descartado: grava no driver e não dá para testar sem risco; a Intel usa a camada Super |
 | Correções após teste em hardware real | ⏳ v0.4 (depende do teste) |
 | Aviso de nova versão, publicação em Releases, "Sobre" com logs | ✅ feito (v1.0) |
+| Aba Desempenho: mouse, teclado, energia, checklist de delay | ✅ feito (v1.1) |
+| Teclas dos atalhos configuráveis + atalho "próximo perfil" | ✅ feito (v1.1) |
+| Remapear teclas do jogo / macros | ❌ descartado: risco de ban (Vanguard) |
 | Assinatura gratuita (SignPath / Microsoft Store / winget) | 🟡 pronta no workflow; depende do dono criar a conta (docs/ASSINATURA.md) |
 
 A Magnification API foi implementada primeiro porque funciona em **qualquer GPU e no

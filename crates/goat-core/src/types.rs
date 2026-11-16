@@ -94,14 +94,77 @@ pub struct Profile {
     pub focus_only: bool,
 }
 
+/// Ajustes de entrada e desempenho aplicados enquanto um jogo está aberto.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PerfTweaks {
+    /// Desliga "Aprimorar precisão do ponteiro" (aceleração do mouse).
+    pub mouse_accel_off: bool,
+    /// Atraso de repetição mínimo e velocidade máxima do teclado.
+    pub keyboard_fast: bool,
+    /// Plano de energia "Alto desempenho".
+    pub high_performance_power: bool,
+}
+
+/// Teclas dos atalhos do Goat Filter (formato "Ctrl+Alt+KeyG").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Bindings {
+    pub toggle: String,
+    pub vibrance_up: String,
+    pub vibrance_down: String,
+    pub next_profile: String,
+}
+
+impl Default for Bindings {
+    fn default() -> Self {
+        Self {
+            toggle: "Ctrl+Alt+KeyG".into(),
+            vibrance_up: "Ctrl+Alt+ArrowUp".into(),
+            vibrance_down: "Ctrl+Alt+ArrowDown".into(),
+            next_profile: "Ctrl+Alt+KeyP".into(),
+        }
+    }
+}
+
+impl Bindings {
+    pub fn all(&self) -> [(&'static str, &str); 4] {
+        [
+            ("toggle", &self.toggle),
+            ("vibranceUp", &self.vibrance_up),
+            ("vibranceDown", &self.vibrance_down),
+            ("nextProfile", &self.next_profile),
+        ]
+    }
+}
+
+/// Estado atual do sistema (aba Desempenho).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PerfStatus {
+    pub supported: bool,
+    /// Aceleração do mouse ligada agora?
+    pub mouse_accel: Option<bool>,
+    /// 0 (mais curto) a 3.
+    pub keyboard_delay: Option<u32>,
+    /// 0 a 31 (mais rápido).
+    pub keyboard_speed: Option<u32>,
+    pub power_high: Option<bool>,
+    pub game_mode: Option<bool>,
+    /// Os ajustes do Goat Filter estão aplicados agora (jogo aberto).
+    pub applied: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub theme: ThemeId,
     /// Método preferido para a faixa acima de 100%.
     pub super_method: SuperMethod,
-    /// Atalhos globais (Ctrl+Alt+G, Ctrl+Alt+↑/↓).
+    /// Atalhos globais ligados.
     pub hotkeys: bool,
+    pub bindings: Bindings,
+    pub perf: PerfTweaks,
     pub start_with_windows: bool,
     pub minimize_to_tray: bool,
     pub default_monitor: Option<String>,
@@ -115,6 +178,8 @@ impl Default for Settings {
             theme: ThemeId::Roxo,
             super_method: SuperMethod::Magnifier,
             hotkeys: true,
+            bindings: Bindings::default(),
+            perf: PerfTweaks::default(),
             start_with_windows: false,
             minimize_to_tray: true,
             default_monitor: None,

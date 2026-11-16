@@ -70,12 +70,46 @@ export interface Profile {
   focusOnly: boolean;
 }
 
+/** Ajustes do Windows aplicados enquanto o jogo está aberto. */
+export interface PerfTweaks {
+  mouseAccelOff: boolean;
+  keyboardFast: boolean;
+  highPerformancePower: boolean;
+}
+
+/** Teclas dos atalhos do Goat Filter, no formato "Ctrl+Alt+KeyG". */
+export interface Bindings {
+  toggle: string;
+  vibranceUp: string;
+  vibranceDown: string;
+  nextProfile: string;
+}
+
+export const DEFAULT_BINDINGS: Bindings = {
+  toggle: "Ctrl+Alt+KeyG",
+  vibranceUp: "Ctrl+Alt+ArrowUp",
+  vibranceDown: "Ctrl+Alt+ArrowDown",
+  nextProfile: "Ctrl+Alt+KeyP",
+};
+
+export interface PerfStatus {
+  supported: boolean;
+  mouseAccel: boolean | null;
+  keyboardDelay: number | null;
+  keyboardSpeed: number | null;
+  powerHigh: boolean | null;
+  gameMode: boolean | null;
+  applied: boolean;
+}
+
 export interface Settings {
   theme: ThemeId;
   /** Método preferido para a faixa acima de 100%. */
   superMethod: SuperMethod;
-  /** Atalhos globais Ctrl+Alt+G e Ctrl+Alt+↑/↓. */
+  /** Atalhos globais ligados. */
   hotkeys: boolean;
+  bindings: Bindings;
+  perf: PerfTweaks;
   startWithWindows: boolean;
   minimizeToTray: boolean;
   /** Id do monitor usado pelos perfis; null = monitor principal. */
@@ -168,6 +202,8 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "roxo",
   superMethod: "magnifier",
   hotkeys: true,
+  bindings: DEFAULT_BINDINGS,
+  perf: { mouseAccelOff: false, keyboardFast: false, highPerformancePower: false },
   startWithWindows: false,
   minimizeToTray: true,
   defaultMonitor: null,

@@ -91,7 +91,7 @@ export function SettingsPage() {
         <div className="ico"><SparkIcon /></div>
         <div className="txt">
           <h2>Super Vibrance</h2>
-          <p>Como aplicar a faixa acima de 100% e os atalhos durante o jogo.</p>
+          <p>Como aplicar a faixa acima de 100%.</p>
         </div>
         <div className="ctl">
           <div className="methods" role="radiogroup" aria-label="Método do Super Vibrance">
@@ -117,15 +117,7 @@ export function SettingsPage() {
               );
             })}
           </div>
-          <ToggleRow
-            label="Atalhos de teclado"
-            checked={st.hotkeys}
-            onChange={(v) => s.updateSettings({ hotkeys: v })}
-            extra={demo ? <DemoTag /> : null}
-          />
-          <p className="note hotkeys">
-            <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd> liga/desliga · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> ajusta 10%
-          </p>
+          <p className="note">Atalhos de teclado e ajustes de mouse e teclado ficam na aba Desempenho.</p>
         </div>
       </section>
 
