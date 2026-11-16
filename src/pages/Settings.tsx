@@ -144,12 +144,21 @@ function About() {
         </p>
       </div>
       <div className="ctl about-ctl">
-        {u?.available ? (
+        {s.updater.pending ? (
+          <div className="update-box">
+            <strong>Versão {s.updater.pending} pronta para instalar</strong>
+            <p className="note">Instala sozinha na próxima vez que o Goat Filter abrir.</p>
+            <button type="button" className="btn primary small" onClick={() => getNative().then((n) => n.installUpdateNow())}>
+              Reiniciar e atualizar agora
+            </button>
+          </div>
+        ) : u?.available ? (
           <div className="update-box">
             <strong>Nova versão {u.latest} disponível</strong>
             {u.notes && <p className="note">{u.notes}</p>}
-            <button type="button" className="btn primary small" onClick={() => getNative().then((n) => n.openRelease(u.url))}>
-              Baixar nova versão
+            {s.settings.autoUpdate && s.updater.installed && <p className="note">Baixando em segundo plano…</p>}
+            <button type="button" className="btn small" onClick={() => getNative().then((n) => n.openRelease(u.url))}>
+              Abrir página da versão
             </button>
           </div>
         ) : (
@@ -157,6 +166,13 @@ function About() {
             {s.updateState === "checking" ? "Verificando…" : "Verificar atualizações"}
           </button>
         )}
+        <ToggleRow
+          label="Atualizar sozinho"
+          checked={s.settings.autoUpdate}
+          disabled={!s.updater.installed}
+          onChange={(v) => s.updateSettings({ autoUpdate: v })}
+          extra={!s.updater.installed ? <span className="pill">só na versão instalada</span> : null}
+        />
         <div className="about-links">
           <button type="button" className="btn link" onClick={() => getNative().then((n) => n.openLogs())}>
             Abrir pasta de logs

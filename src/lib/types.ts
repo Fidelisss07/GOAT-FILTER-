@@ -110,6 +110,8 @@ export interface Settings {
   hotkeys: boolean;
   bindings: Bindings;
   perf: PerfTweaks;
+  /** Baixa e instala versões novas sozinho (versão instalada). */
+  autoUpdate: boolean;
   startWithWindows: boolean;
   minimizeToTray: boolean;
   /** Id do monitor usado pelos perfis; null = monitor principal. */
@@ -174,6 +176,15 @@ export interface UpdateInfo {
   available: boolean;
   url: string | null;
   notes: string | null;
+  installerUrl?: string | null;
+  installerSha256?: string | null;
+}
+
+export interface UpdaterState {
+  /** Versão já baixada e conferida, esperando instalar. */
+  pending: string | null;
+  /** Versão instalada (a portátil não se atualiza sozinha). */
+  installed: boolean;
 }
 
 export interface Notice {
@@ -204,6 +215,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hotkeys: true,
   bindings: DEFAULT_BINDINGS,
   perf: { mouseAccelOff: false, keyboardFast: false, highPerformancePower: false },
+  autoUpdate: true,
   startWithWindows: false,
   minimizeToTray: true,
   defaultMonitor: null,
