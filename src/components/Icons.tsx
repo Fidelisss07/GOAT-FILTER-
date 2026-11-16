@@ -48,6 +48,9 @@ export const MonitorGearIcon = (p: P) => (
     <path d="M12 6.5v1M12 12.5v1M8.5 10h1M14.5 10h1M9.6 7.6l.7.7M13.7 11.7l.7.7M9.6 12.4l.7-.7M13.7 8.3l.7-.7" />
   </svg>
 );
+export const SparkIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M12 2.5 14 9l6.5 2-6.5 2-2 6.5-2-6.5-6.5-2L10 9z" /><path d="M19 3v3M17.5 4.5h3" /></svg>
+);
 export const ArrowsLR = (p: P) => (
   <svg {...base} strokeWidth={2.4} {...p}><path d="m9 7-5 5 5 5M15 7l5 5-5 5" /></svg>
 );

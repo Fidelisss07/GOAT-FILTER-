@@ -4,9 +4,11 @@
  * do sistema: só simula monitores e guarda as preferências no localStorage.
  */
 import {
+  Capabilities,
   DEFAULT_SETTINGS,
   GameStatus,
   MonitorInfo,
+  Notice,
   Settings,
   Snapshot,
 } from "./types";
@@ -22,6 +24,7 @@ export interface NativeApi {
   pickExecutable(current: string): Promise<string | null>;
   onGameStatus(cb: (s: GameStatus) => void): Promise<() => void>;
   onMonitors(cb: (m: MonitorInfo[]) => void): Promise<() => void>;
+  onNotice(cb: (n: Notice) => void): Promise<() => void>;
   window: {
     minimize(): void;
     toggleMaximize(): void;
@@ -60,6 +63,7 @@ async function tauriApi(): Promise<NativeApi> {
     },
     onGameStatus: (cb) => listen<GameStatus>("game-status", (e) => cb(e.payload)),
     onMonitors: (cb) => listen<MonitorInfo[]>("monitors-changed", (e) => cb(e.payload)),
+    onNotice: (cb) => listen<Notice>("notice", (e) => cb(e.payload)),
     window: {
       minimize: () => void win.minimize(),
       toggleMaximize: () => void win.toggleMaximize(),
@@ -89,6 +93,15 @@ export function createDemoApi(): NativeApi {
     { id: "demo-1", name: "Monitor principal", primary: true, driver: "nvidia", current: 50, driverDefault: 50, original: 50 },
     { id: "demo-2", name: "Monitor 2", primary: false, driver: "none", current: 50, driverDefault: null, original: 50 },
   ];
+  const caps: Capabilities = {
+    demo: true,
+    superMethod: "magnifier",
+    superReason: null,
+    methods: [
+      { method: "magnifier", available: true, reason: null },
+      { method: "mhc2", available: true, reason: null },
+    ],
+  };
   const find = (id: string) => {
     const m = monitors.find((x) => x.id === id);
     if (!m) throw new Error("Monitor desconectado.");
@@ -96,7 +109,7 @@ export function createDemoApi(): NativeApi {
   };
   return {
     getSnapshot: async () => ({
-      capabilities: { demo: true, superMethod: "magnifier", superReason: null },
+      capabilities: { ...caps, superMethod: loadDemoSettings().superMethod },
       monitors: structuredClone(monitors),
       settings: loadDemoSettings(),
       game: { state: "unavailable", profileId: null, message: "Modo demonstração: detecção do jogo desativada." },
@@ -123,6 +136,7 @@ export function createDemoApi(): NativeApi {
     pickExecutable: async () => null,
     onGameStatus: async () => () => {},
     onMonitors: async () => () => {},
+    onNotice: async () => () => {},
     window: { minimize() {}, toggleMaximize() {}, close() {} },
   };
 }

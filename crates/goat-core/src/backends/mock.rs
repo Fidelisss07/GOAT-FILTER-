@@ -1,6 +1,7 @@
 //! Backends falsos para testes e para rodar fora do Windows.
 
-use super::{BackendError, DriverVibrance, Result, SuperLayer};
+use super::{combined_factor, BackendError, DriverVibrance, Result, SuperLayer};
+use std::collections::BTreeMap;
 use crate::types::{DriverKind, SuperMethod};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -52,29 +53,39 @@ impl DriverVibrance for MockDriver {
     }
 }
 
+/// Camada Super falsa. `method` define se é global (Magnifier) ou por monitor (Mhc2).
 #[derive(Clone)]
 pub struct MockSuper {
-    pub factor: Arc<Mutex<f32>>,
+    pub method: SuperMethod,
+    pub factors: Arc<Mutex<BTreeMap<String, f32>>>,
 }
 
 impl Default for MockSuper {
     fn default() -> Self {
-        Self { factor: Arc::new(Mutex::new(1.0)) }
+        Self::new(SuperMethod::Magnifier)
     }
 }
 
 impl MockSuper {
+    pub fn new(method: SuperMethod) -> Self {
+        Self { method, factors: Arc::new(Mutex::new(BTreeMap::new())) }
+    }
+    /// Fator global efetivo.
     pub fn get(&self) -> f32 {
-        *self.factor.lock().unwrap()
+        combined_factor(&self.factors.lock().unwrap())
+    }
+    /// Fator de um monitor (camadas por monitor).
+    pub fn of(&self, display: &str) -> f32 {
+        self.factors.lock().unwrap().get(display).copied().unwrap_or(1.0)
     }
 }
 
 impl SuperLayer for MockSuper {
     fn method(&self) -> SuperMethod {
-        SuperMethod::Magnifier
+        self.method
     }
-    fn set_factor(&mut self, factor: f32) -> Result<()> {
-        *self.factor.lock().unwrap() = factor;
+    fn apply(&mut self, factors: &BTreeMap<String, f32>) -> Result<()> {
+        *self.factors.lock().unwrap() = factors.clone();
         Ok(())
     }
 }

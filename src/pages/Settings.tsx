@@ -1,6 +1,6 @@
 import { MonitorSelect, ToggleRow } from "../components/Controls";
-import { CheckIcon, MonitorGearIcon, MonitorIcon, PowerIcon } from "../components/Icons";
-import { THEMES, ThemeId } from "../lib/types";
+import { CheckIcon, MonitorGearIcon, MonitorIcon, PowerIcon, SparkIcon } from "../components/Icons";
+import { METHOD_LABEL, THEMES, ThemeId } from "../lib/types";
 import { useStore } from "../state/store";
 
 // Ordem desta tela segue o mockup: Violeta, Rosa, Amarelo.
@@ -83,6 +83,48 @@ export function SettingsPage() {
             onChange={(v) => s.updateSettings({ restoreOnExit: v })}
             extra={demo ? <DemoTag /> : null}
           />
+        </div>
+      </section>
+
+      <section className="card set-card" aria-label="Super Vibrance e atalhos">
+        <div className="ico"><SparkIcon /></div>
+        <div className="txt">
+          <h2>Super Vibrance</h2>
+          <p>Como aplicar a faixa acima de 100% e os atalhos durante o jogo.</p>
+        </div>
+        <div className="ctl">
+          <div className="methods" role="radiogroup" aria-label="Método do Super Vibrance">
+            {s.capabilities.methods.map((m) => {
+              const on = st.superMethod === m.method;
+              const info = METHOD_LABEL[m.method];
+              return (
+                <button
+                  key={m.method}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  disabled={!m.available}
+                  className="method"
+                  onClick={() => s.updateSettings({ superMethod: m.method })}
+                >
+                  <span className="radio" aria-hidden>{on && <CheckIcon />}</span>
+                  <span className="body">
+                    <strong>{info.title}</strong>
+                    <span>{m.available ? info.detail : `Indisponível: ${m.reason ?? "não suportado"}`}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <ToggleRow
+            label="Atalhos de teclado"
+            checked={st.hotkeys}
+            onChange={(v) => s.updateSettings({ hotkeys: v })}
+            extra={demo ? <DemoTag /> : null}
+          />
+          <p className="note hotkeys">
+            <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd> liga/desliga · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> ajusta 10%
+          </p>
         </div>
       </section>
     </div>

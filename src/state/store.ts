@@ -65,7 +65,7 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export const useStore = create<State>((set, get) => ({
   loaded: false,
   page: "overview",
-  capabilities: { demo: true, superMethod: "none", superReason: null },
+  capabilities: { demo: true, superMethod: "none", superReason: null, methods: [] },
   monitors: [],
   settings: DEFAULT_SETTINGS,
   game: { state: "idle", profileId: null, message: null },
@@ -104,6 +104,7 @@ export const useStore = create<State>((set, get) => ({
     });
     n.onGameStatus((game) => set({ game }));
     n.onMonitors((list) => get().monitorsChanged(list));
+    n.onNotice((t) => get().showToast(t));
   },
 
   setPage: (page) => set({ page }),
@@ -167,6 +168,15 @@ export const useStore = create<State>((set, get) => ({
       set({ settings: effective });
       if (patch.startWithWindows !== undefined && effective.startWithWindows !== patch.startWithWindows) {
         get().showToast({ kind: "error", text: "O Windows não aceitou alterar a inicialização automática." });
+      }
+      if (patch.superMethod !== undefined) {
+        const snap = await n.getSnapshot();
+        set({ capabilities: snap.capabilities, monitors: snap.monitors });
+        if (effective.superMethod !== patch.superMethod) {
+          get().showToast({ kind: "error", text: "Não foi possível usar esse método neste PC." });
+        } else {
+          get().showToast({ kind: "ok", text: "Método do Super Vibrance alterado." });
+        }
       }
     } catch (e) {
       set({ settings: prev });
@@ -253,7 +263,13 @@ export const useStore = create<State>((set, get) => ({
     const s = get();
     const stillThere = list.some((m) => m.id === s.selectedMonitorId);
     const edited = { ...s.edited };
-    for (const m of list) if (edited[m.id] === undefined) edited[m.id] = m.current ?? 50;
+    for (const m of list) {
+      const prev = s.monitors.find((x) => x.id === m.id);
+      // Mudou por fora (atalho, perfil do jogo, bandeja): o slider acompanha.
+      if (edited[m.id] === undefined || (prev && prev.current !== m.current && m.current != null)) {
+        edited[m.id] = m.current ?? 50;
+      }
+    }
     set({
       monitors: list,
       edited,

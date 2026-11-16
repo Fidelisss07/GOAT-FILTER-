@@ -139,8 +139,8 @@ mod tests {
         let e = Engine::new(
             Detected {
                 drivers: vec![Box::new(drv.clone())],
-                super_layer: Some(Box::new(MockSuper::default()) as Box<dyn SuperLayer>),
-                super_reason: None,
+                super_layers: vec![Box::new(MockSuper::default()) as Box<dyn SuperLayer>],
+                super_reasons: vec![],
             },
             vec![Display { id: "D1".into(), name: "M".into(), primary: true }],
             None,

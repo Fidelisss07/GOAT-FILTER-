@@ -23,16 +23,44 @@ Segurança das cores:
 - A camada Super pertence ao processo: se o app fechar, o Windows remove o efeito.
 - Com "Restaurar cores ao sair", tudo volta ao original quando você sai pela bandeja.
 
-> **Dica para o Valorant:** use o modo de exibição **"Janela em tela cheia"**. A camada
-> Super (acima de 100%) passa pela composição do Windows e pode não aparecer em tela
-> cheia exclusiva. A faixa de 0–100% (driver) funciona nos dois modos.
+### Dois métodos para passar de 100% (Configurações → Super Vibrance)
+
+| Método | Onde funciona | Observação |
+|---|---|---|
+| **Matriz do Windows** (padrão) | Qualquer GPU, Windows 10 e 11 | Aplicada pela composição do Windows. No Valorant, use **"Janela em tela cheia"**. Some sozinha se o app fechar. |
+| **Perfil de cor MHC2** (experimental) | Windows 11 | O app gera um perfil de cor com a matriz, e a própria GPU aplica: sem input lag e também em tela cheia exclusiva. É por monitor. Ao desligar, o perfil de cor anterior volta; se o app travar, ele é desfeito na próxima abertura. |
+
+### Atalhos (funcionam com o jogo aberto)
+
+| Atalho | Ação |
+|---|---|
+| `Ctrl` + `Alt` + `G` | Liga/desliga o filtro (volta às cores originais e depois reaplica) |
+| `Ctrl` + `Alt` + `↑` / `↓` | Sobe/desce 10% no monitor padrão |
+
+### Log para diagnóstico
+
+`%LOCALAPPDATA%\com.goatfilter.app\logs\goat-filter.log` registra o que foi detectado
+(placa, monitores, métodos disponíveis) e cada ajuste aplicado.
+
+## Roteiro de teste
+
+1. Abra o app e vá em **Visão geral**. O seletor de monitor deve mostrar o nome do seu
+   monitor e a etiqueta **Driver NVIDIA**.
+2. Coloque **100%** e clique em **Aplicar**. O Painel da NVIDIA deve mostrar 100% de vibrance.
+3. Coloque **150%** e clique em **Aplicar**. As cores devem ficar mais fortes do que em 100%.
+4. Em **Configurações → Super Vibrance**, troque para **Perfil de cor MHC2**. Com 150%
+   aplicado, as cores devem continuar fortes. Volte para 50% e confira se o normal voltou.
+5. Abra o Valorant em **tela cheia** e em **janela em tela cheia** com cada método e veja
+   onde a faixa acima de 100% aparece.
+6. No jogo, teste `Ctrl+Alt+G` e `Ctrl+Alt+↑/↓`.
+7. Saia pela bandeja (**Sair**) e confira se as cores originais voltaram.
 
 ## Baixar o `.exe`
 
 A cada push, o GitHub Actions compila no Windows e publica o artefato
 **goat-filter-windows** (aba *Actions* → execução mais recente → *Artifacts*). Ele contém:
 
-- `Goat Filter_0.1.0_x64-setup.exe`: o instalador
+- `Goat Filter_0.2.0_x64-setup.exe`: o instalador
 - `goat-filter.exe`: a versão portátil
 
 O `.exe` ainda não tem assinatura digital, então o Windows SmartScreen pode avisar.
@@ -69,7 +97,9 @@ src/                 interface React + TypeScript (3 telas, 3 temas)
 crates/goat-core/    núcleo em Rust, sem interface
   backends/nvapi.rs      NVIDIA Digital Vibrance
   backends/adl.rs        AMD saturação
-  backends/magnifier.rs  camada Super (matriz de cor do Windows)
+  backends/magnifier.rs  camada Super: matriz de cor do Windows
+  backends/mhc2.rs       camada Super: perfil de cor MHC2 (Windows 11)
+  backends/icc.rs        gerador do perfil ICC com a tag MHC2
   engine.rs              junta as camadas e restaura os originais
   session.rs             recuperação após crash
   watcher.rs             detecta o jogo abrindo/fechando

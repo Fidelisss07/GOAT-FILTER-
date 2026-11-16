@@ -20,6 +20,10 @@ export interface Profile {
 
 export interface Settings {
   theme: ThemeId;
+  /** Método preferido para a faixa acima de 100%. */
+  superMethod: SuperMethod;
+  /** Atalhos globais Ctrl+Alt+G e Ctrl+Alt+↑/↓. */
+  hotkeys: boolean;
   startWithWindows: boolean;
   minimizeToTray: boolean;
   /** Id do monitor usado pelos perfis; null = monitor principal. */
@@ -44,14 +48,38 @@ export interface MonitorInfo {
   original: number | null;
 }
 
-export type SuperMethod = "magnifier" | "none";
+export type SuperMethod = "magnifier" | "mhc2" | "none";
+
+export interface MethodInfo {
+  method: Exclude<SuperMethod, "none">;
+  available: boolean;
+  reason: string | null;
+}
 
 export interface Capabilities {
   /** true quando rodando no navegador (sem integração com Windows). */
   demo: boolean;
+  /** Método em uso agora. */
   superMethod: SuperMethod;
   /** Motivo quando Super Vibrance não está disponível. */
   superReason: string | null;
+  methods: MethodInfo[];
+}
+
+export const METHOD_LABEL: Record<Exclude<SuperMethod, "none">, { title: string; detail: string }> = {
+  magnifier: {
+    title: "Matriz do Windows",
+    detail: "Qualquer placa, Windows 10 e 11. Use o jogo em “Janela em tela cheia”.",
+  },
+  mhc2: {
+    title: "Perfil de cor MHC2 (experimental)",
+    detail: "Windows 11. Aplicado pela GPU: sem input lag e também em tela cheia.",
+  },
+};
+
+export interface Notice {
+  kind: "ok" | "error" | "info";
+  text: string;
 }
 
 export type GameState = "idle" | "active" | "unavailable";
@@ -73,6 +101,8 @@ export const VALORANT_ID = "valorant";
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: "roxo",
+  superMethod: "magnifier",
+  hotkeys: true,
   startWithWindows: false,
   minimizeToTray: true,
   defaultMonitor: null,

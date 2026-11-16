@@ -1,7 +1,7 @@
 //! Aplicativo Tauri: janela, bandeja, comandos da interface e o loop de detecção.
 
 use goat_core::engine::Engine;
-use goat_core::types::{GameState, GameStatus, MonitorInfo, Settings, Snapshot};
+use goat_core::types::{GameState, GameStatus, MonitorInfo, Settings, Snapshot, SuperMethod, DRIVER_MAX, SUPER_MAX};
 use goat_core::watcher::{running_processes, GameWatcher};
 use goat_core::{backends, monitors, settings as store};
 use std::path::PathBuf;
@@ -11,6 +11,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 const MINIMIZED_ARG: &str = "--minimized";
 
@@ -20,6 +21,23 @@ struct AppState {
     settings_path: PathBuf,
     game: Mutex<GameStatus>,
     watcher: Mutex<GameWatcher>,
+    /// Valores guardados quando o filtro é desligado pelo atalho.
+    paused: Mutex<Option<Vec<(String, u8)>>>,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct Notice {
+    kind: &'static str,
+    text: String,
+}
+
+fn notify(app: &AppHandle, kind: &'static str, text: impl Into<String>) {
+    let _ = app.emit("notice", Notice { kind, text: text.into() });
+}
+
+fn emit_monitors(app: &AppHandle, state: &AppState) {
+    let list = lock(&state.engine).monitors();
+    let _ = app.emit("monitors-changed", list);
 }
 
 type Shared<'a> = State<'a, Arc<AppState>>;
@@ -61,6 +79,19 @@ fn restore_monitor(state: Shared, monitor_id: String) -> Result<MonitorInfo, Str
 #[tauri::command]
 fn save_settings(app: AppHandle, state: Shared, settings: Settings) -> Result<Settings, String> {
     let mut s = store::sanitize(settings);
+    let before = lock(&state.settings).clone();
+
+    if s.super_method != before.super_method {
+        if let Err(e) = lock(&state.engine).set_method(s.super_method) {
+            log::warn!("Trocar método: {e}");
+            s.super_method = before.super_method;
+        }
+        emit_monitors(&app, &state);
+    }
+    if s.hotkeys != before.hotkeys {
+        register_hotkeys(&app, s.hotkeys);
+    }
+
     let auto = app.autolaunch();
     let was = auto.is_enabled().unwrap_or(false);
     if s.start_with_windows != was {
@@ -80,6 +111,81 @@ fn save_settings(app: AppHandle, state: Shared, settings: Settings) -> Result<Se
 fn executable_exists(path: String) -> bool {
     let p = PathBuf::from(path.trim());
     p.is_file() && p.extension().map(|e| e.eq_ignore_ascii_case("exe")).unwrap_or(false)
+}
+
+// ---------------------------------------------------------------------------
+// Atalhos globais (funcionam com o jogo em foco; usam RegisterHotKey)
+// ---------------------------------------------------------------------------
+
+fn shortcuts() -> [Shortcut; 3] {
+    let m = Some(Modifiers::CONTROL | Modifiers::ALT);
+    [Shortcut::new(m, Code::KeyG), Shortcut::new(m, Code::ArrowUp), Shortcut::new(m, Code::ArrowDown)]
+}
+
+fn register_hotkeys(app: &AppHandle, on: bool) {
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    if !on {
+        return;
+    }
+    for sc in shortcuts() {
+        if let Err(e) = gs.register(sc) {
+            log::warn!("Atalho {sc:?} indisponível: {e}");
+            notify(app, "error", "Um atalho já está em uso por outro programa.");
+        }
+    }
+}
+
+fn target_monitor(state: &AppState) -> Option<String> {
+    let wanted = lock(&state.settings).default_monitor.clone();
+    let engine = lock(&state.engine);
+    wanted.filter(|id| engine.has_monitor(id)).or_else(|| engine.primary_id())
+}
+
+fn on_hotkey(app: &AppHandle, sc: &Shortcut) {
+    let state = app.state::<Arc<AppState>>();
+    let [toggle, up, down] = shortcuts();
+    if sc == &toggle {
+        let mut paused = lock(&state.paused);
+        let mut engine = lock(&state.engine);
+        match paused.take() {
+            Some(values) => {
+                for (id, v) in values {
+                    let _ = engine.apply(&id, v);
+                }
+                drop(engine);
+                notify(app, "ok", "Goat Filter ligado");
+            }
+            None => {
+                let values: Vec<(String, u8)> = engine
+                    .monitors()
+                    .into_iter()
+                    .filter_map(|m| match (m.current, m.original) {
+                        (Some(c), o) if Some(c) != o => Some((m.id, c)),
+                        _ => None,
+                    })
+                    .collect();
+                engine.restore_all();
+                *paused = Some(values);
+                drop(engine);
+                notify(app, "info", "Goat Filter desligado (Ctrl+Alt+G para ligar)");
+            }
+        }
+    } else if sc == &up || sc == &down {
+        let Some(id) = target_monitor(&state) else { return };
+        let mut engine = lock(&state.engine);
+        let max = if engine.method() == SuperMethod::None { DRIVER_MAX } else { SUPER_MAX };
+        let cur = engine.current(&id).unwrap_or(50) as i16;
+        let next = (cur + if sc == &up { 10 } else { -10 }).clamp(0, max as i16) as u8;
+        let r = engine.apply(&id, next);
+        drop(engine);
+        *lock(&state.paused) = None;
+        match r {
+            Ok(_) => notify(app, "ok", format!("Vibrance: {next}%")),
+            Err(e) => notify(app, "error", e),
+        }
+    }
+    emit_monitors(app, &state);
 }
 
 // ---------------------------------------------------------------------------
@@ -108,8 +214,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             "restore" => {
                 let st = app.state::<Arc<AppState>>();
                 lock(&st.engine).restore_all();
-                let list = lock(&st.engine).monitors();
-                let _ = app.emit("monitors-changed", list);
+                emit_monitors(app, &st);
             }
             "quit" => app.exit(0),
             _ => {}
@@ -173,6 +278,15 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                    file_name: Some("goat-filter".into()),
+                }))
+                .max_file_size(1_000_000)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![MINIMIZED_ARG])))
         .setup(|app| {
@@ -181,12 +295,28 @@ pub fn run() {
             let settings_path = dir.join("settings.json");
             let settings = store::load(&settings_path);
 
-            let engine = Engine::new(
-                backends::detect(),
+            log::info!("Goat Filter {} iniciando", env!("CARGO_PKG_VERSION"));
+            let mut engine = Engine::new(
+                backends::detect(&dir),
                 monitors::enumerate(),
                 Some(dir.join("session.json")),
                 !cfg!(windows),
             );
+            {
+                let caps = engine.capabilities();
+                for m in &caps.methods {
+                    log::info!("Super {:?}: disponível={} {:?}", m.method, m.available, m.reason);
+                }
+                for m in engine.monitors() {
+                    log::info!("Monitor {} ({}): driver={:?} atual={:?}", m.id, m.name, m.driver, m.current);
+                }
+            }
+            if settings.super_method != engine.method() {
+                if let Err(e) = engine.set_method(settings.super_method) {
+                    log::warn!("Método preferido indisponível: {e}");
+                }
+            }
+            let hotkeys = settings.hotkeys;
             let game = if cfg!(windows) {
                 GameStatus::idle()
             } else {
@@ -202,9 +332,20 @@ pub fn run() {
                 settings_path,
                 game: Mutex::new(game),
                 watcher: Mutex::new(GameWatcher::default()),
+                paused: Mutex::new(None),
             });
             app.manage(state.clone());
             build_tray(app)?;
+            app.handle().plugin(
+                tauri_plugin_global_shortcut::Builder::new()
+                    .with_handler(|app, sc, ev| {
+                        if ev.state() == ShortcutState::Pressed {
+                            on_hotkey(app, sc);
+                        }
+                    })
+                    .build(),
+            )?;
+            register_hotkeys(app.handle(), hotkeys);
             spawn_background(app.handle().clone(), state);
 
             if !std::env::args().any(|a| a == MINIMIZED_ARG) {

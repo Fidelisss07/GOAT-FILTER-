@@ -66,7 +66,11 @@ export function Overview() {
                 {hasSuper ? "Driver sem vibrance — usando a camada Super" : "Sem ajuste disponível neste monitor"}
               </span>
             )}
-            {value > DRIVER_MAX && hasSuper && <span className="pill accent">Super Vibrance (todos os monitores)</span>}
+            {value > DRIVER_MAX && hasSuper && (
+              <span className="pill accent">
+                {caps.superMethod === "mhc2" ? "Super Vibrance · perfil MHC2" : "Super Vibrance · todos os monitores"}
+              </span>
+            )}
             {!hasSuper && caps.superReason && <span className="pill warn">{caps.superReason}</span>}
           </div>
         </section>
@@ -87,6 +91,9 @@ export function Overview() {
               />
               <div className="game-status">
                 <GameBadge />
+                {caps.superMethod === "magnifier" && valorant.vibrance > DRIVER_MAX && (
+                  <p className="note">Acima de 100%: deixe o Valorant em “Janela em tela cheia”.</p>
+                )}
               </div>
             </>
           ) : (

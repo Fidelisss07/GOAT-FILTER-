@@ -95,6 +95,19 @@ describe("Perfis", () => {
   });
 });
 
+describe("Configurações", () => {
+  it("troca o método do Super Vibrance e persiste", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Configurações" }));
+    const mhc2 = screen.getByRole("radio", { name: /Perfil de cor MHC2/ });
+    expect(mhc2).toHaveAttribute("aria-checked", "false");
+    await userEvent.click(mhc2);
+    expect(mhc2).toHaveAttribute("aria-checked", "true");
+    expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).superMethod).toBe("mhc2");
+    expect(useStore.getState().capabilities.superMethod).toBe("mhc2");
+  });
+});
+
 describe("regras de vibrance", () => {
   it("mesmas regras do núcleo em Rust", () => {
     expect(matrixFactor(75, "nvidia")).toBe(1);

@@ -8,7 +8,8 @@
 //! Limitação: é aplicado pela composição do Windows (DWM). Funciona com o jogo
 //! em "Janela em tela cheia"; em tela cheia exclusiva pode não aparecer.
 
-use super::{saturation_matrix, BackendError, Result, SuperLayer};
+use super::{combined_factor, saturation_matrix, BackendError, Result, SuperLayer};
+use std::collections::BTreeMap;
 use crate::types::SuperMethod;
 use std::sync::mpsc::{channel, Sender};
 use std::thread;
@@ -75,7 +76,8 @@ impl SuperLayer for Magnifier {
     fn method(&self) -> SuperMethod {
         SuperMethod::Magnifier
     }
-    fn set_factor(&mut self, factor: f32) -> Result<()> {
+    fn apply(&mut self, factors: &BTreeMap<String, f32>) -> Result<()> {
+        let factor = combined_factor(factors);
         if (factor - self.last).abs() < 1e-4 {
             return Ok(());
         }

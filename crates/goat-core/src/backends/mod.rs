@@ -1,6 +1,7 @@
 //! Backends que alteram as cores. Nada aqui toca no processo de jogo:
 //! tudo passa pelo driver da GPU ou pelo próprio Windows.
 
+pub mod icc;
 pub mod mapping;
 pub mod mock;
 
@@ -9,9 +10,13 @@ pub mod adl;
 #[cfg(windows)]
 pub mod magnifier;
 #[cfg(windows)]
+pub mod mhc2;
+#[cfg(windows)]
 pub mod nvapi;
 
 use crate::types::{DriverKind, SuperMethod};
+use std::collections::BTreeMap;
+use std::path::Path;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
@@ -34,22 +39,34 @@ pub trait DriverVibrance: Send {
     fn default_percent(&mut self, display: &str) -> Option<u8>;
 }
 
-/// Camada 2: matriz de saturação aplicada pelo Windows por cima de tudo.
-/// Fator 1.0 = sem efeito. É global (todos os monitores).
+/// Camada 2: matriz de saturação aplicada pelo Windows depois do jogo.
+/// Recebe o fator desejado por monitor (1.0 = sem efeito). Monitores fora do
+/// mapa devem voltar ao normal. Camadas globais combinam os fatores.
 pub trait SuperLayer: Send {
     fn method(&self) -> SuperMethod;
-    fn set_factor(&mut self, factor: f32) -> Result<()>;
+    fn apply(&mut self, factors: &BTreeMap<String, f32>) -> Result<()>;
+}
+
+/// Fator mais distante de 1.0 (para camadas que valem para a tela toda).
+pub fn combined_factor(factors: &BTreeMap<String, f32>) -> f32 {
+    factors
+        .values()
+        .copied()
+        .fold(1.0f32, |acc, f| if (f - 1.0).abs() > (acc - 1.0).abs() { f } else { acc })
 }
 
 pub struct Detected {
     pub drivers: Vec<Box<dyn DriverVibrance>>,
-    pub super_layer: Option<Box<dyn SuperLayer>>,
-    pub super_reason: Option<String>,
+    /// Camadas Super disponíveis, na ordem de preferência.
+    pub super_layers: Vec<Box<dyn SuperLayer>>,
+    /// Por que cada método ausente não está disponível.
+    pub super_reasons: Vec<(SuperMethod, String)>,
 }
 
 /// Carrega o que existir nesta máquina. Falhas viram "indisponível", nunca pânico.
+/// `data_dir` guarda os perfis de cor gerados pela camada MHC2.
 #[cfg(windows)]
-pub fn detect() -> Detected {
+pub fn detect(data_dir: &Path) -> Detected {
     let mut drivers: Vec<Box<dyn DriverVibrance>> = Vec::new();
     match nvapi::NvApi::load() {
         Ok(n) => drivers.push(Box::new(n)),
@@ -59,19 +76,28 @@ pub fn detect() -> Detected {
         Ok(a) => drivers.push(Box::new(a)),
         Err(e) => log::info!("ADL indisponível: {e}"),
     }
-    let (super_layer, super_reason) = match magnifier::Magnifier::start() {
-        Ok(m) => (Some(Box::new(m) as Box<dyn SuperLayer>), None),
-        Err(e) => (None, Some(format!("Super Vibrance indisponível: {e}"))),
-    };
-    Detected { drivers, super_layer, super_reason }
+    let mut super_layers: Vec<Box<dyn SuperLayer>> = Vec::new();
+    let mut super_reasons = Vec::new();
+    match magnifier::Magnifier::start() {
+        Ok(m) => super_layers.push(Box::new(m)),
+        Err(e) => super_reasons.push((SuperMethod::Magnifier, e)),
+    }
+    match mhc2::Mhc2::start(data_dir.join("perfis-de-cor")) {
+        Ok(m) => super_layers.push(Box::new(m)),
+        Err(e) => super_reasons.push((SuperMethod::Mhc2, e)),
+    }
+    Detected { drivers, super_layers, super_reasons }
 }
 
 #[cfg(not(windows))]
-pub fn detect() -> Detected {
+pub fn detect(_data_dir: &Path) -> Detected {
     Detected {
         drivers: Vec::new(),
-        super_layer: None,
-        super_reason: Some("Disponível apenas no Windows.".into()),
+        super_layers: Vec::new(),
+        super_reasons: vec![
+            (SuperMethod::Magnifier, "disponível apenas no Windows".into()),
+            (SuperMethod::Mhc2, "disponível apenas no Windows 11".into()),
+        ],
     }
 }
 

@@ -5,8 +5,8 @@ use crate::backends::mapping::super_factor;
 use crate::backends::{Detected, DriverVibrance, SuperLayer};
 use crate::monitors::Display;
 use crate::session::Session;
-use crate::types::{Capabilities, DriverKind, MonitorInfo, SuperMethod, DRIVER_MAX, NEUTRAL, SUPER_MAX};
-use std::collections::HashMap;
+use crate::types::{Capabilities, DriverKind, MethodInfo, MonitorInfo, SuperMethod, DRIVER_MAX, NEUTRAL, SUPER_MAX};
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 struct Mon {
@@ -18,11 +18,13 @@ struct Mon {
 
 pub struct Engine {
     drivers: Vec<Box<dyn DriverVibrance>>,
-    super_layer: Option<Box<dyn SuperLayer>>,
-    super_reason: Option<String>,
+    layers: Vec<Box<dyn SuperLayer>>,
+    /// Índice da camada Super em uso.
+    active: Option<usize>,
+    super_reasons: Vec<(SuperMethod, String)>,
     monitors: Vec<Mon>,
     session: Session,
-    factors: HashMap<String, f32>,
+    factors: BTreeMap<String, f32>,
     demo: bool,
 }
 
@@ -31,11 +33,12 @@ impl Engine {
         let (session, leftover) = Session::open(session_path);
         let mut e = Self {
             drivers: detected.drivers,
-            super_layer: detected.super_layer,
-            super_reason: detected.super_reason,
+            active: (!detected.super_layers.is_empty()).then_some(0),
+            layers: detected.super_layers,
+            super_reasons: detected.super_reasons,
             monitors: Vec::new(),
             session,
-            factors: HashMap::new(),
+            factors: BTreeMap::new(),
             demo,
         };
         // Sessão anterior não terminou direito (crash/desligamento): devolve as cores.
@@ -70,7 +73,7 @@ impl Engine {
             let driver = self.driver_for(&d.id);
             let current = match driver {
                 Some(i) => self.drivers[i].get(&d.id).ok(),
-                None => self.super_layer.as_ref().map(|_| NEUTRAL),
+                None => self.active.map(|_| NEUTRAL),
             };
             next.push(Mon { original: current, current, driver, display: d });
         }
@@ -87,11 +90,48 @@ impl Engine {
     }
 
     pub fn capabilities(&self) -> Capabilities {
-        Capabilities {
-            demo: self.demo,
-            super_method: self.super_layer.as_ref().map(|s| s.method()).unwrap_or(SuperMethod::None),
-            super_reason: self.super_reason.clone(),
+        let methods = [SuperMethod::Magnifier, SuperMethod::Mhc2]
+            .into_iter()
+            .map(|m| MethodInfo {
+                method: m,
+                available: self.layers.iter().any(|l| l.method() == m),
+                reason: self.super_reasons.iter().find(|(x, _)| *x == m).map(|(_, r)| r.clone()),
+            })
+            .collect();
+        let super_reason = match self.active {
+            Some(_) => None,
+            None => Some(match self.super_reasons.first() {
+                Some((_, r)) => format!("Super Vibrance indisponível: {r}"),
+                None => "Super Vibrance indisponível".into(),
+            }),
+        };
+        Capabilities { demo: self.demo, super_method: self.method(), super_reason, methods }
+    }
+
+    pub fn method(&self) -> SuperMethod {
+        self.active.map(|i| self.layers[i].method()).unwrap_or(SuperMethod::None)
+    }
+
+    /// Troca o método da camada Super, levando junto os valores aplicados.
+    pub fn set_method(&mut self, method: SuperMethod) -> Result<(), String> {
+        let Some(next) = self.layers.iter().position(|l| l.method() == method) else {
+            return Err("método indisponível neste PC".into());
+        };
+        if self.active == Some(next) {
+            return Ok(());
         }
+        let prev = self.active;
+        if let Some(p) = prev {
+            let _ = self.layers[p].apply(&BTreeMap::new());
+        }
+        self.active = Some(next);
+        if let Err(e) = self.push_super() {
+            let _ = self.layers[next].apply(&BTreeMap::new());
+            self.active = prev;
+            let _ = self.push_super();
+            return Err(e);
+        }
+        Ok(())
     }
 
     pub fn monitors(&mut self) -> Vec<MonitorInfo> {
@@ -140,7 +180,7 @@ impl Engine {
         let driver = self.monitors[i].driver;
         let factor = super_factor(p, driver.is_some());
         let needs_super = (factor - 1.0).abs() > 1e-4;
-        if needs_super && self.super_layer.is_none() {
+        if needs_super && self.active.is_none() {
             return Err(match driver {
                 Some(_) => "Super Vibrance indisponível neste PC: o limite é 100%.".into(),
                 None => "Este monitor não tem Digital Vibrance no driver e a camada Super está indisponível.".into(),
@@ -170,6 +210,7 @@ impl Engine {
             return Err(format!("Super Vibrance: {e}"));
         }
         self.monitors[i].current = Some(p);
+        log::info!("Aplicado {id}: {p}% (fator Super {factor:.2})");
         Ok(self.info(i))
     }
 
@@ -220,16 +261,13 @@ impl Engine {
         }
     }
 
-    /// A camada Super é global: usa o fator mais distante de 1.0.
+    /// Envia os fatores por monitor para a camada Super ativa.
     fn push_super(&mut self) -> Result<(), String> {
-        let f = self
-            .factors
-            .values()
-            .copied()
-            .fold(1.0f32, |acc, f| if (f - 1.0).abs() > (acc - 1.0).abs() { f } else { acc });
-        match self.super_layer.as_mut() {
-            Some(s) => s.set_factor(f).map_err(|e| e.to_string()),
-            None if (f - 1.0).abs() > 1e-4 => Err("indisponível".into()),
+        // Só monitores com efeito de fato entram no mapa.
+        self.factors.retain(|_, f| (*f - 1.0).abs() > 1e-4);
+        match self.active {
+            Some(i) => self.layers[i].apply(&self.factors).map_err(|e| e.to_string()),
+            None if !self.factors.is_empty() => Err("indisponível".into()),
             None => Ok(()),
         }
     }
@@ -251,8 +289,8 @@ mod tests {
         Engine::new(
             Detected {
                 drivers: vec![Box::new(drv.clone())],
-                super_layer: sup.map(|s| Box::new(s.clone()) as Box<dyn SuperLayer>),
-                super_reason: None,
+                super_layers: sup.map(|s| Box::new(s.clone()) as Box<dyn SuperLayer>).into_iter().collect(),
+                super_reasons: vec![],
             },
             displays(),
             path,
@@ -361,5 +399,65 @@ mod tests {
         assert_eq!(sup.get(), 1.0);
         assert!(e.apply("D2", 60).is_err());
         assert_eq!(e.primary_id().as_deref(), Some("D1"));
+    }
+
+    #[test]
+    fn per_monitor_layer_gets_individual_factors() {
+        let drv = MockDriver::with(&[("D1", 50)]);
+        let sup = MockSuper::new(SuperMethod::Mhc2);
+        let mut e = engine(&drv, Some(&sup), None);
+        e.apply("D1", 150).unwrap();
+        e.apply("D2", 100).unwrap();
+        assert!((sup.of("D1") - 1.5).abs() < 1e-6);
+        assert!((sup.of("D2") - 1.5).abs() < 1e-6);
+        e.apply("D1", 80).unwrap();
+        assert_eq!(sup.of("D1"), 1.0);
+        assert!(!sup.factors.lock().unwrap().contains_key("D1"));
+    }
+
+    #[test]
+    fn switching_method_moves_the_effect() {
+        let drv = MockDriver::with(&[("D1", 50)]);
+        let mag = MockSuper::new(SuperMethod::Magnifier);
+        let mhc = MockSuper::new(SuperMethod::Mhc2);
+        let mut e = Engine::new(
+            Detected {
+                drivers: vec![Box::new(drv.clone())],
+                super_layers: vec![Box::new(mag.clone()), Box::new(mhc.clone())],
+                super_reasons: vec![],
+            },
+            displays(),
+            None,
+            false,
+        );
+        assert_eq!(e.method(), SuperMethod::Magnifier);
+        e.apply("D1", 170).unwrap();
+        assert!((mag.get() - 1.7).abs() < 1e-6);
+        e.set_method(SuperMethod::Mhc2).unwrap();
+        assert_eq!(mag.get(), 1.0);
+        assert!((mhc.of("D1") - 1.7).abs() < 1e-6);
+        let caps = e.capabilities();
+        assert_eq!(caps.super_method, SuperMethod::Mhc2);
+        assert!(caps.methods.iter().all(|m| m.available));
+    }
+
+    #[test]
+    fn unavailable_method_is_reported() {
+        let drv = MockDriver::with(&[("D1", 50)]);
+        let mut e = Engine::new(
+            Detected {
+                drivers: vec![Box::new(drv)],
+                super_layers: vec![Box::new(MockSuper::default())],
+                super_reasons: vec![(SuperMethod::Mhc2, "requer Windows 11".into())],
+            },
+            displays(),
+            None,
+            false,
+        );
+        assert!(e.set_method(SuperMethod::Mhc2).is_err());
+        let caps = e.capabilities();
+        let mhc = caps.methods.iter().find(|m| m.method == SuperMethod::Mhc2).unwrap();
+        assert!(!mhc.available);
+        assert_eq!(mhc.reason.as_deref(), Some("requer Windows 11"));
     }
 }

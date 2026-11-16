@@ -36,7 +36,8 @@ pub fn enumerate() -> Vec<Display> {
     unsafe {
         let _ = EnumDisplayMonitors(None, None, Some(cb), LPARAM(&mut raw as *mut _ as isize));
     }
-    let friendly: HashMap<String, String> = friendly_names();
+    let friendly: HashMap<String, String> =
+        query_paths().into_iter().map(|(k, (name, _))| (k, name)).collect();
     let mut list: Vec<Display> = raw
         .into_iter()
         .enumerate()
@@ -53,9 +54,65 @@ pub fn enumerate() -> Vec<Display> {
     list
 }
 
-/// Nome do modelo (ex.: "Redragon ...") via DisplayConfig.
+/// Adaptador (LUID) e origem de um monitor, usados pelas APIs de perfil de cor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Target {
+    pub adapter_low: u32,
+    pub adapter_high: i32,
+    pub source_id: u32,
+}
+
 #[cfg(windows)]
-fn friendly_names() -> std::collections::HashMap<String, String> {
+pub fn display_target(gdi: &str) -> Option<Target> {
+    query_paths().remove(gdi).map(|(_, t)| t)
+}
+
+/// Nome de interface do monitor (`\\?\DISPLAY#...`), usado pelo WCS.
+#[cfg(windows)]
+pub fn monitor_interface_name(gdi: &str) -> Option<String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Graphics::Gdi::{EnumDisplayDevicesW, DISPLAY_DEVICEW};
+    const EDD_GET_DEVICE_INTERFACE_NAME: u32 = 1;
+    let name: Vec<u16> = gdi.encode_utf16().chain(Some(0)).collect();
+    let mut dd = DISPLAY_DEVICEW { cb: std::mem::size_of::<DISPLAY_DEVICEW>() as u32, ..Default::default() };
+    unsafe {
+        if !EnumDisplayDevicesW(PCWSTR(name.as_ptr()), 0, &mut dd, EDD_GET_DEVICE_INTERFACE_NAME).as_bool() {
+            return None;
+        }
+    }
+    let end = dd.DeviceID.iter().position(|&c| c == 0).unwrap_or(dd.DeviceID.len());
+    let id = String::from_utf16_lossy(&dd.DeviceID[..end]);
+    (!id.is_empty()).then_some(id)
+}
+
+/// Número de build do Windows (22000+ = Windows 11).
+#[cfg(windows)]
+pub fn windows_build() -> u32 {
+    use windows::core::w;
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
+    let mut buf = [0u16; 32];
+    let mut len = (buf.len() * 2) as u32;
+    let r = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            w!(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"),
+            w!("CurrentBuildNumber"),
+            RRF_RT_REG_SZ,
+            None,
+            Some(buf.as_mut_ptr() as _),
+            Some(&mut len),
+        )
+    };
+    if r.is_err() {
+        return 0;
+    }
+    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    String::from_utf16_lossy(&buf[..end]).trim().parse().unwrap_or(0)
+}
+
+/// Nome GDI → (nome do modelo, adaptador/origem) via DisplayConfig.
+#[cfg(windows)]
+fn query_paths() -> std::collections::HashMap<String, (String, Target)> {
     use std::collections::HashMap;
     use windows::Win32::Devices::Display::{
         DisplayConfigGetDeviceInfo, GetDisplayConfigBufferSizes, QueryDisplayConfig,
@@ -98,7 +155,12 @@ fn friendly_names() -> std::collections::HashMap<String, String> {
                 let end = s.iter().position(|&c| c == 0).unwrap_or(s.len());
                 String::from_utf16_lossy(&s[..end])
             };
-            out.insert(w(&src.viewGdiDeviceName), w(&tgt.monitorFriendlyDeviceName));
+            let target = Target {
+                adapter_low: p.sourceInfo.adapterId.LowPart,
+                adapter_high: p.sourceInfo.adapterId.HighPart,
+                source_id: p.sourceInfo.id,
+            };
+            out.insert(w(&src.viewGdiDeviceName), (w(&tgt.monitorFriendlyDeviceName), target));
         }
     }
     out

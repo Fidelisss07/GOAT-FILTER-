@@ -21,9 +21,12 @@ Redragon de 144 Hz.
 | Recuperação após crash (`session.json`) | ✅ feito |
 | Bandeja, iniciar com o Windows, instância única | ✅ feito |
 | Instalador `.exe` pelo GitHub Actions | ✅ workflow criado |
-| Camada Super via perfil MHC2 (Win 11, zero lag, tela cheia) | ⏳ próximo passo |
+| Camada Super via perfil MHC2 (Win 11, zero lag, tela cheia) | ✅ feita (v0.2), **falta testar no hardware** |
+| Escolha do método nas Configurações | ✅ feito (v0.2) |
+| Atalhos globais (Ctrl+Alt+G, Ctrl+Alt+↑/↓) | ✅ feito (v0.2) |
+| Log em arquivo para diagnóstico | ✅ feito (v0.2) |
 | Intel via IGCL (vibrance no driver) | ⏳ fase 2 (hoje o Intel usa a camada Super) |
-| DDC/CI do monitor, atalhos globais, saturação por cor | ⏳ fases 2 e 3 |
+| DDC/CI do monitor, saturação por cor, assinatura do `.exe` | ⏳ fases 2 e 3 |
 
 A Magnification API foi implementada primeiro porque funciona em **qualquer GPU e no
 Windows 10 e 11**. O MHC2 só existe no Windows 11 e o formato precisa ser validado em

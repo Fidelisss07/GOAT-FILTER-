@@ -33,6 +33,10 @@ pub struct Profile {
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub theme: ThemeId,
+    /// Método preferido para a faixa acima de 100%.
+    pub super_method: SuperMethod,
+    /// Atalhos globais (Ctrl+Alt+G, Ctrl+Alt+↑/↓).
+    pub hotkeys: bool,
     pub start_with_windows: bool,
     pub minimize_to_tray: bool,
     pub default_monitor: Option<String>,
@@ -44,6 +48,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: ThemeId::Roxo,
+            super_method: SuperMethod::Magnifier,
+            hotkeys: true,
             start_with_windows: false,
             minimize_to_tray: true,
             default_monitor: None,
@@ -83,16 +89,29 @@ pub struct MonitorInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SuperMethod {
+    /// Matriz de cor via Magnification API (qualquer GPU, Windows 10/11).
     Magnifier,
+    /// Perfil de cor com matriz MHC2 (Windows 11, zero lag, tela cheia).
+    Mhc2,
     None,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MethodInfo {
+    pub method: SuperMethod,
+    pub available: bool,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Capabilities {
     pub demo: bool,
+    /// Método em uso agora (None = sem camada Super).
     pub super_method: SuperMethod,
     pub super_reason: Option<String>,
+    pub methods: Vec<MethodInfo>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

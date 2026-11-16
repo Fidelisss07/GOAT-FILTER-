@@ -429,6 +429,29 @@ button, input, select { font: inherit; color: inherit; }
 .set-card .ctl .select select { height: 52px; font-size: 19px; }
 .set-card .ctl .label { color: var(--text); font-size: 20px; }
 
+.methods { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+.method {
+  display: flex; align-items: flex-start; gap: 14px; text-align: left; padding: 12px 14px;
+  border: 1.5px solid #5a5a68; border-radius: 6px; background: transparent; cursor: pointer;
+}
+.method:hover:not(:disabled) { background: #20202b; }
+.method[aria-checked="true"] { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.14); }
+.method:disabled { opacity: 0.5; cursor: not-allowed; }
+.method .radio {
+  width: 24px; height: 24px; border-radius: 50%; border: 2px solid #8a8a98; flex: none;
+  display: grid; place-items: center; margin-top: 2px;
+}
+.method[aria-checked="true"] .radio { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.method .radio svg { width: 14px; height: 14px; }
+.method .body { display: flex; flex-direction: column; gap: 4px; }
+.method strong { font-size: 17px; }
+.method .body > span { color: var(--text-2); font-size: 14px; line-height: 1.35; }
+.note.hotkeys { margin-top: 0; }
+kbd {
+  font-family: inherit; font-size: 12px; padding: 1px 6px; border-radius: 4px;
+  border: 1px solid var(--border); background: #24242f; color: var(--text);
+}
+
 /* ---------------------------------------------------------------------------
    Janela estreita: empilha antes de transbordar
    --------------------------------------------------------------------------- */
