@@ -1,0 +1,12 @@
+//! Núcleo do Goat Filter, sem dependência de interface.
+//!
+//! Regra de ouro: nada aqui toca no processo do jogo. Ajustes passam pelo
+//! driver da GPU (NVAPI/ADL) ou pela composição do Windows (Magnification API).
+
+pub mod backends;
+pub mod engine;
+pub mod monitors;
+pub mod session;
+pub mod settings;
+pub mod types;
+pub mod watcher;

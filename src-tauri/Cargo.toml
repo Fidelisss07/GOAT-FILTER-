@@ -1,0 +1,23 @@
+[package]
+name = "goat-filter"
+description = "Goat Filter — Digital Vibrance e Super Vibrance para jogos"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "goat_filter_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+goat-core = { path = "../crates/goat-core" }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"

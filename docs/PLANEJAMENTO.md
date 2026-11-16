@@ -6,6 +6,29 @@
 
 Referências visuais: `design/telas/*.png` · Logos: `design/logos/*.svg` · Especificação de telas: `design/prompts/*.md`.
 
+## Status (atualizado)
+
+Decisões confirmadas: precisa funcionar em **NVIDIA, AMD e Intel**, no **Windows 10 e 11**,
+e o slider vai de **0 a 200%**. O PC de referência tem uma RTX 3090, Windows 11 e um monitor
+Redragon de 144 Hz.
+
+| Item | Situação |
+|---|---|
+| 3 telas fiéis aos mockups, 3 temas, modo demonstração | ✅ feito |
+| Núcleo Rust com NVIDIA (NVAPI), AMD (ADL) e camada Super | ✅ feito, compila para Windows |
+| Camada Super via Magnification API (todas as GPUs, Win 10/11) | ✅ feita, **falta testar no Valorant** |
+| Detecção do Valorant, aplicar ao abrir, restaurar ao fechar | ✅ feito |
+| Recuperação após crash (`session.json`) | ✅ feito |
+| Bandeja, iniciar com o Windows, instância única | ✅ feito |
+| Instalador `.exe` pelo GitHub Actions | ✅ workflow criado |
+| Camada Super via perfil MHC2 (Win 11, zero lag, tela cheia) | ⏳ próximo passo |
+| Intel via IGCL (vibrance no driver) | ⏳ fase 2 (hoje o Intel usa a camada Super) |
+| DDC/CI do monitor, atalhos globais, saturação por cor | ⏳ fases 2 e 3 |
+
+A Magnification API foi implementada primeiro porque funciona em **qualquer GPU e no
+Windows 10 e 11**. O MHC2 só existe no Windows 11 e o formato precisa ser validado em
+hardware real.
+
 ---
 
 ## 1. Objetivo e princípios
