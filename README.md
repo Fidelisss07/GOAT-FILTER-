@@ -83,6 +83,13 @@ Baixe a versão mais recente na aba
 
 O app avisa quando sai uma versão nova (Configurações › Sobre).
 
+### Links fixos (para sites)
+
+Estes links sempre baixam a versão mais nova:
+
+- Instalador: `https://github.com/Fidelisss07/GOAT-FILTER-/releases/latest/download/GoatFilter-instalador.exe`
+- Portátil: `https://github.com/Fidelisss07/GOAT-FILTER-/releases/latest/download/GoatFilter-portatil.exe`
+
 **Code signing:** Free code signing provided by [SignPath.io](https://about.signpath.io),
 certificate by [SignPath Foundation](https://signpath.org).
 

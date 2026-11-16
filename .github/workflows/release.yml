@@ -49,6 +49,10 @@ jobs:
           New-Item -ItemType Directory release -Force | Out-Null
           Copy-Item (Get-ChildItem target/release/bundle/nsis/*.exe | Select-Object -First 1).FullName "release/GoatFilter-$v-instalador.exe"
           Copy-Item target/release/goat-filter.exe "release/GoatFilter-$v-portatil.exe"
+          # Nomes fixos: o site usa .../releases/latest/download/<nome> e
+          # sempre baixa a versão mais nova.
+          Copy-Item "release/GoatFilter-$v-instalador.exe" "release/GoatFilter-instalador.exe"
+          Copy-Item "release/GoatFilter-$v-portatil.exe" "release/GoatFilter-portatil.exe"
           "VERSION=$v" >> $env:GITHUB_ENV
 
       - name: Enviar para assinatura (opcional)
