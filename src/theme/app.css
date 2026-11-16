@@ -430,6 +430,14 @@ button, input, select { font: inherit; color: inherit; }
 .fine .slider { padding: 8px 12px 0; }
 .fine .slider-marks { height: 34px; }
 .fine .slider-mark { font-size: 12px; }
+.hw-rows { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.hw-row { display: flex; flex-direction: column; gap: 4px; }
+.hw-row.off { flex-direction: row; justify-content: space-between; align-items: center; color: var(--text-2); font-size: 14px; }
+.hw-row .fine-head { display: none; }
+.hw-row .check .fine-value { margin-left: auto; }
+.hw-row .check { width: 100%; }
+.check { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .fine-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .seg { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .seg button {

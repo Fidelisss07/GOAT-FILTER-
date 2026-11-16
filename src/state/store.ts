@@ -70,7 +70,7 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export const useStore = create<State>((set, get) => ({
   loaded: false,
   page: "overview",
-  capabilities: { demo: true, superMethod: "none", superReason: null, methods: [], curves: false },
+  capabilities: { demo: true, superMethod: "none", superReason: null, methods: [], curves: false, monitorHw: false },
   monitors: [],
   settings: DEFAULT_SETTINGS,
   game: { state: "idle", profileId: null, message: null },
@@ -239,9 +239,10 @@ export const useStore = create<State>((set, get) => ({
       errors.name = "Já existe um perfil com esse nome.";
     if (!exe) errors.executable = "Informe o executável do jogo.";
     else if (!/\.exe$/i.test(exe)) errors.executable = "O caminho precisa terminar em .exe.";
-    else if (!(await n.executableExists(exe))) errors.executable = "Arquivo não encontrado neste caminho.";
     set({ draftErrors: errors });
     if (errors.name || errors.executable) return false;
+    // O jogo é reconhecido pelo nome do .exe; caminho errado só gera aviso.
+    const missing = !(await n.executableExists(exe));
     const saved: Profile = { ...d, name, executable: exe };
     const list = get().settings.profiles;
     const profiles = list.some((p) => p.id === d.id)
@@ -249,7 +250,11 @@ export const useStore = create<State>((set, get) => ({
       : [...list, saved];
     await get().updateSettings({ profiles });
     set({ selectedProfileId: saved.id, draft: { ...saved } });
-    get().showToast({ kind: "ok", text: `Perfil "${name}" salvo.` });
+    get().showToast(
+      missing
+        ? { kind: "info", text: `Perfil "${name}" salvo. Aviso: não achei o arquivo nesse caminho, mas o jogo ainda será reconhecido pelo nome do .exe.` }
+        : { kind: "ok", text: `Perfil "${name}" salvo.` },
+    );
     return true;
   },
 

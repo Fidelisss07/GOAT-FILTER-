@@ -54,6 +54,36 @@ pub fn enumerate() -> Vec<Display> {
     list
 }
 
+/// HMONITOR (como inteiro) do monitor com esse nome GDI.
+#[cfg(windows)]
+pub fn hmonitor_for(gdi: &str) -> Option<isize> {
+    use windows::Win32::Foundation::{BOOL, LPARAM, RECT};
+    use windows::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW};
+
+    struct Search<'a> {
+        name: &'a str,
+        found: Option<isize>,
+    }
+    unsafe extern "system" fn cb(h: HMONITOR, _: HDC, _: *mut RECT, data: LPARAM) -> BOOL {
+        let s = &mut *(data.0 as *mut Search);
+        let mut info = MONITORINFOEXW::default();
+        info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if GetMonitorInfoW(h, &mut info as *mut _ as *mut MONITORINFO).as_bool() {
+            let end = info.szDevice.iter().position(|&c| c == 0).unwrap_or(info.szDevice.len());
+            if String::from_utf16_lossy(&info.szDevice[..end]).eq_ignore_ascii_case(s.name) {
+                s.found = Some(h.0 as isize);
+                return false.into();
+            }
+        }
+        true.into()
+    }
+    let mut s = Search { name: gdi, found: None };
+    unsafe {
+        let _ = EnumDisplayMonitors(None, None, Some(cb), LPARAM(&mut s as *mut _ as isize));
+    }
+    s.found
+}
+
 /// Adaptador (LUID) e origem de um monitor, usados pelas APIs de perfil de cor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Target {

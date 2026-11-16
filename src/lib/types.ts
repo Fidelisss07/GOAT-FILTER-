@@ -27,12 +27,34 @@ export interface Tuning {
   contrast: number;
   /** 50..200 (= 0,5..2,0). Acima de 100 clareia as sombras. */
   gamma: number;
+  /** Brilho do próprio monitor via DDC/CI (0–100). null = não mexe. */
+  monitorBrightness: number | null;
+  monitorContrast: number | null;
+  monitorSaturation: number | null;
 }
 
-export const DEFAULT_TUNING: Tuning = { emphasis: "none", emphasisStrength: 50, brightness: 0, contrast: 100, gamma: 100 };
+/** Valores atuais do próprio monitor (0–100). null = o monitor não aceita. */
+export interface MonitorHwState {
+  brightness: number | null;
+  contrast: number | null;
+  saturation: number | null;
+}
+
+export const DEFAULT_TUNING: Tuning = {
+  emphasis: "none",
+  emphasisStrength: 50,
+  brightness: 0,
+  contrast: 100,
+  gamma: 100,
+  monitorBrightness: null,
+  monitorContrast: null,
+  monitorSaturation: null,
+};
 
 export const hasCurve = (t: Tuning) => t.brightness !== 0 || t.contrast !== 100 || t.gamma !== 100;
-export const isNeutral = (t: Tuning) => t.emphasis === "none" && !hasCurve(t);
+export const hasMonitorHw = (t: Tuning) =>
+  t.monitorBrightness != null || t.monitorContrast != null || t.monitorSaturation != null;
+export const isNeutral = (t: Tuning) => t.emphasis === "none" && !hasCurve(t) && !hasMonitorHw(t);
 
 export interface Profile {
   id: string;
@@ -97,6 +119,8 @@ export interface Capabilities {
   methods: MethodInfo[];
   /** Brilho/contraste/gama disponíveis. */
   curves: boolean;
+  /** Controle do monitor por DDC/CI disponível (o modelo ainda pode recusar). */
+  monitorHw: boolean;
 }
 
 export const METHOD_LABEL: Record<Exclude<SuperMethod, "none">, { title: string; detail: string }> = {

@@ -13,6 +13,15 @@ export function Profiles() {
   const nameId = useId();
   const exeId = useId();
   const isNew = !!d && !s.settings.profiles.some((p) => p.id === d.id);
+  const targetMonitor =
+    s.monitors.find((m) => m.id === s.settings.defaultMonitor)?.id ?? s.monitors.find((m) => m.primary)?.id ?? null;
+
+  const findValorant = async () => {
+    const n = await getNative();
+    const path = await n.findValorant();
+    if (path) s.updateDraft({ executable: path });
+    else s.showToast({ kind: "info", text: "Não encontrei o Valorant. Use o botão da pasta para escolher o VALORANT.exe." });
+  };
 
   const browse = async () => {
     if (!d) return;
@@ -90,6 +99,11 @@ export function Profiles() {
                 </button>
               </div>
               {s.draftErrors.executable && <p id={`${exeId}-err`} className="field-error">{s.draftErrors.executable}</p>}
+              {d.id === VALORANT_ID && !s.capabilities.demo && (
+                <button type="button" className="btn link" onClick={findValorant}>
+                  Encontrar o Valorant automaticamente
+                </button>
+              )}
             </div>
 
             <div className="vib-head">
@@ -109,6 +123,7 @@ export function Profiles() {
                 tuning={d.tuning}
                 onChange={(tuning) => s.updateDraft({ tuning })}
                 capabilities={s.capabilities}
+                monitorId={targetMonitor}
               />
             </details>
 

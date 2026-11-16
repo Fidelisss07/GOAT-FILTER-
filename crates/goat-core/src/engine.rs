@@ -2,11 +2,13 @@
 //! driver não tem vibrance) e garante a restauração dos valores originais.
 
 use crate::backends::mapping::super_factor;
-use crate::backends::{CurveControl, Detected, DriverVibrance, SuperLayer};
+use crate::backends::{CurveControl, Detected, DriverVibrance, HwControl, MonitorHw, SuperLayer};
 use crate::color::{self, Mat3, Ramp};
 use crate::monitors::Display;
 use crate::session::Session;
-use crate::types::{Capabilities, DriverKind, MethodInfo, MonitorInfo, SuperMethod, Tuning, DRIVER_MAX, NEUTRAL, SUPER_MAX};
+use crate::types::{
+    Capabilities, DriverKind, MethodInfo, MonitorHwState, MonitorInfo, SuperMethod, Tuning, DRIVER_MAX, NEUTRAL, SUPER_MAX,
+};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
@@ -43,6 +45,9 @@ pub struct Engine {
     session: Session,
     matrices: BTreeMap<String, Mat3>,
     curves: Option<Box<dyn CurveControl>>,
+    hw: Option<Box<dyn MonitorHw>>,
+    /// Máximo cru de cada controle DDC/CI já lido (evita reler, é lento).
+    hw_max: HashMap<(String, HwControl), u32>,
     demo: bool,
 }
 
@@ -58,6 +63,8 @@ impl Engine {
             session,
             matrices: BTreeMap::new(),
             curves: detected.curves,
+            hw: detected.hw,
+            hw_max: HashMap::new(),
             demo,
         };
         // Sessão anterior não terminou direito (crash/desligamento): devolve as cores.
@@ -73,6 +80,15 @@ impl Engine {
             if let (Some(c), Some(r)) = (e.curves.as_mut(), vec_to_ramp(&ramp)) {
                 if let Err(err) = c.set(&display, &r) {
                     log::warn!("Falha ao restaurar a curva de {display}: {err}");
+                }
+            }
+        }
+        for (display, map) in leftover.hw {
+            if let Some(h) = e.hw.as_mut() {
+                for (vcp, v) in map {
+                    if let Some(c) = HwControl::ALL.into_iter().find(|c| c.vcp() == vcp) {
+                        let _ = h.write(&display, c, v);
+                    }
                 }
             }
         }
@@ -131,7 +147,14 @@ impl Engine {
                 None => "Super Vibrance indisponível".into(),
             }),
         };
-        Capabilities { demo: self.demo, super_method: self.method(), super_reason, methods, curves: self.curves.is_some() }
+        Capabilities {
+            demo: self.demo,
+            super_method: self.method(),
+            super_reason,
+            methods,
+            curves: self.curves.is_some(),
+            monitor_hw: self.hw.is_some(),
+        }
     }
 
     pub fn method(&self) -> SuperMethod {
@@ -251,12 +274,84 @@ impl Engine {
         self.monitors[i].current = Some(p);
 
         let curve_msg = self.apply_curve(i, &tuning).err();
+        let hw_msg = self.apply_hw(i, &tuning).err();
         self.monitors[i].tuning = tuning;
         log::info!("Aplicado {id}: {p}% (fator Super {factor:.2}, ajustes {tuning:?})");
-        match curve_msg {
-            Some(e) => Err(format!("Vibrance aplicado, mas brilho/gama falhou: {e}")),
-            None => Ok(self.info(i)),
+        match (curve_msg, hw_msg) {
+            (Some(e), _) => Err(format!("Vibrance aplicado, mas brilho/gama falhou: {e}")),
+            (None, Some(e)) => Err(format!("Vibrance aplicado, mas o monitor recusou: {e}")),
+            (None, None) => Ok(self.info(i)),
         }
+    }
+
+    fn hw_max(&mut self, id: &str, c: HwControl) -> Result<u32, String> {
+        if let Some(m) = self.hw_max.get(&(id.to_string(), c)) {
+            return Ok(*m);
+        }
+        let h = self.hw.as_mut().ok_or("DDC/CI indisponível")?;
+        let (_, max) = h.read(id, c).map_err(|e| e.to_string())?;
+        self.hw_max.insert((id.to_string(), c), max);
+        Ok(max)
+    }
+
+    fn apply_hw(&mut self, i: usize, tuning: &Tuning) -> Result<(), String> {
+        let id = self.monitors[i].display.id.clone();
+        let wanted = [
+            (HwControl::Brightness, tuning.monitor_brightness),
+            (HwControl::Contrast, tuning.monitor_contrast),
+            (HwControl::Saturation, tuning.monitor_saturation),
+        ];
+        let mut first_err = None;
+        for (c, want) in wanted {
+            let original = self.session.hw(&id, c.vcp());
+            let r: Result<(), String> = match (want, original) {
+                (None, None) => Ok(()),
+                (Some(p), _) => (|| {
+                    if original.is_none() {
+                        let h = self.hw.as_mut().ok_or("DDC/CI indisponível")?;
+                        let (cur, max) = h.read(&id, c).map_err(|e| e.to_string())?;
+                        self.hw_max.insert((id.clone(), c), max);
+                        self.session.remember_hw(&id, c.vcp(), cur);
+                    }
+                    let max = self.hw_max(&id, c)?;
+                    let raw = (p as u32 * max + 50) / 100;
+                    self.hw.as_mut().ok_or("DDC/CI indisponível")?.write(&id, c, raw).map_err(|e| e.to_string())
+                })(),
+                (None, Some(orig)) => {
+                    let r = match self.hw.as_mut() {
+                        Some(h) => h.write(&id, c, orig).map_err(|e| e.to_string()),
+                        None => Ok(()),
+                    };
+                    if r.is_ok() {
+                        self.session.forget_hw(&id, c.vcp());
+                    }
+                    r
+                }
+            };
+            if let Err(e) = r {
+                first_err.get_or_insert(e);
+            }
+        }
+        first_err.map_or(Ok(()), Err)
+    }
+
+    /// Lê os valores atuais do próprio monitor (DDC/CI). Lento: só sob demanda.
+    pub fn monitor_hw(&mut self, id: &str) -> Result<MonitorHwState, String> {
+        self.index(id)?;
+        let Some(h) = self.hw.as_mut() else { return Ok(MonitorHwState::default()) };
+        let mut st = MonitorHwState::default();
+        for c in HwControl::ALL {
+            if let Ok((cur, max)) = h.read(id, c) {
+                self.hw_max.insert((id.to_string(), c), max);
+                let pct = Some(((cur * 100 + max / 2) / max).min(100) as u8);
+                match c {
+                    HwControl::Brightness => st.brightness = pct,
+                    HwControl::Contrast => st.contrast = pct,
+                    HwControl::Saturation => st.saturation = pct,
+                }
+            }
+        }
+        Ok(st)
     }
 
     fn apply_curve(&mut self, i: usize, tuning: &Tuning) -> Result<(), String> {
@@ -311,6 +406,13 @@ impl Engine {
                 let _ = self.drivers[d].set(&display, value);
             }
         }
+        if let Some(h) = self.hw.as_mut() {
+            for (display, vcp, v) in self.session.all_hw() {
+                if let Some(c) = HwControl::ALL.into_iter().find(|c| c.vcp() == vcp) {
+                    let _ = h.write(&display, c, v);
+                }
+            }
+        }
         if let Some(c) = self.curves.as_mut() {
             for (display, ramp) in self.session.ramps() {
                 if let Some(r) = vec_to_ramp(&ramp) {
@@ -357,7 +459,7 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backends::mock::{MockCurves, MockDriver, MockSuper};
+    use crate::backends::mock::{MockCurves, MockDriver, MockHw, MockSuper};
     use crate::types::EmphasisColor;
 
     fn displays() -> Vec<Display> {
@@ -374,6 +476,7 @@ mod tests {
                 super_layers: sup.map(|s| Box::new(s.clone()) as Box<dyn SuperLayer>).into_iter().collect(),
                 super_reasons: vec![],
                 curves: Some(Box::new(MockCurves::default())),
+                hw: None,
             },
             displays(),
             path,
@@ -509,6 +612,7 @@ mod tests {
                 super_layers: vec![Box::new(mag.clone()), Box::new(mhc.clone())],
                 super_reasons: vec![],
                 curves: None,
+                hw: None,
             },
             displays(),
             None,
@@ -534,6 +638,7 @@ mod tests {
                 super_layers: vec![Box::new(MockSuper::default())],
                 super_reasons: vec![(SuperMethod::Mhc2, "requer Windows 11".into())],
                 curves: None,
+                hw: None,
             },
             displays(),
             None,
@@ -553,6 +658,7 @@ mod tests {
                 super_layers: vec![Box::new(sup.clone())],
                 super_reasons: vec![],
                 curves: Some(Box::new(curves.clone())),
+                hw: Some(Box::new(MockHw::default())),
             },
             displays(),
             path,
@@ -606,5 +712,63 @@ mod tests {
         let _e = engine_with_curves(&drv, &MockSuper::default(), &curves, Some(path.clone()));
         assert_eq!(curves.ramp("D1"), color::identity_ramp());
         assert!(!path.exists());
+    }
+
+    fn engine_with_hw(hw: &MockHw, path: Option<PathBuf>) -> (MockDriver, Engine) {
+        let drv = MockDriver::with(&[("D1", 50)]);
+        let e = Engine::new(
+            Detected {
+                drivers: vec![Box::new(drv.clone())],
+                super_layers: vec![Box::new(MockSuper::default())],
+                super_reasons: vec![],
+                curves: None,
+                hw: Some(Box::new(hw.clone())),
+            },
+            displays(),
+            path,
+            false,
+        );
+        (drv, e)
+    }
+
+    #[test]
+    fn monitor_ddc_applied_and_restored() {
+        let hw = MockHw::default();
+        let (_d, mut e) = engine_with_hw(&hw, None);
+        let st = e.monitor_hw("D1").unwrap();
+        assert_eq!(st.brightness, Some(70));
+        assert_eq!(st.saturation, None);
+        let t = Tuning { monitor_brightness: Some(100), monitor_contrast: Some(60), ..Tuning::default() };
+        e.apply_with("D1", 75, t).unwrap();
+        assert_eq!(hw.value("D1", HwControl::Brightness), 100);
+        assert_eq!(hw.value("D1", HwControl::Contrast), 60);
+        e.restore("D1").unwrap();
+        assert_eq!(hw.value("D1", HwControl::Brightness), 70);
+        assert_eq!(hw.value("D1", HwControl::Contrast), 70);
+    }
+
+    #[test]
+    fn unsupported_monitor_control_reports_error_but_keeps_vibrance() {
+        let hw = MockHw::default();
+        let (drv, mut e) = engine_with_hw(&hw, None);
+        let t = Tuning { monitor_saturation: Some(80), ..Tuning::default() };
+        let err = e.apply_with("D1", 90, t).unwrap_err();
+        assert!(err.contains("monitor recusou"), "{err}");
+        assert_eq!(drv.level("D1"), Some(90));
+    }
+
+    #[test]
+    fn monitor_ddc_recovered_after_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.json");
+        let hw = MockHw::default();
+        {
+            let (_d, mut e) = engine_with_hw(&hw, Some(path.clone()));
+            e.apply_with("D1", 60, Tuning { monitor_brightness: Some(20), ..Tuning::default() }).unwrap();
+            std::mem::forget(e);
+        }
+        assert_eq!(hw.value("D1", HwControl::Brightness), 20);
+        let _ = engine_with_hw(&hw, Some(path.clone()));
+        assert_eq!(hw.value("D1", HwControl::Brightness), 70);
     }
 }

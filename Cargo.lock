@@ -1442,7 +1442,7 @@ dependencies = [
 
 [[package]]
 name = "goat-core"
-version = "0.3.0"
+version = "0.5.0"
 dependencies = [
  "libloading 0.8.9",
  "log",
@@ -1455,7 +1455,7 @@ dependencies = [
 
 [[package]]
 name = "goat-filter"
-version = "0.3.0"
+version = "0.5.0"
 dependencies = [
  "goat-core",
  "log",

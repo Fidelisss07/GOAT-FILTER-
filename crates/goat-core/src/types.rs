@@ -42,11 +42,26 @@ pub struct Tuning {
     pub contrast: u8,
     /// 50..200 (= 0,5..2,0). Acima de 100 clareia sombras.
     pub gamma: u8,
+    /// Brilho do próprio monitor via DDC/CI (0–100). None = não mexe.
+    pub monitor_brightness: Option<u8>,
+    /// Contraste do próprio monitor via DDC/CI (0–100). None = não mexe.
+    pub monitor_contrast: Option<u8>,
+    /// Saturação do próprio monitor via DDC/CI (0–100), se o modelo aceitar.
+    pub monitor_saturation: Option<u8>,
 }
 
 impl Default for Tuning {
     fn default() -> Self {
-        Self { emphasis: EmphasisColor::None, emphasis_strength: 50, brightness: 0, contrast: 100, gamma: 100 }
+        Self {
+            emphasis: EmphasisColor::None,
+            emphasis_strength: 50,
+            brightness: 0,
+            contrast: 100,
+            gamma: 100,
+            monitor_brightness: None,
+            monitor_contrast: None,
+            monitor_saturation: None,
+        }
     }
 }
 
@@ -56,6 +71,9 @@ impl Tuning {
         self.brightness = self.brightness.clamp(-50, 50);
         self.contrast = self.contrast.clamp(50, 150);
         self.gamma = self.gamma.clamp(50, 200);
+        self.monitor_brightness = self.monitor_brightness.map(|v| v.min(100));
+        self.monitor_contrast = self.monitor_contrast.map(|v| v.min(100));
+        self.monitor_saturation = self.monitor_saturation.map(|v| v.min(100));
         self
     }
 }
@@ -165,6 +183,17 @@ pub struct Capabilities {
     pub methods: Vec<MethodInfo>,
     /// Brilho/contraste/gama disponíveis (gamma ramp do Windows).
     pub curves: bool,
+    /// Controle do monitor por DDC/CI disponível (o modelo ainda pode recusar).
+    pub monitor_hw: bool,
+}
+
+/// Valores atuais do próprio monitor (0–100). None = o monitor não aceita.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MonitorHwState {
+    pub brightness: Option<u8>,
+    pub contrast: Option<u8>,
+    pub saturation: Option<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

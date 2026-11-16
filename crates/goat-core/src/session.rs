@@ -16,6 +16,9 @@ pub struct SessionData {
     /// Nome GDI → gamma ramp original (3 × 256 valores).
     #[serde(default)]
     pub ramps: BTreeMap<String, Vec<u16>>,
+    /// Nome GDI → código VCP → valor cru original do monitor (DDC/CI).
+    #[serde(default)]
+    pub hw: BTreeMap<String, BTreeMap<u8, u32>>,
 }
 
 pub struct Session {
@@ -75,6 +78,37 @@ impl Session {
         }
     }
 
+    pub fn remember_hw(&mut self, display: &str, vcp: u8, value: u32) {
+        let e = self.data.hw.entry(display.to_string()).or_default();
+        if e.contains_key(&vcp) {
+            return;
+        }
+        e.insert(vcp, value);
+        self.flush();
+    }
+
+    pub fn hw(&self, display: &str, vcp: u8) -> Option<u32> {
+        self.data.hw.get(display).and_then(|m| m.get(&vcp)).copied()
+    }
+
+    pub fn forget_hw(&mut self, display: &str, vcp: u8) {
+        if let Some(m) = self.data.hw.get_mut(display) {
+            m.remove(&vcp);
+            if m.is_empty() {
+                self.data.hw.remove(display);
+            }
+            self.flush();
+        }
+    }
+
+    pub fn all_hw(&self) -> Vec<(String, u8, u32)> {
+        self.data
+            .hw
+            .iter()
+            .flat_map(|(d, m)| m.iter().map(move |(c, v)| (d.clone(), *c, *v)))
+            .collect()
+    }
+
     pub fn originals(&self) -> Vec<(String, u8)> {
         self.data.originals.iter().map(|(k, v)| (k.clone(), *v)).collect()
     }
@@ -82,11 +116,12 @@ impl Session {
     pub fn clear(&mut self) {
         self.data.originals.clear();
         self.data.ramps.clear();
+        self.data.hw.clear();
         self.flush();
     }
 
     fn is_empty(&self) -> bool {
-        self.data.originals.is_empty() && self.data.ramps.is_empty()
+        self.data.originals.is_empty() && self.data.ramps.is_empty() && self.data.hw.is_empty()
     }
 
     fn flush(&self) {

@@ -1,6 +1,6 @@
 //! Backends falsos para testes e para rodar fora do Windows.
 
-use super::{combined, BackendError, CurveControl, DriverVibrance, Result, SuperLayer};
+use super::{combined, BackendError, CurveControl, DriverVibrance, HwControl, MonitorHw, Result, SuperLayer};
 use crate::color::{self, Mat3, Ramp};
 use std::collections::BTreeMap;
 use crate::types::{DriverKind, SuperMethod};
@@ -118,6 +118,41 @@ impl CurveControl for MockCurves {
     }
     fn set(&mut self, display: &str, ramp: &Ramp) -> Result<()> {
         self.ramps.lock().unwrap().insert(display.into(), *ramp);
+        Ok(())
+    }
+}
+
+/// Monitor DDC/CI falso: valores 0–100, saturação só se `saturation` for true.
+#[derive(Clone)]
+pub struct MockHw {
+    pub values: Arc<Mutex<HashMap<(String, HwControl), u32>>>,
+    pub saturation: bool,
+}
+
+impl Default for MockHw {
+    fn default() -> Self {
+        Self { values: Arc::new(Mutex::new(HashMap::new())), saturation: false }
+    }
+}
+
+impl MockHw {
+    pub fn value(&self, display: &str, c: HwControl) -> u32 {
+        self.values.lock().unwrap().get(&(display.to_string(), c)).copied().unwrap_or(70)
+    }
+}
+
+impl MonitorHw for MockHw {
+    fn read(&mut self, display: &str, c: HwControl) -> Result<(u32, u32)> {
+        if c == HwControl::Saturation && !self.saturation {
+            return Err(BackendError::Unsupported);
+        }
+        Ok((self.value(display, c), 100))
+    }
+    fn write(&mut self, display: &str, c: HwControl, value: u32) -> Result<()> {
+        if c == HwControl::Saturation && !self.saturation {
+            return Err(BackendError::Unsupported);
+        }
+        self.values.lock().unwrap().insert((display.to_string(), c), value);
         Ok(())
     }
 }

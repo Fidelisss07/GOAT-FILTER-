@@ -7,6 +7,7 @@ import {
   Capabilities,
   DEFAULT_SETTINGS,
   DEFAULT_TUNING,
+  MonitorHwState,
   Tuning,
   GameStatus,
   MonitorInfo,
@@ -20,6 +21,10 @@ export interface NativeApi {
   applyVibrance(monitorId: string, percent: number): Promise<MonitorInfo>;
   /** Vibrance + ajustes finos (botão "Testar agora" do perfil). */
   applyTuned(monitorId: string, percent: number, tuning: Tuning): Promise<MonitorInfo>;
+  /** Lê o próprio monitor por DDC/CI (lento). */
+  monitorHw(monitorId: string): Promise<MonitorHwState>;
+  /** Procura o VALORANT.exe nesta máquina. */
+  findValorant(): Promise<string | null>;
   /** Grava os perfis em um arquivo escolhido pelo usuário. null = cancelado. */
   exportProfiles(): Promise<number | null>;
   /** Lê perfis de um arquivo; devolve as preferências atualizadas. null = cancelado. */
@@ -58,6 +63,8 @@ async function tauriApi(): Promise<NativeApi> {
       invoke<MonitorInfo>("apply_vibrance", { monitorId, percent }),
     applyTuned: (monitorId, percent, tuning) =>
       invoke<MonitorInfo>("apply_tuned", { monitorId, percent, tuning }),
+    monitorHw: (monitorId) => invoke<MonitorHwState>("monitor_hw", { monitorId }),
+    findValorant: () => invoke<string | null>("find_valorant"),
     exportProfiles: async () => {
       const { save } = await import("@tauri-apps/plugin-dialog");
       const path = await save({
@@ -125,6 +132,7 @@ export function createDemoApi(): NativeApi {
     superMethod: "magnifier",
     superReason: null,
     curves: true,
+    monitorHw: true,
     methods: [
       { method: "magnifier", available: true, reason: null },
       { method: "mhc2", available: true, reason: null },
@@ -153,6 +161,8 @@ export function createDemoApi(): NativeApi {
       m.tuning = { ...tuning };
       return { ...m };
     },
+    monitorHw: async (id) => (find(id).primary ? { brightness: 70, contrast: 50, saturation: null } : { brightness: null, contrast: null, saturation: null }),
+    findValorant: async () => null,
     exportProfiles: async () => loadDemoSettings().profiles.length,
     importProfiles: async () => null,
     restoreMonitor: async (id) => {

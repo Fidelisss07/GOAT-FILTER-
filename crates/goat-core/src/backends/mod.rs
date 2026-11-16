@@ -8,6 +8,8 @@ pub mod mock;
 #[cfg(windows)]
 pub mod adl;
 #[cfg(windows)]
+pub mod ddc;
+#[cfg(windows)]
 pub mod gamma;
 #[cfg(windows)]
 pub mod magnifier;
@@ -58,6 +60,31 @@ pub fn combined(matrices: &BTreeMap<String, Mat3>) -> Mat3 {
         .fold(color::IDENTITY, |acc, m| if color::strength(&m) > color::strength(&acc) { m } else { acc })
 }
 
+/// Controles do próprio monitor via DDC/CI (códigos VCP do padrão MCCS).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum HwControl {
+    Brightness,
+    Contrast,
+    Saturation,
+}
+
+impl HwControl {
+    pub const ALL: [HwControl; 3] = [HwControl::Brightness, HwControl::Contrast, HwControl::Saturation];
+    pub fn vcp(self) -> u8 {
+        match self {
+            HwControl::Brightness => 0x10,
+            HwControl::Contrast => 0x12,
+            HwControl::Saturation => 0x8A,
+        }
+    }
+}
+
+/// Monitor físico (DDC/CI). Valores crus do monitor: (atual, máximo).
+pub trait MonitorHw: Send {
+    fn read(&mut self, display: &str, control: HwControl) -> Result<(u32, u32)>;
+    fn write(&mut self, display: &str, control: HwControl, value: u32) -> Result<()>;
+}
+
 /// Brilho/contraste/gama por monitor (gamma ramp).
 pub trait CurveControl: Send {
     fn get(&mut self, display: &str) -> Result<Ramp>;
@@ -71,6 +98,7 @@ pub struct Detected {
     /// Por que cada método ausente não está disponível.
     pub super_reasons: Vec<(SuperMethod, String)>,
     pub curves: Option<Box<dyn CurveControl>>,
+    pub hw: Option<Box<dyn MonitorHw>>,
 }
 
 /// Carrega o que existir nesta máquina. Falhas viram "indisponível", nunca pânico.
@@ -96,7 +124,14 @@ pub fn detect(data_dir: &Path) -> Detected {
         Ok(m) => super_layers.push(Box::new(m)),
         Err(e) => super_reasons.push((SuperMethod::Mhc2, e)),
     }
-    Detected { drivers, super_layers, super_reasons, curves: Some(Box::new(gamma::GdiGamma)) }
+    let hw = match ddc::Ddc::load() {
+        Ok(d) => Some(Box::new(d) as Box<dyn MonitorHw>),
+        Err(e) => {
+            log::info!("DDC/CI indisponível: {e}");
+            None
+        }
+    };
+    Detected { drivers, super_layers, super_reasons, curves: Some(Box::new(gamma::GdiGamma)), hw }
 }
 
 #[cfg(not(windows))]
@@ -109,6 +144,7 @@ pub fn detect(_data_dir: &Path) -> Detected {
             (SuperMethod::Mhc2, "disponível apenas no Windows 11".into()),
         ],
         curves: None,
+        hw: None,
     }
 }
 

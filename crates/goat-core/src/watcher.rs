@@ -191,6 +191,7 @@ mod tests {
                 super_layers: vec![Box::new(MockSuper::default()) as Box<dyn SuperLayer>],
                 super_reasons: vec![],
                 curves: None,
+                hw: None,
             },
             vec![Display { id: "D1".into(), name: "M".into(), primary: true }],
             None,

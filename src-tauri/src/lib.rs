@@ -1,7 +1,10 @@
 //! Aplicativo Tauri: janela, bandeja, comandos da interface e o loop de detecção.
 
 use goat_core::engine::Engine;
-use goat_core::types::{GameState, GameStatus, MonitorInfo, Settings, Snapshot, SuperMethod, Tuning, DRIVER_MAX, SUPER_MAX};
+use goat_core::types::{
+    GameState, GameStatus, MonitorHwState, MonitorInfo, Settings, Snapshot, SuperMethod, Tuning, DRIVER_MAX, SUPER_MAX,
+    VALORANT_ID,
+};
 use goat_core::watcher::{process_snapshot, GameWatcher};
 use goat_core::{backends, monitors, settings as store};
 use std::path::PathBuf;
@@ -75,6 +78,20 @@ fn apply_vibrance(state: Shared, monitor_id: String, percent: u8) -> Result<Moni
 #[tauri::command]
 fn apply_tuned(state: Shared, monitor_id: String, percent: u8, tuning: Tuning) -> Result<MonitorInfo, String> {
     lock(&state.engine).apply_with(&monitor_id, percent, tuning)
+}
+
+/// Valores atuais do próprio monitor (DDC/CI). Lento: a interface chama sob demanda.
+#[tauri::command]
+async fn monitor_hw(app: AppHandle, monitor_id: String) -> Result<MonitorHwState, String> {
+    let state = app.state::<Arc<AppState>>().inner().clone();
+    tauri::async_runtime::spawn_blocking(move || lock(&state.engine).monitor_hw(&monitor_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn find_valorant() -> Option<String> {
+    goat_core::games::find_valorant()
 }
 
 #[tauri::command]
@@ -316,7 +333,18 @@ pub fn run() {
             let dir = app.path().app_config_dir()?;
             std::fs::create_dir_all(&dir)?;
             let settings_path = dir.join("settings.json");
-            let settings = store::load(&settings_path);
+            let mut settings = store::load(&settings_path);
+
+            // Valorant fora de C:\Riot Games? Corrige o caminho sozinho.
+            if let Some(p) = settings.profiles.iter_mut().find(|p| p.id == VALORANT_ID) {
+                if !std::path::Path::new(&p.executable).is_file() {
+                    if let Some(found) = goat_core::games::find_valorant() {
+                        log::info!("Valorant encontrado em {found}");
+                        p.executable = found;
+                        let _ = store::save(&settings_path, &settings);
+                    }
+                }
+            }
 
             log::info!("Goat Filter {} iniciando", env!("CARGO_PKG_VERSION"));
             let mut engine = Engine::new(
@@ -391,6 +419,8 @@ pub fn run() {
             get_snapshot,
             apply_vibrance,
             apply_tuned,
+            monitor_hw,
+            find_valorant,
             export_profiles,
             import_profiles,
             restore_monitor,
