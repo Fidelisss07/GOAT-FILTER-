@@ -119,6 +119,8 @@ export interface Settings {
   language: Language;
   /** Apps (nome do .exe) fechados quando um jogo abre. */
   closeOnGame: string[];
+  /** Biblioteca de códigos de mira do Valorant. */
+  crosshairs: Crosshair[];
   startWithWindows: boolean;
   minimizeToTray: boolean;
   /** Id do monitor usado pelos perfis; null = monitor principal. */
@@ -178,6 +180,18 @@ export const METHOD_LABEL: Record<Exclude<SuperMethod, "none">, { title: string;
 };
 
 export type Language = "auto" | "pt" | "en";
+
+export interface Crosshair {
+  id: string;
+  name: string;
+  code: string;
+}
+
+/** Código de mira do Valorant: começa com "0;" (mesma regra do núcleo). */
+export const isCrosshairCode = (c: string) => {
+  const x = c.trim();
+  return x.length <= 400 && x.startsWith("0;") && /^[A-Za-z0-9;.\-]+$/.test(x);
+};
 
 export interface DisplayMode {
   width: number;
@@ -274,6 +288,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notify: true,
   language: "auto",
   closeOnGame: [],
+  crosshairs: [],
   startWithWindows: false,
   minimizeToTray: true,
   defaultMonitor: null,

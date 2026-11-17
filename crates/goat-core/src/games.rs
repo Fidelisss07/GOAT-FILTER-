@@ -22,6 +22,46 @@ pub fn valorant_from_riot_installs(json: &str) -> Option<String> {
     Some(format!(r"{dir}\VALORANT.exe"))
 }
 
+/// Código de mira do Valorant: começa com "0;" e só tem letras, números, ";", "." e "-".
+pub fn is_crosshair_code(code: &str) -> bool {
+    let c = code.trim();
+    c.len() <= 400 && c.starts_with("0;") && c.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, ';' | '.' | '-'))
+}
+
+/// Riot Client, para abrir o Valorant pelo caminho oficial.
+pub fn riot_client_from_installs(json: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(json).ok()?;
+    let p = v.get("rc_default").or_else(|| v.get("rc_live"))?.as_str()?;
+    Some(p.replace('/', "\\"))
+}
+
+/// Abre o jogo de um perfil. Valorant vai pelo Riot Client.
+pub fn launch_game(executable: &str) -> Result<(), String> {
+    let file = executable.rsplit(['\\', '/']).next().unwrap_or("").to_lowercase();
+    if file == "valorant.exe" || file == "valorant-win64-shipping.exe" {
+        let rc = std::fs::read_to_string(r"C:\ProgramData\Riot Games\RiotClientInstalls.json")
+            .ok()
+            .and_then(|s| riot_client_from_installs(&s))
+            .filter(|p| std::path::Path::new(p).is_file())
+            .ok_or("Riot Client não encontrado")?;
+        std::process::Command::new(rc)
+            .args(["--launch-product=valorant", "--launch-patchline=live"])
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    } else {
+        if !std::path::Path::new(executable).is_file() {
+            return Err("executável do perfil não encontrado".into());
+        }
+        let dir = std::path::Path::new(executable).parent().map(|d| d.to_path_buf());
+        let mut cmd = std::process::Command::new(executable);
+        if let Some(d) = dir {
+            cmd.current_dir(d);
+        }
+        cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
+    }
+}
+
 /// Caminho do `VALORANT.exe` nesta máquina, se encontrado.
 pub fn find_valorant() -> Option<String> {
     let exists = |p: &str| std::path::Path::new(p).is_file();
@@ -285,5 +325,18 @@ mod tests {
         );
         assert!(valorant_from_riot_installs("{}").is_none());
         assert!(valorant_from_riot_installs("lixo").is_none());
+    }
+
+    #[test]
+    fn crosshair_codes() {
+        assert!(is_crosshair_code("0;P;c;5;h;0;0l;4;0o;2;0a;1;0f;0;1b;0"));
+        assert!(!is_crosshair_code("P;c;5"));
+        assert!(!is_crosshair_code("0;P;<script>"));
+    }
+
+    #[test]
+    fn riot_client_path() {
+        let j = r#"{"rc_default": "C:/Riot Games/Riot Client/RiotClientServices.exe"}"#;
+        assert_eq!(riot_client_from_installs(j).as_deref(), Some(r"C:\Riot Games\Riot Client\RiotClientServices.exe"));
     }
 }

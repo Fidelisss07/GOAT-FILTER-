@@ -68,6 +68,8 @@ pub fn sanitize(mut s: Settings) -> Settings {
     }
     s.close_on_game = crate::tweaks::closable(&s.close_on_game);
     s.close_on_game.dedup();
+    s.crosshairs.retain(|c| crate::games::is_crosshair_code(&c.code) && !c.name.trim().is_empty());
+    s.crosshairs.truncate(200);
     s
 }
 
