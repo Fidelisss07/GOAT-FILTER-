@@ -137,6 +137,10 @@ tirar esse aviso estão em [docs/ASSINATURA.md](docs/ASSINATURA.md).
 
 A cada push, o workflow **Build Windows** também gera os `.exe` como artefato (para testes).
 
+**Site atualizado sozinho (opcional):** na Vercel, em *Settings › Git › Deploy Hooks*, crie um hook
+para a branch `main` e salve a URL no GitHub como segredo `VERCEL_DEPLOY_HOOK`. Depois de cada
+versão publicada, o workflow chama o hook e o site passa a servir o instalador novo.
+
 ## Desenvolvimento
 
 Pré-requisitos no Windows: [Node 22](https://nodejs.org), [Rust](https://rustup.rs) e
