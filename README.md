@@ -73,6 +73,16 @@ mudam as teclas do jogo nem simulam teclas, o que mantém o app seguro contra ba
 | `Ctrl` + `Alt` + `↑` / `↓` | Sobe/desce 10% no monitor padrão |
 | `Ctrl` + `Alt` + `P` | Aplica o próximo perfil |
 
+**Checklist do sistema (v1.5):** mostra se o monitor está na taxa máxima (e coloca em 144 Hz, por
+exemplo, com um clique), desliga a gravação em segundo plano do Xbox (Game DVR), liga o agendamento
+de GPU por hardware (HAGS, pede permissão de administrador e vale após reiniciar) e abre a opção
+"Não perturbe ao jogar" do Windows.
+
+**Fechar ao abrir o jogo:** você marca apps pesados (navegadores, OneDrive, launchers…) e o Goat
+Filter fecha esses apps quando o jogo abre, como se você clicasse no X (nunca à força, nunca o jogo).
+
+**Painel da máquina:** uso de CPU e RAM e, em placas NVIDIA, uso, temperatura e VRAM da GPU.
+
 **O que mais tira delay:** um checklist com o que realmente reduz atraso (NVIDIA Reflex,
 buffer de entrada bruta, polling do mouse, FPS, Modo de Jogo do Windows).
 

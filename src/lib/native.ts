@@ -8,7 +8,11 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_TUNING,
   FoundGame,
+  HeavyApp,
   MonitorHwState,
+  MonitorMode,
+  SystemStats,
+  WindowsTweaks,
   PerfStatus,
   UpdateInfo,
   UpdaterState,
@@ -40,6 +44,16 @@ export interface NativeApi {
   openRelease(url: string | null): Promise<void>;
   openLogs(): Promise<void>;
   onUpdate(cb: (u: UpdateInfo) => void): Promise<() => void>;
+  displayModes(): Promise<MonitorMode[]>;
+  setRefreshRate(monitorId: string, hz: number): Promise<void>;
+  windowsTweaks(): Promise<WindowsTweaks>;
+  setGameDvr(on: boolean): Promise<WindowsTweaks>;
+  /** Pede permissão de administrador; vale depois de reiniciar o PC. */
+  requestHags(on: boolean): Promise<void>;
+  heavyApps(): Promise<HeavyApp[]>;
+  closeAppsNow(names: string[]): Promise<number>;
+  systemStats(): Promise<SystemStats>;
+  openWindowsSettings(page: string): Promise<void>;
   /** Procura jogos competitivos instalados (Steam, Epic, Riot). */
   findGames(): Promise<FoundGame[]>;
   /** Procura o VALORANT.exe nesta máquina. */
@@ -85,6 +99,15 @@ async function tauriApi(): Promise<NativeApi> {
     monitorHw: (monitorId) => invoke<MonitorHwState>("monitor_hw", { monitorId }),
     findValorant: () => invoke<string | null>("find_valorant"),
     findGames: () => invoke<FoundGame[]>("find_games"),
+    displayModes: () => invoke<MonitorMode[]>("display_modes"),
+    setRefreshRate: (monitorId, hz) => invoke<void>("set_refresh_rate", { monitorId, hz }),
+    windowsTweaks: () => invoke<WindowsTweaks>("windows_tweaks"),
+    setGameDvr: (on) => invoke<WindowsTweaks>("set_game_dvr", { on }),
+    requestHags: (on) => invoke<void>("request_hags", { on }),
+    heavyApps: () => invoke<HeavyApp[]>("heavy_apps"),
+    closeAppsNow: (names) => invoke<number>("close_apps_now", { names }),
+    systemStats: () => invoke<SystemStats>("system_stats"),
+    openWindowsSettings: (page) => invoke<void>("open_windows_settings", { page }),
     perfStatus: () => invoke<PerfStatus>("perf_status"),
     setGameMode: (on) => invoke<PerfStatus>("set_game_mode", { on }),
     updaterState: () => invoke<UpdaterState>("updater_state"),
@@ -181,6 +204,8 @@ export function createDemoApi(): NativeApi {
     gameMode: false,
     applied: false,
   };
+  const demoMode = { width: 1920, height: 1080, hz: 60, maxHz: 144, rates: [60, 120, 144] };
+  const demoTweaks = { gameDvr: true, hags: false };
   const find = (id: string) => {
     const m = monitors.find((x) => x.id === id);
     if (!m) throw new Error("Monitor desconectado.");
@@ -206,6 +231,36 @@ export function createDemoApi(): NativeApi {
     },
     monitorHw: async (id) => (find(id).primary ? { brightness: 70, contrast: 50, saturation: null } : { brightness: null, contrast: null, saturation: null }),
     findValorant: async () => null,
+    displayModes: async () => [
+      { monitorId: "demo-1", name: "Monitor principal", mode: { ...demoMode } },
+      { monitorId: "demo-2", name: "Monitor 2", mode: { width: 1920, height: 1080, hz: 60, maxHz: 60, rates: [60] } },
+    ],
+    setRefreshRate: async (_id, hz) => {
+      demoMode.hz = hz;
+    },
+    windowsTweaks: async () => ({ ...demoTweaks }),
+    setGameDvr: async (on) => {
+      demoTweaks.gameDvr = on;
+      return { ...demoTweaks };
+    },
+    requestHags: async () => {},
+    heavyApps: async () => [
+      { exe: "chrome.exe", name: "Google Chrome", running: true },
+      { exe: "onedrive.exe", name: "OneDrive", running: true },
+      { exe: "firefox.exe", name: "Firefox", running: false },
+    ],
+    closeAppsNow: async (names) => names.length,
+    systemStats: async () => ({
+      cpuUsage: 18 + Math.round(Math.random() * 6),
+      ramUsedGb: 9.4,
+      ramTotalGb: 32,
+      gpuName: "NVIDIA GeForce RTX 3090",
+      gpuUsage: 7,
+      gpuTemp: 41,
+      vramUsedGb: 1.9,
+      vramTotalGb: 24,
+    }),
+    openWindowsSettings: async () => {},
     findGames: async () => [
       { id: "valorant", name: "Valorant", executable: "C:\\Riot Games\\VALORANT\\live\\VALORANT.exe" },
       { id: "cs2", name: "Counter-Strike 2", executable: "D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe" },

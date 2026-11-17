@@ -117,6 +117,8 @@ export interface Settings {
   /** Aviso do Windows quando um perfil liga/desliga. */
   notify: boolean;
   language: Language;
+  /** Apps (nome do .exe) fechados quando um jogo abre. */
+  closeOnGame: string[];
   startWithWindows: boolean;
   minimizeToTray: boolean;
   /** Id do monitor usado pelos perfis; null = monitor principal. */
@@ -177,6 +179,44 @@ export const METHOD_LABEL: Record<Exclude<SuperMethod, "none">, { title: string;
 
 export type Language = "auto" | "pt" | "en";
 
+export interface DisplayMode {
+  width: number;
+  height: number;
+  hz: number;
+  maxHz: number;
+  rates: number[];
+}
+
+export interface MonitorMode {
+  monitorId: string;
+  name: string;
+  mode: DisplayMode | null;
+}
+
+export interface WindowsTweaks {
+  /** Gravação em segundo plano do Xbox ligada? */
+  gameDvr: boolean | null;
+  /** Agendamento de GPU por hardware ligado? */
+  hags: boolean | null;
+}
+
+export interface HeavyApp {
+  exe: string;
+  name: string;
+  running: boolean;
+}
+
+export interface SystemStats {
+  cpuUsage: number | null;
+  ramUsedGb: number | null;
+  ramTotalGb: number | null;
+  gpuName: string | null;
+  gpuUsage: number | null;
+  gpuTemp: number | null;
+  vramUsedGb: number | null;
+  vramTotalGb: number | null;
+}
+
 /** Jogo encontrado nos lançadores (Steam, Epic, Riot). */
 export interface FoundGame {
   id: string;
@@ -233,6 +273,7 @@ export const DEFAULT_SETTINGS: Settings = {
   applyAllMonitors: false,
   notify: true,
   language: "auto",
+  closeOnGame: [],
   startWithWindows: false,
   minimizeToTray: true,
   defaultMonitor: null,

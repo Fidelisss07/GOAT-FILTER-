@@ -93,6 +93,7 @@ struct AppState {
     /// Índice do último perfil escolhido pelo atalho "próximo perfil".
     next_profile: Mutex<usize>,
     perf: Mutex<PerfManager>,
+    stats: Mutex<goat_core::tweaks::StatsSampler>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -297,6 +298,72 @@ fn set_game_mode(state: Shared, on: bool) -> Result<goat_core::types::PerfStatus
     let mut p = lock(&state.perf);
     p.set_game_mode(on)?;
     Ok(p.status())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MonitorMode {
+    monitor_id: String,
+    name: String,
+    mode: Option<goat_core::tweaks::DisplayMode>,
+}
+
+/// Taxa atual e máxima de cada monitor.
+#[tauri::command]
+fn display_modes(state: Shared) -> Vec<MonitorMode> {
+    let list = lock(&state.engine).monitors();
+    list.into_iter()
+        .map(|m| MonitorMode { mode: goat_core::tweaks::display_mode(&m.id), monitor_id: m.id, name: m.name })
+        .collect()
+}
+
+#[tauri::command]
+fn set_refresh_rate(monitor_id: String, hz: u32) -> Result<(), String> {
+    goat_core::tweaks::set_refresh(&monitor_id, hz)
+}
+
+#[tauri::command]
+fn windows_tweaks() -> goat_core::tweaks::WindowsTweaks {
+    goat_core::tweaks::windows_tweaks()
+}
+
+#[tauri::command]
+fn set_game_dvr(on: bool) -> Result<goat_core::tweaks::WindowsTweaks, String> {
+    goat_core::tweaks::set_game_dvr(on)?;
+    Ok(goat_core::tweaks::windows_tweaks())
+}
+
+/// Pede permissão de administrador; vale depois de reiniciar o PC.
+#[tauri::command]
+fn request_hags(on: bool) -> Result<(), String> {
+    goat_core::tweaks::request_hags(on)
+}
+
+#[tauri::command]
+fn heavy_apps() -> Vec<goat_core::tweaks::HeavyApp> {
+    let (procs, _) = process_snapshot();
+    goat_core::tweaks::heavy_apps(&procs)
+}
+
+#[tauri::command]
+fn close_apps_now(names: Vec<String>) -> usize {
+    goat_core::tweaks::close_apps(&names)
+}
+
+#[tauri::command]
+fn system_stats(state: Shared) -> goat_core::tweaks::SystemStats {
+    lock(&state.stats).sample()
+}
+
+/// Abre uma página das Configurações do Windows (só as usadas pelo app).
+#[tauri::command]
+fn open_windows_settings(app: AppHandle, page: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    const ALLOWED: &[&str] = &["ms-settings:notifications", "ms-settings:display-advancedgraphics", "ms-settings:gaming-gamemode"];
+    if !ALLOWED.contains(&page.as_str()) {
+        return Err("página não permitida".into());
+    }
+    app.opener().open_url(page, None::<&str>).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -658,6 +725,14 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                         lock(&state.watcher).tick(&procs, foreground.as_deref(), &settings, &mut engine, &mut perf)
                     };
                     if let Some(status) = changed {
+                        // Jogo acabou de abrir: fecha os apps escolhidos.
+                        let was_active = matches!(lock(&state.game).state, GameState::Active | GameState::Paused);
+                        if status.state == GameState::Active && !was_active && !settings.close_on_game.is_empty() {
+                            let n = goat_core::tweaks::close_apps(&settings.close_on_game);
+                            if n > 0 {
+                                log::info!("{n} app(s) fechados ao abrir o jogo");
+                            }
+                        }
                         notify_game(&app, &state, &status);
                         *lock(&state.game) = status.clone();
                         let _ = app.emit("game-status", status);
@@ -772,6 +847,7 @@ pub fn run() {
                 hotkeys: Mutex::new(Vec::new()),
                 next_profile: Mutex::new(0),
                 perf: Mutex::new(PerfManager::new(backends::system_tweaks(), Some(dir.join("perf.json")))),
+                stats: Mutex::new(Default::default()),
             });
             app.manage(state.clone());
             let state_for_keys = state.clone();
@@ -847,6 +923,15 @@ pub fn run() {
             set_game_mode,
             find_valorant,
             find_games,
+            display_modes,
+            set_refresh_rate,
+            windows_tweaks,
+            set_game_dvr,
+            request_hags,
+            heavy_apps,
+            close_apps_now,
+            system_stats,
+            open_windows_settings,
             check_update,
             open_release,
             open_logs,

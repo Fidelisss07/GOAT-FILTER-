@@ -197,7 +197,8 @@ h1, h2, h3 { margin: 0; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
-.btn.small { height: 36px; font-size: 14px; padding: 0 14px; }
+.btn.small { height: 36px; font-size: 14px; padding: 0 14px; white-space: nowrap; }
+.panel > .rows + .section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
 .btn.small svg { width: 16px; height: 16px; }
 .btn.block { width: 100%; margin-top: 16px; }
 .btn.icon { width: 50px; padding: 0; }
@@ -439,6 +440,21 @@ h1, h2, h3 { margin: 0; }
 .bind-key.conflict { border-color: var(--danger); }
 .bind-key:disabled { opacity: 0.45; cursor: not-allowed; }
 .shortcuts .section-head .toggle { margin-left: auto; }
+
+.state.warn { color: #ffb44d; font-weight: 600; }
+.state-group { display: inline-flex; align-items: center; gap: 12px; }
+.close-apps .rows { margin-top: 6px; }
+.check-row { cursor: pointer; }
+.check-row input { width: 18px; height: 18px; accent-color: var(--accent); }
+.close-apps > .btn { margin-top: 10px; }
+.machine { display: flex; flex-direction: column; gap: 12px; }
+.machine .section-head { margin-bottom: 0; }
+.gpu-name { margin: 2px 0 -4px; }
+.meter-head { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px; color: var(--text-2); }
+.meter-head strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.meter .bar { height: 8px; border-radius: 4px; background: #4a454a; overflow: hidden; }
+.meter .fill { height: 100%; background: var(--accent); transition: width 0.4s; }
+.meter.warn .fill { background: #ffb44d; }
 
 /* ---------------------------------------------------------------------------
    Configurações
