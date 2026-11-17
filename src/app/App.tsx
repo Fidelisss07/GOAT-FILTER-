@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import mascot from "../assets/cabrito-lateral.webp";
 import { ThemeSwatches } from "../components/Controls";
 import { UpdateBanner } from "../components/UpdatePanel";
-import { BoltIcon, GearIcon, HomeIcon, LayersIcon, WinClose, WinMax, WinMin } from "../components/Icons";
+import { BoltIcon, GearIcon, HomeIcon, LayersIcon, TargetIcon, WinClose, WinMax, WinMin } from "../components/Icons";
 import { getNative, NativeApi } from "../lib/native";
 import { ThemeId } from "../lib/types";
 import { Overview } from "../pages/Overview";
 import { PerformancePage } from "../pages/Performance";
 import { Profiles } from "../pages/Profiles";
 import { SettingsPage } from "../pages/Settings";
+import { TrainingPage } from "../pages/Training";
 import { useT } from "../lib/useT";
 import { Page, useStore } from "../state/store";
 
@@ -19,12 +20,14 @@ const PAGES: { id: Page; title: string; Icon: typeof HomeIcon }[] = [
   { id: "overview", title: "Visão geral", Icon: HomeIcon },
   { id: "profiles", title: "Perfis", Icon: LayersIcon },
   { id: "performance", title: "Desempenho", Icon: BoltIcon },
+  { id: "training", title: "Treino", Icon: TargetIcon },
   { id: "settings", title: "Configurações", Icon: GearIcon },
 ];
 const HEADINGS: Record<Page, string> = {
   overview: "Digital Vibrance",
   profiles: "Perfis",
   performance: "Desempenho",
+  training: "Treino",
   settings: "Configurações",
 };
 
@@ -99,6 +102,7 @@ export function App() {
           {s.loaded && s.page === "overview" && <Overview />}
           {s.loaded && s.page === "profiles" && <Profiles />}
           {s.loaded && s.page === "performance" && <PerformancePage />}
+          {s.loaded && s.page === "training" && <TrainingPage />}
           {s.loaded && s.page === "settings" && <SettingsPage />}
         </div>
       </main>

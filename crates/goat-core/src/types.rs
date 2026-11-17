@@ -106,6 +106,15 @@ pub struct PerfTweaks {
     pub high_performance_power: bool,
 }
 
+/// Código de mira do Valorant salvo pelo usuário.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Crosshair {
+    pub id: String,
+    pub name: String,
+    pub code: String,
+}
+
 /// Teclas dos atalhos do Goat Filter (formato "Ctrl+Alt+KeyG").
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -175,6 +184,8 @@ pub struct Settings {
     pub language: String,
     /// Apps (nome do .exe) fechados quando um jogo abre.
     pub close_on_game: Vec<String>,
+    /// Biblioteca de códigos de mira do Valorant.
+    pub crosshairs: Vec<Crosshair>,
     pub start_with_windows: bool,
     pub minimize_to_tray: bool,
     pub default_monitor: Option<String>,
@@ -195,6 +206,7 @@ impl Default for Settings {
             notify: true,
             language: "auto".into(),
             close_on_game: Vec::new(),
+            crosshairs: Vec::new(),
             start_with_windows: false,
             minimize_to_tray: true,
             default_monitor: None,

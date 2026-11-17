@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App } from "../app/App";
 import { createDemoApi, setNativeForTests } from "../lib/native";
 import { matrixFactor } from "../lib/vibrance";
+import { cmPer360, convertSens } from "../lib/sens";
+import { isCrosshairCode } from "../lib/types";
 import { bindingFromEvent, prettyBinding } from "../components/KeyCapture";
 import { useStore } from "../state/store";
 
@@ -271,6 +273,53 @@ describe("Atualização dentro do app", () => {
     act(() => useStore.setState({ updateProgress: null }));
     await userEvent.click(screen.getByRole("button", { name: "Mais tarde" }));
     expect(screen.queryByText("Nova versão v1.4.0 disponível")).toBeNull();
+  });
+});
+
+describe("Treino v1.6", () => {
+  it("conversor de sensibilidade: CS2 1.5 → Valorant ≈ 0.471", () => {
+    expect(convertSens(1.5, "cs2", "valorant")).toBeCloseTo(0.4714, 3);
+    expect(convertSens(0.4714, "valorant", "cs2")).toBeCloseTo(1.5, 2);
+    expect(cmPer360(0.4714, 800, "valorant")).toBeCloseTo(34.6, 0);
+  });
+
+  it("valida código de mira do Valorant", () => {
+    expect(isCrosshairCode("0;P;c;5;h;0;0l;4;0o;2;0a;1;0f;0;1b;0")).toBe(true);
+    expect(isCrosshairCode("oi")).toBe(false);
+    expect(isCrosshairCode("0;P;<script>")).toBe(false);
+  });
+
+  it("abre a aba Treino, salva uma mira e mostra o conversor", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Treino" }));
+    expect(screen.getByRole("button", { name: "Aquecer e jogar" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Miras" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(screen.getByText("Dê um nome para a mira.")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Nome"), "Minha");
+    await userEvent.type(screen.getByLabelText("Código da mira"), "0;P;c;5;h;0;0l;4");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(await screen.findByText("Minha")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).crosshairs[0].code).toBe("0;P;c;5;h;0;0l;4"),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Excluir Minha" }));
+    expect(screen.queryByText("Minha")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Sensibilidade" }));
+    expect(screen.getByText("0.471")).toBeInTheDocument();
+  });
+
+  it("teste de reação avisa clique cedo demais", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Treino" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Reação" }));
+    const btn = screen.getByRole("button", { name: /Clique para começar/ });
+    fireEvent.mouseDown(btn);
+    expect(screen.getByText("Espere o verde…")).toBeInTheDocument();
+    fireEvent.mouseDown(btn);
+    expect(screen.getByText(/Cedo demais/)).toBeInTheDocument();
   });
 });
 

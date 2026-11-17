@@ -57,6 +57,11 @@ export const KeyboardIcon = (p: P) => (
 export const ListIcon = (p: P) => (
   <svg {...base} {...p}><path d="m4 6.5 1.5 1.5L8 5.5M4 12.5 5.5 14 8 11.5M4 18.5 5.5 20 8 17.5M11 7h9M11 13h9M11 19h9" /></svg>
 );
+export const TargetIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.65} {...p}>
+    <circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4" /><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" />
+  </svg>
+);
 export const SparkIcon = (p: P) => (
   <svg {...base} {...p}><path d="M12 2.5 14 9l6.5 2-6.5 2-2 6.5-2-6.5-6.5-2L10 9z" /><path d="M19 3v3M17.5 4.5h3" /></svg>
 );

@@ -78,6 +78,15 @@ exemplo, com um clique), desliga a gravação em segundo plano do Xbox (Game DVR
 de GPU por hardware (HAGS, pede permissão de administrador e vale após reiniciar) e abre a opção
 "Não perturbe ao jogar" do Windows.
 
+**Treino (v1.6):** aba nova, tudo rodando dentro do Goat Filter (fora do jogo):
+
+- **Aquecer e jogar:** aquecimento de flick de 2, 3 ou 5 minutos e, no fim, abre o Valorant sozinho.
+- **Mira:** treino de flick e tracking de 30 s, com precisão, tempo por alvo e recorde.
+- **Reação:** tempo de reação (média de 5).
+- **Mouse:** taxa de polling real (Hz) e teste de clique duplo do botão.
+- **Sensibilidade:** converte entre Valorant, CS2, Apex e Overwatch 2, com eDPI e cm/360°.
+- **Miras:** guarde códigos de mira do Valorant e copie com um clique.
+
 **Fechar ao abrir o jogo:** você marca apps pesados (navegadores, OneDrive, launchers…) e o Goat
 Filter fecha esses apps quando o jogo abre, como se você clicasse no X (nunca à força, nunca o jogo).
 

@@ -366,6 +366,18 @@ fn open_windows_settings(app: AppHandle, page: String) -> Result<(), String> {
     app.opener().open_url(page, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// "Aquecer e jogar": abre o jogo do perfil (Valorant pelo Riot Client).
+#[tauri::command]
+fn launch_game(state: Shared, profile_id: String) -> Result<(), String> {
+    let exe = lock(&state.settings)
+        .profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .map(|p| p.executable.clone())
+        .ok_or("perfil não encontrado")?;
+    goat_core::games::launch_game(&exe)
+}
+
 #[tauri::command]
 async fn find_games() -> Vec<goat_core::games::FoundGame> {
     tauri::async_runtime::spawn_blocking(goat_core::games::find_installed_games).await.unwrap_or_default()
@@ -923,6 +935,7 @@ pub fn run() {
             set_game_mode,
             find_valorant,
             find_games,
+            launch_game,
             display_modes,
             set_refresh_rate,
             windows_tweaks,
