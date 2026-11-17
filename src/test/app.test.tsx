@@ -181,6 +181,79 @@ describe("Desempenho", () => {
   });
 });
 
+describe("v1.4", () => {
+  it("preset Competitivo preenche vibrance e realce", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Perfis" }));
+    const comp = screen.getByRole("button", { name: "Competitivo" });
+    await userEvent.click(comp);
+    expect(comp).toHaveAttribute("aria-pressed", "true");
+    const d = useStore.getState().draft!;
+    expect(d.vibrance).toBe(90);
+    expect(d.tuning).toMatchObject({ emphasis: "red", gamma: 120 });
+  });
+
+  it("encontra jogos instalados e cria perfis", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Perfis" }));
+    await userEvent.click(screen.getByRole("button", { name: "Encontrar jogos instalados" }));
+    const panel = await screen.findByRole("region", { name: "Jogos instalados" });
+    // Valorant já tem perfil: não aparece
+    expect(within(panel).queryByText("Valorant")).toBeNull();
+    await userEvent.click(within(panel).getByRole("button", { name: "Adicionar todos (2)" }));
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem("goat-filter:settings") ?? "{}");
+      expect(saved.profiles?.map((p: { id: string }) => p.id)).toEqual(["valorant", "cs2", "fortnite"]);
+    });
+  });
+
+  it("troca o idioma para inglês", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Configurações" }));
+    await userEvent.selectOptions(screen.getByLabelText("Idioma"), "en");
+    expect(await screen.findByRole("button", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).language).toBe("en");
+  });
+
+  it("opção de todos os monitores e avisos são salvas", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Configurações" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Aplicar perfis em todos os monitores" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Avisar quando um perfil ligar ou desligar" }));
+    const saved = JSON.parse(localStorage.getItem("goat-filter:settings")!);
+    expect(saved.applyAllMonitors).toBe(true);
+    expect(saved.notify).toBe(false);
+  });
+});
+
+describe("Atualização dentro do app", () => {
+  it("mostra o aviso no topo e atualiza sem abrir página", async () => {
+    const api = createDemoApi();
+    let called = 0;
+    api.updateNow = async () => {
+      called++;
+    };
+    api.updaterState = async () => ({ pending: null, installed: true });
+    setNativeForTests(api);
+    await renderApp();
+    act(() =>
+      useStore.setState({
+        update: { current: "1.3.0", latest: "v1.4.0", available: true, url: null, notes: "presets\njogos" },
+      }),
+    );
+    const banner = await screen.findByText("Nova versão v1.4.0 disponível");
+    expect(banner).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Atualizar agora" }));
+    expect(called).toBe(1);
+    act(() => useStore.setState({ updateProgress: 42 }));
+    expect(screen.getByText("Baixando… 42%")).toBeInTheDocument();
+    act(() => useStore.setState({ updateProgress: null }));
+    await userEvent.click(screen.getByRole("button", { name: "Mais tarde" }));
+    expect(screen.queryByText("Nova versão v1.4.0 disponível")).toBeNull();
+  });
+});
+
 describe("Configurações", () => {
   it("troca o método do Super Vibrance e persiste", async () => {
     await renderApp();

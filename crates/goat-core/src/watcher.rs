@@ -12,8 +12,8 @@ const REAPPLY_AFTER: u8 = 8;
 
 struct Active {
     profile_id: String,
-    monitor_id: String,
-    before: (Option<u8>, Tuning),
+    /// Monitores alterados e como cada um estava antes.
+    targets: Vec<(String, (Option<u8>, Tuning))>,
     reapply_in: u8,
     /// Perfil desfeito porque o jogo saiu do foco.
     suspended: bool,
@@ -24,12 +24,42 @@ fn status(state: GameState, profile: &Profile, message: Option<String>) -> GameS
 }
 
 fn restore_before(engine: &mut Engine, a: &Active) {
-    let target = a.before.0.or_else(|| engine.monitors().into_iter().find(|m| m.id == a.monitor_id).and_then(|m| m.original));
-    if let Some(v) = target {
-        if let Err(e) = engine.apply_with(&a.monitor_id, v, a.before.1) {
-            log::warn!("Restaurar cores do jogo falhou: {e}");
+    for (id, before) in &a.targets {
+        let target = before.0.or_else(|| engine.monitors().into_iter().find(|m| &m.id == id).and_then(|m| m.original));
+        if let Some(v) = target {
+            if let Err(e) = engine.apply_with(id, v, before.1) {
+                log::warn!("Restaurar cores do jogo falhou: {e}");
+            }
         }
     }
+}
+
+/// Monitores onde os perfis são aplicados: todos ou só o padrão.
+pub fn target_monitors(settings: &Settings, engine: &Engine) -> Vec<String> {
+    if settings.apply_all_monitors {
+        let all = engine.monitor_ids();
+        if !all.is_empty() {
+            return all;
+        }
+    }
+    settings
+        .default_monitor
+        .clone()
+        .filter(|id| engine.has_monitor(id))
+        .or_else(|| engine.primary_id())
+        .into_iter()
+        .collect()
+}
+
+/// Aplica o perfil em cada monitor; devolve o primeiro erro.
+fn apply_profile(engine: &mut Engine, a: &Active, p: &Profile) -> Option<String> {
+    let mut err = None;
+    for (id, _) in &a.targets {
+        if let Err(e) = engine.apply_with(id, p.vibrance, p.tuning) {
+            err.get_or_insert(e);
+        }
+    }
+    err
 }
 
 #[derive(Default)]
@@ -89,14 +119,14 @@ impl GameWatcher {
                 if a.suspended && (focused || !p.focus_only) {
                     a.suspended = false;
                     a.reapply_in = REAPPLY_AFTER;
-                    let msg = engine.apply_with(&a.monitor_id, p.vibrance, p.tuning).err();
+                    let msg = apply_profile(engine, a, p);
                     let perf_errs = perf.apply(&settings.perf);
                     return Some(status(GameState::Active, p, join(msg, perf_errs)));
                 }
                 if !a.suspended && a.reapply_in > 0 {
                     a.reapply_in -= 1;
                     if a.reapply_in == 0 {
-                        if let Err(e) = engine.apply_with(&a.monitor_id, p.vibrance, p.tuning) {
+                        if let Some(e) = apply_profile(engine, a, p) {
                             log::warn!("Reaplicar perfil falhou: {e}");
                         }
                     }
@@ -119,28 +149,28 @@ impl GameWatcher {
             .filter(|p| p.apply_on_open)
             .find(|p| process_names_for(&p.executable).iter().any(|n| running.contains(n)))?;
 
-        let monitor_id = settings
-            .default_monitor
-            .clone()
-            .filter(|id| engine.has_monitor(id))
-            .or_else(|| engine.primary_id())?;
-        let before = (engine.current(&monitor_id), engine.tuning(&monitor_id).unwrap_or_default());
+        let ids = target_monitors(settings, engine);
+        if ids.is_empty() {
+            return None;
+        }
+        let targets: Vec<(String, (Option<u8>, Tuning))> = ids
+            .into_iter()
+            .map(|id| {
+                let before = (engine.current(&id), engine.tuning(&id).unwrap_or_default());
+                (id, before)
+            })
+            .collect();
         let names = process_names_for(&profile.executable);
         let focused = foreground.map(|f| names.iter().any(|n| n == f)).unwrap_or(true);
         if profile.focus_only && !focused {
-            self.active = Some(Active { profile_id: profile.id.clone(), monitor_id, before, reapply_in: 0, suspended: true });
+            self.active = Some(Active { profile_id: profile.id.clone(), targets, reapply_in: 0, suspended: true });
             return Some(status(GameState::Paused, profile, None));
         }
-        let message = engine.apply_with(&monitor_id, profile.vibrance, profile.tuning).err();
+        let a = Active { profile_id: profile.id.clone(), targets, reapply_in: REAPPLY_AFTER, suspended: false };
+        let message = apply_profile(engine, &a, profile);
         let perf_errs = perf.apply(&settings.perf);
         let message = join(message, perf_errs);
-        self.active = Some(Active {
-            profile_id: profile.id.clone(),
-            monitor_id,
-            before,
-            reapply_in: REAPPLY_AFTER,
-            suspended: false,
-        });
+        self.active = Some(a);
         Some(status(GameState::Active, profile, message))
     }
 }
@@ -313,5 +343,35 @@ mod tests {
         assert_eq!(sys.state.lock().unwrap().0, [0, 0, 0]);
         w.tick(&procs(&[]), None, &s, &mut e, &mut pm);
         assert_eq!(sys.state.lock().unwrap().0, [6, 10, 1]);
+    }
+
+    #[test]
+    fn all_monitors_option() {
+        let drv = MockDriver::with(&[("D1", 50), ("D2", 40)]);
+        let mut e = Engine::new(
+            Detected {
+                drivers: vec![Box::new(drv.clone())],
+                super_layers: vec![Box::new(MockSuper::default()) as Box<dyn SuperLayer>],
+                super_reasons: vec![],
+                curves: None,
+                hw: None,
+            },
+            vec![
+                Display { id: "D1".into(), name: "A".into(), primary: true },
+                Display { id: "D2".into(), name: "B".into(), primary: false },
+            ],
+            None,
+            false,
+        );
+        let mut s = Settings::default();
+        s.apply_all_monitors = true;
+        let mut w = GameWatcher::default();
+        let mut pm = PerfManager::new(None, None);
+        w.tick(&procs(&["valorant.exe"]), None, &s, &mut e, &mut pm);
+        assert_eq!(drv.level("D1"), Some(75));
+        assert_eq!(drv.level("D2"), Some(75));
+        w.tick(&procs(&[]), None, &s, &mut e, &mut pm);
+        assert_eq!(drv.level("D1"), Some(50));
+        assert_eq!(drv.level("D2"), Some(40));
     }
 }

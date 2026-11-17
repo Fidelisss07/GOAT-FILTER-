@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getNative } from "../lib/native";
 import { Capabilities, EMPHASIS, MonitorHwState, Tuning } from "../lib/types";
+import { useT } from "../lib/useT";
 import { CheckIcon } from "./Icons";
 import { Slider } from "./Slider";
 
@@ -15,6 +16,7 @@ function Fine(props: {
   disabled?: boolean;
 }) {
   const { min, max, neutral, format } = props;
+  const t = useT();
   return (
     <div className="fine">
       <div className="fine-head">
@@ -22,7 +24,7 @@ function Fine(props: {
         <span className={`fine-value ${props.value !== neutral ? "changed" : ""}`}>
           {format(props.value)}
           {props.value !== neutral && !props.disabled && (
-            <button type="button" className="reset" aria-label={`Voltar ${props.label} ao normal`} onClick={() => props.onChange(neutral)}>
+            <button type="button" className="reset" aria-label={t("Voltar {name} ao normal", { name: props.label })} onClick={() => props.onChange(neutral)}>
               ↺
             </button>
           )}
@@ -53,6 +55,7 @@ const HW_ROWS: { key: HwKey; read: keyof MonitorHwState; label: string }[] = [
 
 /** Controles do próprio monitor (DDC/CI). Lê os valores atuais ao abrir. */
 function MonitorHwEditor({ tuning, set, monitorId }: { tuning: Tuning; set(p: Partial<Tuning>): void; monitorId: string | null }) {
+  const t = useT();
   const [hw, setHw] = useState<MonitorHwState | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -69,13 +72,13 @@ function MonitorHwEditor({ tuning, set, monitorId }: { tuning: Tuning; set(p: Pa
     };
   }, [monitorId]);
 
-  if (err) return <p className="note">Não foi possível ler o monitor: {err}</p>;
-  if (!hw) return <p className="note">Lendo o monitor…</p>;
+  if (err) return <p className="note">{t("Não foi possível ler o monitor: {e}", { e: err })}</p>;
+  if (!hw) return <p className="note">{t("Lendo o monitor…")}</p>;
   const none = HW_ROWS.every((r) => hw[r.read] == null);
   if (none)
     return (
       <p className="note">
-        Este monitor não respondeu ao DDC/CI. Procure a opção “DDC/CI” no menu do próprio monitor e ligue-a.
+        {t("Este monitor não respondeu ao DDC/CI. Procure a opção “DDC/CI” no menu do próprio monitor e ligue-a.")}
       </p>
     );
   return (
@@ -86,8 +89,8 @@ function MonitorHwEditor({ tuning, set, monitorId }: { tuning: Tuning; set(p: Pa
         if (current == null)
           return (
             <div key={r.key} className="hw-row off">
-              <span>{r.label}</span>
-              <span className="pill">não suportado</span>
+              <span>{t(r.label)}</span>
+              <span className="pill">{t("não suportado")}</span>
             </div>
           );
         return (
@@ -98,13 +101,13 @@ function MonitorHwEditor({ tuning, set, monitorId }: { tuning: Tuning; set(p: Pa
                 checked={value != null}
                 onChange={(e) => set({ [r.key]: e.target.checked ? current : null } as Partial<Tuning>)}
               />
-              {r.label}
+              {t(r.label)}
               {value != null && <span className="fine-value changed">{value}%</span>}
             </label>
             {value != null ? (
-              <Fine label={r.label} value={value} min={0} max={100} neutral={current} format={(v) => `${v}%`} onChange={(v) => set({ [r.key]: v } as Partial<Tuning>)} />
+              <Fine label={t(r.label)} value={value} min={0} max={100} neutral={current} format={(v) => `${v}%`} onChange={(v) => set({ [r.key]: v } as Partial<Tuning>)} />
             ) : (
-              <span className="note">atual: {current}% (não muda)</span>
+              <span className="note">{t("atual: {v}% (não muda)", { v: current })}</span>
             )}
           </div>
         );
@@ -126,6 +129,7 @@ export function TuningEditor({
   /** Monitor onde o perfil é aplicado (para ler o DDC/CI). */
   monitorId: string | null;
 }) {
+  const t = useT();
   const set = (patch: Partial<Tuning>) => onChange({ ...tuning, ...patch });
   const hasMatrix = capabilities.superMethod !== "none";
   const signed = (v: number) => (v > 0 ? `+${v}` : `${v}`);
@@ -134,10 +138,10 @@ export function TuningEditor({
     <div className="tuning">
       <div className="fine">
         <div className="fine-head">
-          <span>Realçar cor do inimigo</span>
-          {!hasMatrix && <span className="pill warn">indisponível neste PC</span>}
+          <span>{t("Realçar cor do inimigo")}</span>
+          {!hasMatrix && <span className="pill warn">{t("indisponível neste PC")}</span>}
         </div>
-        <div className="seg" role="radiogroup" aria-label="Cor do contorno do inimigo">
+        <div className="seg" role="radiogroup" aria-label={t("Cor do contorno do inimigo")}>
           {EMPHASIS.map((e) => {
             const on = tuning.emphasis === e.id;
             return (
@@ -150,18 +154,18 @@ export function TuningEditor({
                 onClick={() => set({ emphasis: e.id })}
               >
                 {e.color ? <span className="dot" style={{ background: e.color }} /> : null}
-                {e.label}
+                {t(e.label)}
                 {on && <CheckIcon className="seg-check" />}
               </button>
             );
           })}
         </div>
-        <p className="note">Use a mesma cor do contorno escolhida no Valorant (Configurações › Geral › Cor de destaque do inimigo).</p>
+        <p className="note">{t("Use a mesma cor do contorno escolhida no Valorant (Configurações › Geral › Cor de destaque do inimigo).")}</p>
       </div>
 
       {tuning.emphasis !== "none" && (
         <Fine
-          label="Força do realce"
+          label={t("Força do realce")}
           value={tuning.emphasisStrength}
           min={0}
           max={100}
@@ -172,16 +176,16 @@ export function TuningEditor({
       )}
 
       <div className="fine-grid">
-        <Fine label="Brilho" value={tuning.brightness} min={-50} max={50} neutral={0} format={signed} onChange={(v) => set({ brightness: v })} disabled={!capabilities.curves} />
-        <Fine label="Contraste" value={tuning.contrast} min={50} max={150} neutral={100} format={(v) => `${v}%`} onChange={(v) => set({ contrast: v })} disabled={!capabilities.curves} />
-        <Fine label="Gama" value={tuning.gamma} min={50} max={200} neutral={100} format={(v) => (v / 100).toFixed(2).replace(".", ",")} onChange={(v) => set({ gamma: v })} disabled={!capabilities.curves} />
+        <Fine label={t("Brilho")} value={tuning.brightness} min={-50} max={50} neutral={0} format={signed} onChange={(v) => set({ brightness: v })} disabled={!capabilities.curves} />
+        <Fine label={t("Contraste")} value={tuning.contrast} min={50} max={150} neutral={100} format={(v) => `${v}%`} onChange={(v) => set({ contrast: v })} disabled={!capabilities.curves} />
+        <Fine label={t("Gama")} value={tuning.gamma} min={50} max={200} neutral={100} format={(v) => (v / 100).toFixed(2).replace(".", ",")} onChange={(v) => set({ gamma: v })} disabled={!capabilities.curves} />
       </div>
-      <p className="note">Gama acima de 1,00 clareia as sombras e ajuda a ver inimigos em cantos escuros.</p>
+      <p className="note">{t("Gama acima de 1,00 clareia as sombras e ajuda a ver inimigos em cantos escuros.")}</p>
 
       {capabilities.monitorHw && (
         <div className="fine">
           <div className="fine-head">
-            <span>Monitor (pelo cabo, DDC/CI)</span>
+            <span>{t("Monitor (pelo cabo, DDC/CI)")}</span>
           </div>
           <MonitorHwEditor tuning={tuning} set={set} monitorId={monitorId} />
         </div>

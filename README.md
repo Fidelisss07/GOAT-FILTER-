@@ -42,6 +42,18 @@ Segurança das cores:
 
 Os perfis podem ser **exportados e importados** (arquivo `.goatfilter.json`) para compartilhar.
 
+### Novidades da v1.4
+
+- **Presets** no editor de perfis: Competitivo (cores fortes, contorno vermelho realçado e sombras
+  mais claras), Vibrante e Natural.
+- **Encontrar jogos instalados:** procura Valorant (Riot), Counter-Strike 2, Apex Legends, Overwatch 2,
+  Rainbow Six Siege, PUBG e Rocket League na Steam, Fortnite e Rocket League na Epic, e cria os perfis
+  com um clique.
+- **Bandeja:** botão direito no ícone para ligar/desligar o filtro ou aplicar qualquer perfil.
+- **Todos os monitores:** opção em Configurações › Monitor e ajustes.
+- **Avisos do Windows** quando um perfil liga, pausa (alt-tab) ou desliga.
+- **Inglês:** Configurações › Aparência › Idioma (Automático segue o idioma do Windows).
+
 ### Aba Desempenho
 
 **Enquanto joga** (ligado quando o jogo abre, desfeito quando fecha ou no alt-tab):
@@ -96,10 +108,11 @@ Baixe a versão mais recente na aba
 - `GoatFilter-<versão>-instalador.exe`: instala e cria atalho (recomendado)
 - `GoatFilter-<versão>-portatil.exe`: roda sem instalar
 
-**Atualização automática** (a partir da v1.2, na versão instalada): o app baixa a versão
-nova em segundo plano, confere o SHA-256 publicado pelo GitHub e instala em silêncio na próxima
-vez que abrir (ou em Configurações › Sobre › **Reiniciar e atualizar agora**). Dá para desligar
-em Configurações › Sobre › **Atualizar sozinho**. A versão portátil só avisa.
+**Atualização dentro do app** (versão instalada): quando sai versão nova, aparece um aviso no
+topo do app com **Atualizar agora**: ele baixa (mostrando o progresso), confere o SHA-256 publicado
+pelo GitHub, instala em silêncio e reabre sozinho. Se o app estiver só na bandeja e nenhum jogo
+estiver aberto, isso acontece sem você fazer nada. Dá para desligar em Configurações › Sobre ›
+**Atualizar sozinho**. A versão portátil só avisa e leva à página de download.
 
 ### Links fixos (para sites)
 
@@ -124,6 +137,10 @@ tirar esse aviso estão em [docs/ASSINATURA.md](docs/ASSINATURA.md).
 3. O GitHub compila, testa e cria a página da versão com os dois `.exe`.
 
 A cada push, o workflow **Build Windows** também gera os `.exe` como artefato (para testes).
+
+**Site atualizado sozinho (opcional):** na Vercel, em *Settings › Git › Deploy Hooks*, crie um hook
+para a branch `main` e salve a URL no GitHub como segredo `VERCEL_DEPLOY_HOOK`. Depois de cada
+versão publicada, o workflow chama o hook e o site passa a servir o instalador novo.
 
 ## Desenvolvimento
 

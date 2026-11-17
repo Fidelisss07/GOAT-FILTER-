@@ -187,6 +187,10 @@ impl Engine {
         (0..self.monitors.len()).map(|i| self.info(i)).collect()
     }
 
+    pub fn monitor_ids(&self) -> Vec<String> {
+        self.monitors.iter().map(|m| m.display.id.clone()).collect()
+    }
+
     pub fn has_monitor(&self, id: &str) -> bool {
         self.monitors.iter().any(|m| m.display.id == id)
     }

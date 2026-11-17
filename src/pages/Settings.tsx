@@ -1,83 +1,120 @@
+import { useId } from "react";
 import { MonitorSelect, ToggleRow } from "../components/Controls";
-import { MonitorIcon, PowerIcon, SparkIcon } from "../components/Icons";
+import { ChevronDown, MonitorIcon, PowerIcon, SparkIcon } from "../components/Icons";
+import { UpdateActions } from "../components/UpdatePanel";
 import { getNative } from "../lib/native";
-import { METHOD_LABEL, THEMES, ThemeId } from "../lib/types";
+import { Language, METHOD_LABEL, THEMES, ThemeId } from "../lib/types";
+import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
 
 // Ordem do mockup: Rosa, Roxo, Amarelo.
 const ORDER: ThemeId[] = ["rosa", "roxo", "amarelo"];
 
+const LANGUAGES: { id: Language; label: string }[] = [
+  { id: "auto", label: "Automático (idioma do Windows)" },
+  { id: "pt", label: "Português" },
+  { id: "en", label: "English" },
+];
+
 export function SettingsPage() {
   const s = useStore();
+  const t = useT();
+  const langId = useId();
   const st = s.settings;
   const demo = s.capabilities.demo;
   const defaultMonitor =
     s.monitors.find((m) => m.id === st.defaultMonitor)?.id ?? s.monitors.find((m) => m.primary)?.id ?? null;
+  const demoTag = demo ? <DemoTag /> : null;
 
   return (
     <div className="stack">
-      <section className="panel" aria-label="Preferências">
-        <div className="section" aria-label="Aparência">
+      <section className="panel" aria-label={t("Preferências")}>
+        <div className="section" aria-label={t("Aparência")}>
           <div className="section-head">
             <MonitorIcon />
-            <h2>Aparência</h2>
+            <h2>{t("Aparência")}</h2>
           </div>
-          <div className="row">
-            <span>Cor de destaque do aplicativo</span>
-            <div className="radios" role="radiogroup" aria-label="Tema do aplicativo">
-              {ORDER.map((id) => {
-                const t = THEMES.find((x) => x.id === id)!;
-                const on = st.theme === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={on}
-                    className="radio-opt"
-                    onClick={() => s.setTheme(id)}
-                  >
-                    <span className="radio-dot" aria-hidden />
-                    {t.label}
-                  </button>
-                );
-              })}
+          <div className="rows">
+            <div className="row">
+              <span>{t("Cor de destaque do aplicativo")}</span>
+              <div className="radios" role="radiogroup" aria-label={t("Tema do aplicativo")}>
+                {ORDER.map((id) => {
+                  const th = THEMES.find((x) => x.id === id)!;
+                  const on = st.theme === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      className="radio-opt"
+                      onClick={() => s.setTheme(id)}
+                    >
+                      <span className="radio-dot" aria-hidden />
+                      {t(th.label)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="row">
+              <label htmlFor={langId}>{t("Idioma")}</label>
+              <div className="row-ctl select">
+                <select
+                  id={langId}
+                  value={st.language}
+                  onChange={(e) => s.updateSettings({ language: e.target.value as Language })}
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.id === "auto" ? t(l.label) : l.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown />
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="section" aria-label="Inicialização">
+        <div className="section" aria-label={t("Inicialização")}>
           <div className="section-head">
             <PowerIcon />
-            <h2>Inicialização</h2>
+            <h2>{t("Inicialização")}</h2>
           </div>
           <div className="rows">
             <ToggleRow
-              label="Iniciar com o Windows"
+              label={t("Iniciar com o Windows")}
               checked={st.startWithWindows}
               onChange={(v) => s.updateSettings({ startWithWindows: v })}
-              extra={demo ? <DemoTag /> : null}
+              extra={demoTag}
             />
             <ToggleRow
-              label="Minimizar para a bandeja"
+              label={t("Minimizar para a bandeja")}
               checked={st.minimizeToTray}
               onChange={(v) => s.updateSettings({ minimizeToTray: v })}
-              extra={demo ? <DemoTag /> : null}
+              extra={demoTag}
+            />
+            <ToggleRow
+              label={t("Avisar quando um perfil ligar ou desligar")}
+              checked={st.notify}
+              onChange={(v) => s.updateSettings({ notify: v })}
+              extra={demoTag}
             />
           </div>
         </div>
 
-        <div className="section" aria-label="Monitor e ajustes">
+        <div className="section" aria-label={t("Monitor e ajustes")}>
           <div className="section-head">
             <MonitorIcon />
-            <h2>Monitor e ajustes</h2>
+            <h2>{t("Monitor e ajustes")}</h2>
           </div>
           <div className="rows">
             <div className="row">
-              <span>Monitor padrão</span>
+              <span>{t("Monitor padrão")}</span>
               <div className="row-ctl">
                 <MonitorSelect
-                  label="Monitor padrão"
+                  label={t("Monitor padrão")}
                   showLabel={false}
                   monitors={s.monitors}
                   value={defaultMonitor}
@@ -86,10 +123,17 @@ export function SettingsPage() {
               </div>
             </div>
             <ToggleRow
-              label="Restaurar cores ao sair"
+              label={t("Aplicar perfis em todos os monitores")}
+              checked={st.applyAllMonitors}
+              onChange={(v) => s.updateSettings({ applyAllMonitors: v })}
+              disabled={s.monitors.length < 2 && !demo}
+              extra={s.monitors.length < 2 && !demo ? <span className="pill">{t("só um monitor conectado")}</span> : null}
+            />
+            <ToggleRow
+              label={t("Restaurar cores ao sair")}
               checked={st.restoreOnExit}
               onChange={(v) => s.updateSettings({ restoreOnExit: v })}
-              extra={demo ? <DemoTag /> : null}
+              extra={demoTag}
             />
           </div>
         </div>
@@ -101,8 +145,8 @@ export function SettingsPage() {
             <SparkIcon />
             <h2>Super Vibrance</h2>
           </div>
-          <p className="meta">Como aplicar a faixa acima de 100%.</p>
-          <div className="methods" role="radiogroup" aria-label="Método do Super Vibrance">
+          <p className="meta">{t("Como aplicar a faixa acima de 100%.")}</p>
+          <div className="methods" role="radiogroup" aria-label={t("Método do Super Vibrance")}>
             {s.capabilities.methods.map((m) => {
               const on = st.superMethod === m.method;
               const info = METHOD_LABEL[m.method];
@@ -118,8 +162,12 @@ export function SettingsPage() {
                 >
                   <span className="radio-dot" aria-hidden />
                   <span className="body">
-                    <strong>{info.title}</strong>
-                    <span>{m.available ? info.detail : `Indisponível: ${m.reason ?? "não suportado"}`}</span>
+                    <strong>{t(info.title)}</strong>
+                    <span>
+                      {m.available
+                        ? t(info.detail)
+                        : t("Indisponível: {why}", { why: m.reason ? t(m.reason) : t("não suportado") })}
+                    </span>
                   </span>
                 </button>
               );
@@ -137,53 +185,39 @@ const logos = import.meta.glob<string>("../assets/logo/*-simbolo.svg", { eager: 
 
 function About() {
   const s = useStore();
+  const t = useT();
   const u = s.update;
   return (
-    <section className="panel about" aria-label="Sobre">
+    <section className="panel about" aria-label={t("Sobre")}>
       <div className="section-head">
         <img src={logos[`../assets/logo/${s.settings.theme}-simbolo.svg`]} alt="" className="about-logo" />
         <h2>Goat Filter</h2>
         <span className="meta">
-          Versão {s.version || "—"}
-          {u?.latest && !u.available && " · atualizado"}
+          {t("Versão {v}", { v: s.version || "—" })}
+          {u?.latest && !u.available && ` · ${t("atualizado")}`}
         </span>
       </div>
       <div className="ctl about-ctl">
-        {s.updater.pending ? (
-          <div className="update-box">
-            <strong>Versão {s.updater.pending} pronta para instalar</strong>
-            <p className="note">Instala sozinha na próxima vez que o Goat Filter abrir.</p>
-            <button type="button" className="btn primary small" onClick={() => getNative().then((n) => n.installUpdateNow())}>
-              Reiniciar e atualizar agora
-            </button>
-          </div>
-        ) : u?.available ? (
-          <div className="update-box">
-            <strong>Nova versão {u.latest} disponível</strong>
-            {u.notes && <p className="note">{u.notes}</p>}
-            {s.settings.autoUpdate && s.updater.installed && <p className="note">Baixando em segundo plano…</p>}
-            <button type="button" className="btn small" onClick={() => getNative().then((n) => n.openRelease(u.url))}>
-              Abrir página da versão
-            </button>
-          </div>
+        {s.updater.pending || u?.available ? (
+          <UpdateActions />
         ) : (
           <button type="button" className="btn small" disabled={s.updateState === "checking"} onClick={s.checkUpdate}>
-            {s.updateState === "checking" ? "Verificando…" : "Verificar atualizações"}
+            {s.updateState === "checking" ? t("Verificando…") : t("Verificar atualizações")}
           </button>
         )}
         <ToggleRow
-          label="Atualizar sozinho"
+          label={t("Atualizar sozinho")}
           checked={s.settings.autoUpdate}
           disabled={!s.updater.installed}
           onChange={(v) => s.updateSettings({ autoUpdate: v })}
-          extra={!s.updater.installed ? <span className="pill">só na versão instalada</span> : null}
+          extra={!s.updater.installed ? <span className="pill">{t("só na versão instalada")}</span> : null}
         />
         <div className="about-links">
           <button type="button" className="btn link" onClick={() => getNative().then((n) => n.openLogs())}>
-            Abrir pasta de logs
+            {t("Abrir pasta de logs")}
           </button>
           <button type="button" className="btn link" onClick={() => getNative().then((n) => n.openRelease(null))}>
-            Página de downloads
+            {t("Página de downloads")}
           </button>
         </div>
       </div>
@@ -192,5 +226,6 @@ function About() {
 }
 
 function DemoTag() {
-  return <span className="pill">demonstração</span>;
+  const t = useT();
+  return <span className="pill">{t("demonstração")}</span>;
 }

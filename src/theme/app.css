@@ -392,6 +392,28 @@ h1, h2, h3 { margin: 0; }
 .check { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
 .check input { width: 18px; height: 18px; accent-color: var(--accent); }
 
+/* Presets e jogos encontrados ---------------------------------------------- */
+.presets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 8px; }
+.presets-label { color: var(--text-2); font-size: 13px; margin-right: 4px; }
+.preset {
+  height: 32px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--border);
+  background: transparent; cursor: pointer; font-size: 14px;
+}
+.preset:hover { border-color: #8a838a; }
+.preset[aria-pressed="true"] { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.16); color: var(--accent); font-weight: 600; }
+.find-btn { align-self: flex-start; margin-top: 16px; }
+.find-games {
+  margin-top: 16px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border-soft);
+  background: rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; gap: 8px;
+}
+.find-head { display: flex; align-items: center; justify-content: space-between; }
+.find-row { display: flex; align-items: center; gap: 12px; }
+.find-row .ico { width: 34px; height: 34px; border-radius: 8px; background: #181718; display: grid; place-items: center; flex: none; }
+.find-row .ico svg { width: 20px; height: 20px; }
+.find-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.find-games > .btn.primary { align-self: flex-start; margin-top: 4px; }
+.row-ctl.select select { height: 42px; }
+
 /* ---------------------------------------------------------------------------
    Desempenho
    --------------------------------------------------------------------------- */
@@ -447,9 +469,18 @@ h1, h2, h3 { margin: 0; }
 .about-ctl > .btn.small { align-self: flex-start; }
 .about-links { display: flex; gap: 18px; flex-wrap: wrap; }
 .update-box {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px;
   border: 1.5px solid var(--accent); border-radius: 10px; background: rgba(var(--accent-rgb), 0.1);
 }
+.update-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.update-notes { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+.update-actions { display: flex; align-items: center; gap: 14px; flex: none; }
+.update-progress { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+.update-progress .bar { flex: 1; max-width: 260px; height: 6px; border-radius: 3px; background: #4a454a; overflow: hidden; }
+.update-progress .fill { height: 100%; background: var(--accent); transition: width 0.2s; }
+.update-banner { flex: none; padding: 10px 28px 0; }
+.update-box.compact { padding: 8px 12px; }
+.update-box.compact strong { font-size: 14px; }
 
 /* ---------------------------------------------------------------------------
    Janelas menores: reorganiza antes de cortar

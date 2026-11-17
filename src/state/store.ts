@@ -1,9 +1,12 @@
 import { create } from "zustand";
+import { resolveLang, translate, Vars } from "../lib/i18n";
 import { getNative } from "../lib/native";
+import { applyPreset, PRESETS } from "../lib/presets";
 import {
   Capabilities,
   DEFAULT_SETTINGS,
   DEFAULT_TUNING,
+  FoundGame,
   GameStatus,
   MonitorInfo,
   Profile,
@@ -41,6 +44,10 @@ interface State {
   version: string;
   update: UpdateInfo | null;
   updater: UpdaterState;
+  /** Progresso do download da atualização (0–100), ou null. */
+  updateProgress: number | null;
+  /** O usuário escondeu o aviso de atualização nesta sessão. */
+  updateDismissed: boolean;
   updateState: "idle" | "checking" | "error";
 
   selectedProfileId: string | null;
@@ -61,6 +68,8 @@ interface State {
   updateDraft(patch: Partial<Profile>): void;
   saveDraft(): Promise<boolean>;
   deleteProfile(id: string): Promise<void>;
+  /** Cria perfis (preset Competitivo) para jogos encontrados. */
+  addProfilesFromGames(games: FoundGame[]): Promise<void>;
   /** Aplica o rascunho do perfil no monitor padrão, sem salvar. */
   testDraft(): Promise<void>;
   exportProfiles(): Promise<void>;
@@ -68,9 +77,15 @@ interface State {
   showToast(t: Toast): void;
   monitorsChanged(list: MonitorInfo[]): void;
   checkUpdate(): Promise<void>;
+  /** Baixa, instala e reabre (o app fecha sozinho no fim). */
+  updateNow(): Promise<void>;
+  dismissUpdate(): void;
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Tradução para mensagens geradas fora dos componentes. */
+const tr = (pt: string, vars?: Vars) => translate(resolveLang(useStore.getState().settings.language), pt, vars);
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -88,6 +103,8 @@ export const useStore = create<State>((set, get) => ({
   version: "",
   update: null,
   updater: { pending: null, installed: false },
+  updateProgress: null,
+  updateDismissed: false,
   updateState: "idle",
   selectedProfileId: VALORANT_ID,
   draft: null,
@@ -122,7 +139,8 @@ export const useStore = create<State>((set, get) => ({
     n.onMonitors((list) => get().monitorsChanged(list));
     n.onNotice((t) => get().showToast(t));
     n.onUpdate((update) => set({ update }));
-    n.onUpdateReady((pending) => set({ updater: { ...get().updater, pending } }));
+    n.onUpdateReady((pending) => set({ updater: { ...get().updater, pending }, updateProgress: null }));
+    n.onUpdateProgress((p) => set({ updateProgress: p }));
     n.updaterState().then((updater) => set({ updater })).catch(() => {});
     n.appVersion().then((version) => set({ version })).catch(() => {});
   },
@@ -150,9 +168,9 @@ export const useStore = create<State>((set, get) => ({
       const n = await getNative();
       const m = await n.applyVibrance(id, edited[id]);
       replaceMonitor(set, get, m);
-      get().showToast({ kind: "ok", text: `Aplicado: ${m.current ?? edited[id]}%` });
+      get().showToast({ kind: "ok", text: tr("Aplicado: {v}%", { v: m.current ?? edited[id] }) });
     } catch (e) {
-      get().showToast({ kind: "error", text: `Não foi possível aplicar: ${errMsg(e)}` });
+      get().showToast({ kind: "error", text: tr("Não foi possível aplicar: {e}", { e: errMsg(e) }) });
     } finally {
       set({ busy: false });
     }
@@ -169,10 +187,10 @@ export const useStore = create<State>((set, get) => ({
       if (m.current != null) set({ edited: { ...get().edited, [id]: m.current } });
       get().showToast({
         kind: "ok",
-        text: m.driverDefault != null ? "Padrão do driver restaurado." : "Valor anterior restaurado.",
+        text: tr(m.driverDefault != null ? "Padrão do driver restaurado." : "Valor anterior restaurado."),
       });
     } catch (e) {
-      get().showToast({ kind: "error", text: `Não foi possível restaurar: ${errMsg(e)}` });
+      get().showToast({ kind: "error", text: tr("Não foi possível restaurar: {e}", { e: errMsg(e) }) });
     } finally {
       set({ busy: false });
     }
@@ -187,20 +205,20 @@ export const useStore = create<State>((set, get) => ({
       const effective = await n.saveSettings(next);
       set({ settings: effective });
       if (patch.startWithWindows !== undefined && effective.startWithWindows !== patch.startWithWindows) {
-        get().showToast({ kind: "error", text: "O Windows não aceitou alterar a inicialização automática." });
+        get().showToast({ kind: "error", text: tr("O Windows não aceitou alterar a inicialização automática.") });
       }
       if (patch.superMethod !== undefined) {
         const snap = await n.getSnapshot();
         set({ capabilities: snap.capabilities, monitors: snap.monitors });
         if (effective.superMethod !== patch.superMethod) {
-          get().showToast({ kind: "error", text: "Não foi possível usar esse método neste PC." });
+          get().showToast({ kind: "error", text: tr("Não foi possível usar esse método neste PC.") });
         } else {
-          get().showToast({ kind: "ok", text: "Método do Super Vibrance alterado." });
+          get().showToast({ kind: "ok", text: tr("Método do Super Vibrance alterado.") });
         }
       }
     } catch (e) {
       set({ settings: prev });
-      get().showToast({ kind: "error", text: `Não foi possível salvar: ${errMsg(e)}` });
+      get().showToast({ kind: "error", text: tr("Não foi possível salvar: {e}", { e: errMsg(e) }) });
     }
   },
 
@@ -267,10 +285,42 @@ export const useStore = create<State>((set, get) => ({
     set({ selectedProfileId: saved.id, draft: { ...saved } });
     get().showToast(
       missing
-        ? { kind: "info", text: `Perfil "${name}" salvo. Aviso: não achei o arquivo nesse caminho, mas o jogo ainda será reconhecido pelo nome do .exe.` }
-        : { kind: "ok", text: `Perfil "${name}" salvo.` },
+        ? { kind: "info", text: tr("Perfil \"{name}\" salvo. Aviso: não achei o arquivo nesse caminho, mas o jogo ainda será reconhecido pelo nome do .exe.", { name }) }
+        : { kind: "ok", text: tr("Perfil \"{name}\" salvo.", { name }) },
     );
     return true;
+  },
+
+  async addProfilesFromGames(games) {
+    if (games.length === 0) return;
+    const max = get().capabilities.superMethod !== "none" ? 200 : 100;
+    const preset = PRESETS[0];
+    const list = [...get().settings.profiles];
+    let last: string | null = null;
+    for (const g of games) {
+      const existing = list.find((p) => p.id === g.id);
+      if (existing) {
+        // Ex.: Valorant em outra pasta — só corrige o caminho.
+        existing.executable = g.executable;
+        last = existing.id;
+        continue;
+      }
+      const { vibrance, tuning } = applyPreset(preset, DEFAULT_TUNING, max);
+      list.push({
+        id: g.id,
+        name: g.name,
+        executable: g.executable,
+        vibrance,
+        tuning,
+        applyOnOpen: true,
+        restoreOnClose: true,
+        focusOnly: false,
+      });
+      last = g.id;
+    }
+    await get().updateSettings({ profiles: list });
+    if (last) get().selectProfile(last);
+    get().showToast({ kind: "ok", text: tr("{n} perfil(is) adicionado(s).", { n: games.length }) });
   },
 
   async deleteProfile(id) {
@@ -292,7 +342,7 @@ export const useStore = create<State>((set, get) => ({
       const n = await getNative();
       const m = await n.applyTuned(id, d.vibrance, d.tuning);
       set({ monitors: get().monitors.map((x) => (x.id === m.id ? m : x)), edited: { ...get().edited, [id]: m.current ?? d.vibrance } });
-      get().showToast({ kind: "ok", text: `Testando "${d.name || "perfil"}" no monitor padrão. Use Restaurar padrão para voltar.` });
+      get().showToast({ kind: "ok", text: tr("Testando \"{name}\" no monitor padrão. Use Restaurar padrão para voltar.", { name: d.name || tr("perfil") }) });
     } catch (e) {
       get().showToast({ kind: "error", text: errMsg(e) });
     }
@@ -302,7 +352,7 @@ export const useStore = create<State>((set, get) => ({
     try {
       const n = await getNative();
       const count = await n.exportProfiles();
-      if (count != null) get().showToast({ kind: "ok", text: `${count} perfil(is) exportado(s).` });
+      if (count != null) get().showToast({ kind: "ok", text: tr("{n} perfil(is) exportado(s).", { n: count }) });
     } catch (e) {
       get().showToast({ kind: "error", text: errMsg(e) });
     }
@@ -315,7 +365,7 @@ export const useStore = create<State>((set, get) => ({
       if (!s) return;
       set({ settings: s });
       get().selectProfile(get().selectedProfileId ?? VALORANT_ID);
-      get().showToast({ kind: "ok", text: "Perfis importados." });
+      get().showToast({ kind: "ok", text: tr("Perfis importados.") });
     } catch (e) {
       get().showToast({ kind: "error", text: errMsg(e) });
     }
@@ -328,11 +378,26 @@ export const useStore = create<State>((set, get) => ({
       const update = await n.checkUpdate();
       set({ update, updateState: "idle" });
       if (!update.available)
-        get().showToast({ kind: "ok", text: update.latest ? "Você já está na versão mais recente." : "Nenhuma versão publicada ainda." });
+        get().showToast({ kind: "ok", text: tr(update.latest ? "Você já está na versão mais recente." : "Nenhuma versão publicada ainda.") });
     } catch (e) {
       set({ updateState: "error" });
-      get().showToast({ kind: "error", text: `Não foi possível verificar: ${errMsg(e)}` });
+      get().showToast({ kind: "error", text: tr("Não foi possível verificar: {e}", { e: errMsg(e) }) });
     }
+  },
+
+  async updateNow() {
+    set({ updateProgress: get().updateProgress ?? 0 });
+    try {
+      const n = await getNative();
+      await n.updateNow();
+    } catch (e) {
+      set({ updateProgress: null });
+      get().showToast({ kind: "error", text: tr("Não foi possível atualizar: {e}", { e: errMsg(e) }) });
+    }
+  },
+
+  dismissUpdate() {
+    set({ updateDismissed: true });
   },
 
   showToast(t) {
@@ -358,7 +423,7 @@ export const useStore = create<State>((set, get) => ({
       selectedMonitorId: stillThere ? s.selectedMonitorId : (list.find((m) => m.primary) ?? list[0])?.id ?? null,
     });
     if (!stillThere && s.selectedMonitorId) {
-      s.showToast({ kind: "info", text: "Monitor desconectado. Selecionamos outro disponível." });
+      s.showToast({ kind: "info", text: tr("Monitor desconectado. Selecionamos outro disponível.") });
     }
   },
 }));

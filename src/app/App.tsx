@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import mascot from "../assets/cabrito-lateral.webp";
 import { ThemeSwatches } from "../components/Controls";
+import { UpdateBanner } from "../components/UpdatePanel";
 import { BoltIcon, GearIcon, HomeIcon, LayersIcon, WinClose, WinMax, WinMin } from "../components/Icons";
 import { getNative, NativeApi } from "../lib/native";
 import { ThemeId } from "../lib/types";
@@ -8,6 +9,7 @@ import { Overview } from "../pages/Overview";
 import { PerformancePage } from "../pages/Performance";
 import { Profiles } from "../pages/Profiles";
 import { SettingsPage } from "../pages/Settings";
+import { useT } from "../lib/useT";
 import { Page, useStore } from "../state/store";
 
 const logos = import.meta.glob<string>("../assets/logo/*.svg", { eager: true, query: "?url", import: "default" });
@@ -28,6 +30,7 @@ const HEADINGS: Record<Page, string> = {
 
 export function App() {
   const s = useStore();
+  const t = useT();
   const [native, setNative] = useState<NativeApi | null>(null);
   const theme = s.settings.theme;
 
@@ -49,7 +52,7 @@ export function App() {
           <img className="wordmark" src={logo(theme, "wordmark")} alt="goat filter" />
         </div>
 
-        <nav className="nav" aria-label="Navegação principal">
+        <nav className="nav" aria-label={t("Navegação principal")}>
           {PAGES.map(({ id, title, Icon }) => (
             <button
               key={id}
@@ -58,7 +61,7 @@ export function App() {
               onClick={() => s.setPage(id)}
             >
               <Icon />
-              {title}
+              {t(title)}
             </button>
           ))}
         </nav>
@@ -69,7 +72,7 @@ export function App() {
         </div>
 
         <div className="theme-block">
-          <h2 id="tema-label">Tema</h2>
+          <h2 id="tema-label">{t("Tema")}</h2>
           <ThemeSwatches value={theme} onChange={s.setTheme} />
         </div>
       </aside>
@@ -78,19 +81,20 @@ export function App() {
         <header className="titlebar" data-tauri-drag-region>
           {s.capabilities.demo && s.loaded && (
             <span className="demo-banner" data-tauri-drag-region>
-              Modo demonstração — nenhuma cor do sistema é alterada
+              {t("Modo demonstração — nenhuma cor do sistema é alterada")}
             </span>
           )}
           <div className="winctl">
-            <button type="button" aria-label="Minimizar" onClick={() => native?.window.minimize()}><WinMin /></button>
-            <button type="button" aria-label="Maximizar" onClick={() => native?.window.toggleMaximize()}><WinMax /></button>
-            <button type="button" className="close" aria-label="Fechar" onClick={() => native?.window.close()}><WinClose /></button>
+            <button type="button" aria-label={t("Minimizar")} onClick={() => native?.window.minimize()}><WinMin /></button>
+            <button type="button" aria-label={t("Maximizar")} onClick={() => native?.window.toggleMaximize()}><WinMax /></button>
+            <button type="button" className="close" aria-label={t("Fechar")} onClick={() => native?.window.close()}><WinClose /></button>
           </div>
         </header>
 
+        <UpdateBanner />
         <div className="page">
           <div className="page-head">
-            <h1>{HEADINGS[s.page]}</h1>
+            <h1>{t(HEADINGS[s.page])}</h1>
           </div>
           {s.loaded && s.page === "overview" && <Overview />}
           {s.loaded && s.page === "profiles" && <Profiles />}

@@ -18,6 +18,8 @@ jobs:
       # Assinatura gratuita (SignPath Foundation). Fica desligada até o
       # segredo SIGNPATH_API_TOKEN existir. Veja docs/ASSINATURA.md.
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      # Opcional: Deploy Hook da Vercel para o site pegar a versão nova.
+      VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
     steps:
       - uses: actions/checkout@v4
 
@@ -103,3 +105,8 @@ jobs:
 
             Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
             Privacidade: [PRIVACY.md](https://github.com/Fidelisss07/GOAT-FILTER-/blob/main/PRIVACY.md)
+
+      - name: Atualizar o site (opcional)
+        if: env.VERCEL_DEPLOY_HOOK != ''
+        shell: pwsh
+        run: Invoke-RestMethod -Method Post -Uri $env:VERCEL_DEPLOY_HOOK | Out-Null

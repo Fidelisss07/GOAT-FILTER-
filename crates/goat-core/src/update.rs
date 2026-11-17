@@ -143,11 +143,36 @@ pub fn from_manifest_json(current: &str, repo: &str, json: &serde_json::Value) -
     })
 }
 
+/// Tira o markdown das notas da versão e deixa só a lista do que mudou
+/// (uma linha por item). Ex.: "* v1.4: presets by @fulano in https://..." → "v1.4: presets".
+pub fn clean_notes(body: &str) -> Option<String> {
+    let items: Vec<String> = body
+        .lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            let item = l.strip_prefix("* ").or_else(|| l.strip_prefix("- "))?;
+            let item = item.replace("**", "");
+            let item = match item.rfind(" by @") {
+                Some(i) => item[..i].to_string(),
+                None => item,
+            };
+            let item = item.trim().to_string();
+            let skip = item.is_empty()
+                || item.starts_with("GoatFilter-")
+                || item.starts_with('@')
+                || item.to_lowercase().contains("first contribution");
+            (!skip).then_some(item)
+        })
+        .take(8)
+        .collect();
+    (!items.is_empty()).then(|| items.join("\n"))
+}
+
 /// Monta o resultado a partir do JSON de `releases/latest`.
 pub fn from_release_json(current: &str, json: &serde_json::Value) -> UpdateInfo {
     let tag = json.get("tag_name").and_then(|t| t.as_str()).map(str::to_string);
     let url = json.get("html_url").and_then(|t| t.as_str()).map(str::to_string);
-    let notes = json.get("body").and_then(|t| t.as_str()).map(|s| s.chars().take(600).collect());
+    let notes = json.get("body").and_then(|t| t.as_str()).and_then(clean_notes);
     let available = tag.as_deref().map(|t| is_newer(t, current)).unwrap_or(false);
     let installer = pick_installer(json);
     UpdateInfo {
@@ -259,5 +284,12 @@ mod tests {
         let u = from_manifest_json("1.0.0", "o/r", &bad).unwrap();
         assert!(u.installer_url.is_none() && u.installer_sha256.is_none());
         assert!(from_manifest_json("1.0.0", "o/r", &serde_json::json!({"version": "lixo"})).is_none());
+    }
+
+    #[test]
+    fn cleans_release_notes() {
+        let body = "## Baixar\n- **GoatFilter-1.3.1-instalador.exe**: instala\n\n## What's Changed\n* v1.3.1: atualização sem o limite by @Fidelisss07 in https://github.com/x/y/pull/6\n\n## New Contributors\n* @Fidelisss07 made their first contribution in https://x\n";
+        assert_eq!(clean_notes(body).as_deref(), Some("v1.3.1: atualização sem o limite"));
+        assert!(clean_notes("## nada").is_none());
     }
 }

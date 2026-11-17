@@ -167,6 +167,12 @@ pub struct Settings {
     pub perf: PerfTweaks,
     /// Baixa e instala versões novas sozinho (só na versão instalada).
     pub auto_update: bool,
+    /// Perfis aplicados em todos os monitores (não só no padrão).
+    pub apply_all_monitors: bool,
+    /// Aviso do Windows quando um perfil liga/desliga.
+    pub notify: bool,
+    /// "auto", "pt" ou "en".
+    pub language: String,
     pub start_with_windows: bool,
     pub minimize_to_tray: bool,
     pub default_monitor: Option<String>,
@@ -183,6 +189,9 @@ impl Default for Settings {
             bindings: Bindings::default(),
             perf: PerfTweaks::default(),
             auto_update: true,
+            apply_all_monitors: false,
+            notify: true,
+            language: "auto".into(),
             start_with_windows: false,
             minimize_to_tray: true,
             default_monitor: None,
