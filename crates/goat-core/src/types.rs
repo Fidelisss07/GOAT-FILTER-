@@ -173,6 +173,8 @@ pub struct Settings {
     pub notify: bool,
     /// "auto", "pt" ou "en".
     pub language: String,
+    /// Apps (nome do .exe) fechados quando um jogo abre.
+    pub close_on_game: Vec<String>,
     pub start_with_windows: bool,
     pub minimize_to_tray: bool,
     pub default_monitor: Option<String>,
@@ -192,6 +194,7 @@ impl Default for Settings {
             apply_all_monitors: false,
             notify: true,
             language: "auto".into(),
+            close_on_game: Vec::new(),
             start_with_windows: false,
             minimize_to_tray: true,
             default_monitor: None,

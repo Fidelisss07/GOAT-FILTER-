@@ -11,6 +11,7 @@ pub mod update;
 pub mod monitors;
 pub mod perf;
 pub mod session;
+pub mod tweaks;
 pub mod settings;
 pub mod types;
 pub mod watcher;

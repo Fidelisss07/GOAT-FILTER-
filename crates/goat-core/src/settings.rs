@@ -66,6 +66,8 @@ pub fn sanitize(mut s: Settings) -> Settings {
         p.vibrance = p.vibrance.min(SUPER_MAX);
         p.tuning = p.tuning.sanitized();
     }
+    s.close_on_game = crate::tweaks::closable(&s.close_on_game);
+    s.close_on_game.dedup();
     s
 }
 

@@ -168,7 +168,8 @@ describe("Desempenho", () => {
   it("liga o Modo de Jogo do Windows", async () => {
     await renderApp();
     await userEvent.click(screen.getByRole("button", { name: "Desempenho" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Ligar" }));
+    const row = (await screen.findByText("Modo de Jogo do Windows")).closest(".row") as HTMLElement;
+    await userEvent.click(within(row).getByRole("button", { name: "Ligar" }));
     expect(await screen.findByText("Ligado", { selector: ".state" })).toBeInTheDocument();
   });
 
@@ -224,6 +225,25 @@ describe("v1.4", () => {
     const saved = JSON.parse(localStorage.getItem("goat-filter:settings")!);
     expect(saved.applyAllMonitors).toBe(true);
     expect(saved.notify).toBe(false);
+  });
+});
+
+describe("Desempenho v1.5", () => {
+  it("corrige a taxa do monitor, desliga o Game DVR e escolhe apps para fechar", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Desempenho" }));
+    expect(await screen.findByText("60 Hz de 144 Hz")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Usar 144 Hz" }));
+    expect((await screen.findAllByText("144 Hz")).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole("button", { name: "Desligar" }));
+    expect(await screen.findByText("Desligada")).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Google Chrome/ }));
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("goat-filter:settings") ?? "{}").closeOnGame).toEqual(["chrome.exe"]),
+    );
+    expect(await screen.findByText("NVIDIA GeForce RTX 3090")).toBeInTheDocument();
   });
 });
 

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Toggle, ToggleRow } from "../components/Controls";
 import { BoltIcon, CheckIcon, CheckSquareIcon, KeyboardIcon } from "../components/Icons";
+import { CloseApps } from "../components/CloseApps";
 import { KeyCapture } from "../components/KeyCapture";
+import { MachinePanel } from "../components/MachinePanel";
+import { SystemChecks } from "../components/SystemChecks";
 import { getNative } from "../lib/native";
 import { Bindings, DEFAULT_BINDINGS, PerfStatus, PerfTweaks } from "../lib/types";
 import { useT } from "../lib/useT";
@@ -78,6 +81,7 @@ export function PerformancePage() {
             <h2>{t("Checklist de latência")}</h2>
           </div>
           <div className="rows checklist">
+            <SystemChecks />
             <div className="row">
               <span>{t("Modo de Jogo do Windows")}</span>
               {st?.gameMode == null ? (
@@ -136,9 +140,16 @@ export function PerformancePage() {
               extra={<Now good={st?.powerHigh ?? null}>{st?.powerHigh ? "alto desempenho" : "outro plano"}</Now>}
             />
           </div>
+          <div className="section">
+            <div className="section-head">
+              <h3>{t("Fechar ao abrir o jogo")}</h3>
+            </div>
+            <CloseApps />
+          </div>
         </section>
       </div>
 
+      <div className="stack">
       <section className="panel shortcuts" aria-label={t("Atalhos")}>
         <div className="section-head">
           <KeyboardIcon />
@@ -162,6 +173,8 @@ export function PerformancePage() {
         </button>
         <p className="note">{t("Clique numa tecla e aperte a nova combinação, com Ctrl ou Alt. Os atalhos não mudam as teclas do jogo nem simulam teclas.")}</p>
       </section>
+      <MachinePanel />
+      </div>
     </div>
   );
 }
