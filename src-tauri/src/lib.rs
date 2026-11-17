@@ -210,6 +210,76 @@ fn install_update_now(app: AppHandle, state: Shared) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Clone, serde::Serialize)]
+struct Progress {
+    percent: u8,
+}
+
+/// Baixa a atualização avisando a interface do progresso.
+fn download_with_progress(app: &AppHandle, info: &goat_core::update::UpdateInfo) -> Result<updater::Pending, String> {
+    let dir = updates_dir(app).ok_or("pasta de atualização indisponível")?;
+    let _ = app.emit("update-progress", Progress { percent: 0 });
+    let h = app.clone();
+    let p = updater::download(&dir, info, move |percent| {
+        let _ = h.emit("update-progress", Progress { percent });
+    })?;
+    let _ = app.emit("update-ready", p.version.clone());
+    Ok(p)
+}
+
+/// Com a janela fechada (só na bandeja) e nenhum jogo aberto, instala na
+/// hora e o app volta sozinho, já atualizado e minimizado.
+fn install_if_idle(app: &AppHandle, p: &updater::Pending) -> bool {
+    let state = app.state::<Arc<AppState>>();
+    let visible = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(true);
+    let playing = matches!(lock(&state.game).state, GameState::Active | GameState::Paused);
+    if visible || playing {
+        return false;
+    }
+    let restore = lock(&state.settings).restore_on_exit;
+    lock(&state.engine).end_session(restore);
+    lock(&state.perf).restore();
+    match updater::launch(p, true) {
+        Ok(()) => {
+            app.exit(0);
+            true
+        }
+        Err(e) => {
+            log::warn!("Instalar atualização: {e}");
+            false
+        }
+    }
+}
+
+/// "Atualizar agora": baixa (com progresso), instala e reabre o app.
+#[tauri::command]
+async fn update_now(app: AppHandle) -> Result<(), String> {
+    if !updater::is_installed() {
+        return Err("a versão portátil não se atualiza sozinha; baixe a nova pela página de downloads".into());
+    }
+    let h = app.clone();
+    let pending = tauri::async_runtime::spawn_blocking(move || -> Result<updater::Pending, String> {
+        let dir = updates_dir(&h).ok_or("pasta de atualização indisponível")?;
+        if let Some(p) = updater::pending(&dir) {
+            return Ok(p);
+        }
+        let info = fetch_update()?;
+        if !info.available {
+            return Err("você já está na versão mais recente".into());
+        }
+        download_with_progress(&h, &info)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let state = app.state::<Arc<AppState>>();
+    let restore = lock(&state.settings).restore_on_exit;
+    lock(&state.engine).end_session(restore);
+    lock(&state.perf).restore();
+    updater::launch(&pending, false)?;
+    app.exit(0);
+    Ok(())
+}
+
 #[tauri::command]
 fn app_version() -> String {
     env!("CARGO_PKG_VERSION").into()
@@ -731,19 +801,20 @@ pub fn run() {
                         let version = u.latest.clone().unwrap_or_default();
                         let _ = handle.emit("update-available", u.clone());
                         let auto = lock(&handle.state::<Arc<AppState>>().settings).auto_update;
-                        let dir = updates_dir(&handle);
-                        match (auto && updater::is_installed(), dir) {
-                            (true, Some(dir)) => match updater::download(&dir, &u) {
+                        if auto && updater::is_installed() {
+                            match download_with_progress(&handle, &u) {
                                 Ok(p) => {
-                                    notify(&handle, "ok", format!("Versão {} baixada — instala sozinha na próxima abertura", p.version));
-                                    let _ = handle.emit("update-ready", p.version);
+                                    if !install_if_idle(&handle, &p) {
+                                        notify(&handle, "ok", format!("Versão {} pronta — clique em Reiniciar e atualizar", p.version));
+                                    }
                                 }
                                 Err(e) => {
                                     log::warn!("Atualização automática: {e}");
-                                    notify(&handle, "info", format!("Nova versão {version} disponível — veja em Configurações › Sobre"));
+                                    notify(&handle, "info", format!("Nova versão {version} disponível"));
                                 }
-                            },
-                            _ => notify(&handle, "info", format!("Nova versão {version} disponível — veja em Configurações › Sobre")),
+                            }
+                        } else {
+                            notify(&handle, "info", format!("Nova versão {version} disponível"));
                         }
                     }
                     Ok(_) => {}
@@ -782,6 +853,7 @@ pub fn run() {
             app_version,
             updater_state,
             install_update_now,
+            update_now,
             export_profiles,
             import_profiles,
             restore_monitor,

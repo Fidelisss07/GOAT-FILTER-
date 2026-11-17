@@ -32,7 +32,8 @@ pub fn clear(dir: &Path) {
 }
 
 /// Baixa e confere o instalador. Devolve a atualização pronta.
-pub fn download(dir: &Path, info: &UpdateInfo) -> Result<Pending, String> {
+/// `progress` recebe a porcentagem (0–100) durante o download.
+pub fn download(dir: &Path, info: &UpdateInfo, progress: impl Fn(u8)) -> Result<Pending, String> {
     let version = info.latest.clone().ok_or("versão desconhecida")?;
     let url = info.installer_url.clone().ok_or("a versão não tem instalador")?;
     // Sem o código de verificação do GitHub, não instala sozinho.
@@ -56,7 +57,9 @@ pub fn download(dir: &Path, info: &UpdateInfo) -> Result<Pending, String> {
         .set("User-Agent", "goat-filter-updater")
         .call()
         .map_err(|e| format!("download falhou ({e})"))?;
+    let size: Option<u64> = resp.header("Content-Length").and_then(|v| v.parse().ok());
     let mut reader = resp.into_reader();
+    let mut last_pct = 255u8;
     let mut out = std::fs::File::create(&part).map_err(|e| e.to_string())?;
     let mut h = Sha256::new();
     let mut buf = [0u8; 64 * 1024];
@@ -73,6 +76,13 @@ pub fn download(dir: &Path, info: &UpdateInfo) -> Result<Pending, String> {
         }
         h.update(&buf[..n]);
         out.write_all(&buf[..n]).map_err(|e| e.to_string())?;
+        if let Some(sz) = size.filter(|s| *s > 0) {
+            let pct = ((total * 100) / sz).min(100) as u8;
+            if pct != last_pct {
+                last_pct = pct;
+                progress(pct);
+            }
+        }
     }
     drop(out);
     let got = format!("{:x}", h.finalize());

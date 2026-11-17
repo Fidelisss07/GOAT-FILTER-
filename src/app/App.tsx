@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import mascot from "../assets/cabrito-lateral.webp";
 import { ThemeSwatches } from "../components/Controls";
+import { UpdateBanner } from "../components/UpdatePanel";
 import { BoltIcon, GearIcon, HomeIcon, LayersIcon, WinClose, WinMax, WinMin } from "../components/Icons";
 import { getNative, NativeApi } from "../lib/native";
 import { ThemeId } from "../lib/types";
@@ -90,6 +91,7 @@ export function App() {
           </div>
         </header>
 
+        <UpdateBanner />
         <div className="page">
           <div className="page-head">
             <h1>{t(HEADINGS[s.page])}</h1>

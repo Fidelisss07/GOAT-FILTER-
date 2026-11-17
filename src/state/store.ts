@@ -44,6 +44,10 @@ interface State {
   version: string;
   update: UpdateInfo | null;
   updater: UpdaterState;
+  /** Progresso do download da atualização (0–100), ou null. */
+  updateProgress: number | null;
+  /** O usuário escondeu o aviso de atualização nesta sessão. */
+  updateDismissed: boolean;
   updateState: "idle" | "checking" | "error";
 
   selectedProfileId: string | null;
@@ -73,6 +77,9 @@ interface State {
   showToast(t: Toast): void;
   monitorsChanged(list: MonitorInfo[]): void;
   checkUpdate(): Promise<void>;
+  /** Baixa, instala e reabre (o app fecha sozinho no fim). */
+  updateNow(): Promise<void>;
+  dismissUpdate(): void;
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -96,6 +103,8 @@ export const useStore = create<State>((set, get) => ({
   version: "",
   update: null,
   updater: { pending: null, installed: false },
+  updateProgress: null,
+  updateDismissed: false,
   updateState: "idle",
   selectedProfileId: VALORANT_ID,
   draft: null,
@@ -130,7 +139,8 @@ export const useStore = create<State>((set, get) => ({
     n.onMonitors((list) => get().monitorsChanged(list));
     n.onNotice((t) => get().showToast(t));
     n.onUpdate((update) => set({ update }));
-    n.onUpdateReady((pending) => set({ updater: { ...get().updater, pending } }));
+    n.onUpdateReady((pending) => set({ updater: { ...get().updater, pending }, updateProgress: null }));
+    n.onUpdateProgress((p) => set({ updateProgress: p }));
     n.updaterState().then((updater) => set({ updater })).catch(() => {});
     n.appVersion().then((version) => set({ version })).catch(() => {});
   },
@@ -373,6 +383,21 @@ export const useStore = create<State>((set, get) => ({
       set({ updateState: "error" });
       get().showToast({ kind: "error", text: tr("Não foi possível verificar: {e}", { e: errMsg(e) }) });
     }
+  },
+
+  async updateNow() {
+    set({ updateProgress: get().updateProgress ?? 0 });
+    try {
+      const n = await getNative();
+      await n.updateNow();
+    } catch (e) {
+      set({ updateProgress: null });
+      get().showToast({ kind: "error", text: tr("Não foi possível atualizar: {e}", { e: errMsg(e) }) });
+    }
+  },
+
+  dismissUpdate() {
+    set({ updateDismissed: true });
   },
 
   showToast(t) {

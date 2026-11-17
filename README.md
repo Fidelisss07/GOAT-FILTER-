@@ -108,10 +108,11 @@ Baixe a versão mais recente na aba
 - `GoatFilter-<versão>-instalador.exe`: instala e cria atalho (recomendado)
 - `GoatFilter-<versão>-portatil.exe`: roda sem instalar
 
-**Atualização automática** (a partir da v1.2, na versão instalada): o app baixa a versão
-nova em segundo plano, confere o SHA-256 publicado pelo GitHub e instala em silêncio na próxima
-vez que abrir (ou em Configurações › Sobre › **Reiniciar e atualizar agora**). Dá para desligar
-em Configurações › Sobre › **Atualizar sozinho**. A versão portátil só avisa.
+**Atualização dentro do app** (versão instalada): quando sai versão nova, aparece um aviso no
+topo do app com **Atualizar agora**: ele baixa (mostrando o progresso), confere o SHA-256 publicado
+pelo GitHub, instala em silêncio e reabre sozinho. Se o app estiver só na bandeja e nenhum jogo
+estiver aberto, isso acontece sem você fazer nada. Dá para desligar em Configurações › Sobre ›
+**Atualizar sozinho**. A versão portátil só avisa e leva à página de download.
 
 ### Links fixos (para sites)
 

@@ -227,6 +227,33 @@ describe("v1.4", () => {
   });
 });
 
+describe("Atualização dentro do app", () => {
+  it("mostra o aviso no topo e atualiza sem abrir página", async () => {
+    const api = createDemoApi();
+    let called = 0;
+    api.updateNow = async () => {
+      called++;
+    };
+    api.updaterState = async () => ({ pending: null, installed: true });
+    setNativeForTests(api);
+    await renderApp();
+    act(() =>
+      useStore.setState({
+        update: { current: "1.3.0", latest: "v1.4.0", available: true, url: null, notes: "presets\njogos" },
+      }),
+    );
+    const banner = await screen.findByText("Nova versão v1.4.0 disponível");
+    expect(banner).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Atualizar agora" }));
+    expect(called).toBe(1);
+    act(() => useStore.setState({ updateProgress: 42 }));
+    expect(screen.getByText("Baixando… 42%")).toBeInTheDocument();
+    act(() => useStore.setState({ updateProgress: null }));
+    await userEvent.click(screen.getByRole("button", { name: "Mais tarde" }));
+    expect(screen.queryByText("Nova versão v1.4.0 disponível")).toBeNull();
+  });
+});
+
 describe("Configurações", () => {
   it("troca o método do Super Vibrance e persiste", async () => {
     await renderApp();

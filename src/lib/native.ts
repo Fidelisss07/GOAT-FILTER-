@@ -31,6 +31,9 @@ export interface NativeApi {
   setGameMode(on: boolean): Promise<PerfStatus>;
   updaterState(): Promise<UpdaterState>;
   installUpdateNow(): Promise<void>;
+  /** Baixa (se preciso), instala e reabre o app. */
+  updateNow(): Promise<void>;
+  onUpdateProgress(cb: (percent: number) => void): Promise<() => void>;
   onUpdateReady(cb: (version: string) => void): Promise<() => void>;
   appVersion(): Promise<string>;
   checkUpdate(): Promise<UpdateInfo>;
@@ -86,6 +89,8 @@ async function tauriApi(): Promise<NativeApi> {
     setGameMode: (on) => invoke<PerfStatus>("set_game_mode", { on }),
     updaterState: () => invoke<UpdaterState>("updater_state"),
     installUpdateNow: () => invoke<void>("install_update_now"),
+    updateNow: () => invoke<void>("update_now"),
+    onUpdateProgress: (cb) => listen<{ percent: number }>("update-progress", (e) => cb(e.payload.percent)),
     onUpdateReady: (cb) => listen<string>("update-ready", (e) => cb(e.payload)),
     appVersion: () => invoke<string>("app_version"),
     checkUpdate: () => invoke<UpdateInfo>("check_update"),
@@ -213,6 +218,8 @@ export function createDemoApi(): NativeApi {
     },
     updaterState: async () => ({ pending: null, installed: true }),
     installUpdateNow: async () => {},
+    updateNow: async () => {},
+    onUpdateProgress: async () => () => {},
     onUpdateReady: async () => () => {},
     appVersion: async () => "1.2.0",
     checkUpdate: async () => ({ current: "1.0.0", latest: null, available: false, url: null, notes: null }),

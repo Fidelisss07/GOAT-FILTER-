@@ -203,4 +203,12 @@ export const EN: Record<string, string> = {
   "{n} perfil(is) adicionado(s).": "{n} profile(s) added.",
   "{n} perfil(is) exportado(s).": "{n} profile(s) exported.",
   "“Verificar” são recomendações: o Goat Filter não altera o jogo nem o mouse. Nenhum programa “zera” os milissegundos; isto é o que reduz o atraso de verdade.": "“Check” items are recommendations: Goat Filter does not change the game or the mouse. No program “zeroes” the milliseconds; this is what actually reduces delay.",
+  "Não foi possível atualizar: {e}": "Could not update: {e}",
+  "Baixando atualização": "Downloading update",
+  "Baixando… {p}%": "Downloading… {p}%",
+  "Instalando e reabrindo…": "Installing and reopening…",
+  "Reiniciar e atualizar": "Restart and update",
+  "Atualizar agora": "Update now",
+  "Baixar a versão nova": "Download the new version",
+  "Mais tarde": "Later",
 };

@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { MonitorSelect, ToggleRow } from "../components/Controls";
 import { ChevronDown, MonitorIcon, PowerIcon, SparkIcon } from "../components/Icons";
+import { UpdateActions } from "../components/UpdatePanel";
 import { getNative } from "../lib/native";
 import { Language, METHOD_LABEL, THEMES, ThemeId } from "../lib/types";
 import { useT } from "../lib/useT";
@@ -197,23 +198,8 @@ function About() {
         </span>
       </div>
       <div className="ctl about-ctl">
-        {s.updater.pending ? (
-          <div className="update-box">
-            <strong>{t("Versão {v} pronta para instalar", { v: s.updater.pending })}</strong>
-            <p className="note">{t("Instala sozinha na próxima vez que o Goat Filter abrir.")}</p>
-            <button type="button" className="btn primary small" onClick={() => getNative().then((n) => n.installUpdateNow())}>
-              {t("Reiniciar e atualizar agora")}
-            </button>
-          </div>
-        ) : u?.available ? (
-          <div className="update-box">
-            <strong>{t("Nova versão {v} disponível", { v: u.latest ?? "" })}</strong>
-            {u.notes && <p className="note">{u.notes}</p>}
-            {s.settings.autoUpdate && s.updater.installed && <p className="note">{t("Baixando em segundo plano…")}</p>}
-            <button type="button" className="btn small" onClick={() => getNative().then((n) => n.openRelease(u.url))}>
-              {t("Abrir página da versão")}
-            </button>
-          </div>
+        {s.updater.pending || u?.available ? (
+          <UpdateActions />
         ) : (
           <button type="button" className="btn small" disabled={s.updateState === "checking"} onClick={s.checkUpdate}>
             {s.updateState === "checking" ? t("Verificando…") : t("Verificar atualizações")}
