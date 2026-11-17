@@ -42,6 +42,18 @@ Segurança das cores:
 
 Os perfis podem ser **exportados e importados** (arquivo `.goatfilter.json`) para compartilhar.
 
+### Novidades da v1.4
+
+- **Presets** no editor de perfis: Competitivo (cores fortes, contorno vermelho realçado e sombras
+  mais claras), Vibrante e Natural.
+- **Encontrar jogos instalados:** procura Valorant (Riot), Counter-Strike 2, Apex Legends, Overwatch 2,
+  Rainbow Six Siege, PUBG e Rocket League na Steam, Fortnite e Rocket League na Epic, e cria os perfis
+  com um clique.
+- **Bandeja:** botão direito no ícone para ligar/desligar o filtro ou aplicar qualquer perfil.
+- **Todos os monitores:** opção em Configurações › Monitor e ajustes.
+- **Avisos do Windows** quando um perfil liga, pausa (alt-tab) ou desliga.
+- **Inglês:** Configurações › Aparência › Idioma (Automático segue o idioma do Windows).
+
 ### Aba Desempenho
 
 **Enquanto joga** (ligado quando o jogo abre, desfeito quando fecha ou no alt-tab):

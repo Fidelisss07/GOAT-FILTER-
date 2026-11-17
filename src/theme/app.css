@@ -392,6 +392,28 @@ h1, h2, h3 { margin: 0; }
 .check { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
 .check input { width: 18px; height: 18px; accent-color: var(--accent); }
 
+/* Presets e jogos encontrados ---------------------------------------------- */
+.presets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 8px; }
+.presets-label { color: var(--text-2); font-size: 13px; margin-right: 4px; }
+.preset {
+  height: 32px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--border);
+  background: transparent; cursor: pointer; font-size: 14px;
+}
+.preset:hover { border-color: #8a838a; }
+.preset[aria-pressed="true"] { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.16); color: var(--accent); font-weight: 600; }
+.find-btn { align-self: flex-start; margin-top: 16px; }
+.find-games {
+  margin-top: 16px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border-soft);
+  background: rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; gap: 8px;
+}
+.find-head { display: flex; align-items: center; justify-content: space-between; }
+.find-row { display: flex; align-items: center; gap: 12px; }
+.find-row .ico { width: 34px; height: 34px; border-radius: 8px; background: #181718; display: grid; place-items: center; flex: none; }
+.find-row .ico svg { width: 20px; height: 20px; }
+.find-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.find-games > .btn.primary { align-self: flex-start; margin-top: 4px; }
+.row-ctl.select select { height: 42px; }
+
 /* ---------------------------------------------------------------------------
    Desempenho
    --------------------------------------------------------------------------- */

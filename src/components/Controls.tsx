@@ -1,5 +1,7 @@
 import { ReactNode, useId } from "react";
+import { T } from "../lib/i18n";
 import { MonitorInfo, THEMES, ThemeId } from "../lib/types";
+import { useT } from "../lib/useT";
 import { CheckIcon, ChevronDown } from "./Icons";
 
 export function Toggle({
@@ -38,8 +40,9 @@ export function ToggleRow(props: { label: string; checked: boolean; onChange(v: 
   );
 }
 
-export function monitorLabel(m: MonitorInfo): string {
-  return m.primary ? `Monitor principal${m.name && m.name !== "Monitor principal" ? ` — ${m.name}` : ""}` : m.name;
+export function monitorLabel(m: MonitorInfo, t: T = (x) => x): string {
+  const main = t("Monitor principal");
+  return m.primary ? `${main}${m.name && m.name !== "Monitor principal" ? ` — ${m.name}` : ""}` : m.name;
 }
 
 export function MonitorSelect({
@@ -56,6 +59,7 @@ export function MonitorSelect({
   showLabel?: boolean;
 }) {
   const id = useId();
+  const t = useT();
   return (
     <div>
       {showLabel && (
@@ -71,10 +75,10 @@ export function MonitorSelect({
           onChange={(e) => onChange(e.target.value)}
           disabled={monitors.length === 0}
         >
-          {monitors.length === 0 && <option value="">Nenhum monitor detectado</option>}
+          {monitors.length === 0 && <option value="">{t("Nenhum monitor detectado")}</option>}
           {monitors.map((m) => (
             <option key={m.id} value={m.id}>
-              {monitorLabel(m)}
+              {monitorLabel(m, t)}
             </option>
           ))}
         </select>
@@ -86,33 +90,34 @@ export function MonitorSelect({
 
 /** Seletor de tema da sidebar (ordem: rosa, roxo, amarelo). */
 export function ThemeSwatches({ value, onChange }: { value: ThemeId; onChange(t: ThemeId): void }) {
+  const t = useT();
   const move = (dir: number) => {
-    const i = THEMES.findIndex((t) => t.id === value);
+    const i = THEMES.findIndex((x) => x.id === value);
     onChange(THEMES[(i + dir + THEMES.length) % THEMES.length].id);
   };
   return (
     <div
       className="swatches"
       role="radiogroup"
-      aria-label="Tema"
+      aria-label={t("Tema")}
       onKeyDown={(e) => {
         if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); move(1); }
         if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); move(-1); }
       }}
     >
-      {THEMES.map((t) => {
-        const on = t.id === value;
+      {THEMES.map((th) => {
+        const on = th.id === value;
         return (
           <button
-            key={t.id}
+            key={th.id}
             type="button"
             role="radio"
             aria-checked={on}
-            aria-label={`Tema ${t.label}`}
+            aria-label={t("Tema {name}", { name: t(th.label) })}
             tabIndex={on ? 0 : -1}
             className="swatch"
-            style={{ background: t.color, color: t.id === "amarelo" ? "#1a1606" : "#fff" }}
-            onClick={() => onChange(t.id)}
+            style={{ background: th.color, color: th.id === "amarelo" ? "#1a1606" : "#fff" }}
+            onClick={() => onChange(th.id)}
           >
             {on && <CheckIcon />}
           </button>

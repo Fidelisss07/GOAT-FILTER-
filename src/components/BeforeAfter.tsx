@@ -1,6 +1,7 @@
 import { KeyboardEvent, PointerEvent, useRef, useState } from "react";
 import scene from "../assets/cenario-preview.png";
 import { clamp } from "../lib/vibrance";
+import { useT } from "../lib/useT";
 import { ArrowsLR } from "./Icons";
 
 /**
@@ -8,6 +9,7 @@ import { ArrowsLR } from "./Icons";
  * recebe CSS saturate(). É só ilustração — não mede o ajuste real do monitor.
  */
 export function BeforeAfter({ saturation }: { saturation: number }) {
+  const t = useT();
   const [pos, setPos] = useState(50);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -35,7 +37,7 @@ export function BeforeAfter({ saturation }: { saturation: number }) {
       className="compare"
       role="slider"
       tabIndex={0}
-      aria-label="Divisor da comparação antes e depois"
+      aria-label={t("Divisor da comparação antes e depois")}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(pos)}
@@ -43,10 +45,10 @@ export function BeforeAfter({ saturation }: { saturation: number }) {
       onPointerMove={onMove}
       onKeyDown={onKey}
     >
-      <img src={scene} alt="Cena ilustrativa sem ajuste" draggable={false} />
+      <img src={scene} alt={t("Cena ilustrativa sem ajuste")} draggable={false} />
       <img
         src={scene}
-        alt="Cena ilustrativa com o ajuste"
+        alt={t("Cena ilustrativa com o ajuste")}
         draggable={false}
         style={{ filter: `saturate(${saturation})`, clipPath: `inset(0 0 0 ${pos}%)` }}
       />
@@ -54,9 +56,9 @@ export function BeforeAfter({ saturation }: { saturation: number }) {
       <div className="handle" style={{ left: `${pos}%` }}>
         <ArrowsLR />
       </div>
-      <span className="tag before">Antes</span>
-      <span className="tag after">Depois</span>
-      <span className="disclaimer" title="A cena é ilustrativa e não mede o ajuste real do monitor">Prévia ilustrativa</span>
+      <span className="tag before">{t("Antes")}</span>
+      <span className="tag after">{t("Depois")}</span>
+      <span className="disclaimer" title={t("A cena é ilustrativa e não mede o ajuste real do monitor")}>{t("Prévia ilustrativa")}</span>
     </div>
   );
 }

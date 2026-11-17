@@ -112,6 +112,11 @@ export interface Settings {
   perf: PerfTweaks;
   /** Baixa e instala versões novas sozinho (versão instalada). */
   autoUpdate: boolean;
+  /** Perfis aplicados em todos os monitores. */
+  applyAllMonitors: boolean;
+  /** Aviso do Windows quando um perfil liga/desliga. */
+  notify: boolean;
+  language: Language;
   startWithWindows: boolean;
   minimizeToTray: boolean;
   /** Id do monitor usado pelos perfis; null = monitor principal. */
@@ -170,6 +175,15 @@ export const METHOD_LABEL: Record<Exclude<SuperMethod, "none">, { title: string;
   },
 };
 
+export type Language = "auto" | "pt" | "en";
+
+/** Jogo encontrado nos lançadores (Steam, Epic, Riot). */
+export interface FoundGame {
+  id: string;
+  name: string;
+  executable: string;
+}
+
 export interface UpdateInfo {
   current: string;
   latest: string | null;
@@ -216,6 +230,9 @@ export const DEFAULT_SETTINGS: Settings = {
   bindings: DEFAULT_BINDINGS,
   perf: { mouseAccelOff: false, keyboardFast: false, highPerformancePower: false },
   autoUpdate: true,
+  applyAllMonitors: false,
+  notify: true,
+  language: "auto",
   startWithWindows: false,
   minimizeToTray: true,
   defaultMonitor: null,

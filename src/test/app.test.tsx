@@ -181,6 +181,52 @@ describe("Desempenho", () => {
   });
 });
 
+describe("v1.4", () => {
+  it("preset Competitivo preenche vibrance e realce", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Perfis" }));
+    const comp = screen.getByRole("button", { name: "Competitivo" });
+    await userEvent.click(comp);
+    expect(comp).toHaveAttribute("aria-pressed", "true");
+    const d = useStore.getState().draft!;
+    expect(d.vibrance).toBe(90);
+    expect(d.tuning).toMatchObject({ emphasis: "red", gamma: 120 });
+  });
+
+  it("encontra jogos instalados e cria perfis", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Perfis" }));
+    await userEvent.click(screen.getByRole("button", { name: "Encontrar jogos instalados" }));
+    const panel = await screen.findByRole("region", { name: "Jogos instalados" });
+    // Valorant já tem perfil: não aparece
+    expect(within(panel).queryByText("Valorant")).toBeNull();
+    await userEvent.click(within(panel).getByRole("button", { name: "Adicionar todos (2)" }));
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem("goat-filter:settings") ?? "{}");
+      expect(saved.profiles?.map((p: { id: string }) => p.id)).toEqual(["valorant", "cs2", "fortnite"]);
+    });
+  });
+
+  it("troca o idioma para inglês", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Configurações" }));
+    await userEvent.selectOptions(screen.getByLabelText("Idioma"), "en");
+    expect(await screen.findByRole("button", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).language).toBe("en");
+  });
+
+  it("opção de todos os monitores e avisos são salvas", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Configurações" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Aplicar perfis em todos os monitores" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Avisar quando um perfil ligar ou desligar" }));
+    const saved = JSON.parse(localStorage.getItem("goat-filter:settings")!);
+    expect(saved.applyAllMonitors).toBe(true);
+    expect(saved.notify).toBe(false);
+  });
+});
+
 describe("Configurações", () => {
   it("troca o método do Super Vibrance e persiste", async () => {
     await renderApp();

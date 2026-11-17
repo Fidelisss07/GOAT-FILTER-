@@ -230,6 +230,11 @@ fn set_game_mode(state: Shared, on: bool) -> Result<goat_core::types::PerfStatus
 }
 
 #[tauri::command]
+async fn find_games() -> Vec<goat_core::games::FoundGame> {
+    tauri::async_runtime::spawn_blocking(goat_core::games::find_installed_games).await.unwrap_or_default()
+}
+
+#[tauri::command]
 fn find_valorant() -> Option<String> {
     goat_core::games::find_valorant()
 }
@@ -242,12 +247,13 @@ fn export_profiles(state: Shared, path: String) -> Result<usize, String> {
 }
 
 #[tauri::command]
-fn import_profiles(state: Shared, path: String) -> Result<Settings, String> {
+fn import_profiles(app: AppHandle, state: Shared, path: String) -> Result<Settings, String> {
     let raw = std::fs::read_to_string(&path).map_err(|e| format!("não foi possível ler: {e}"))?;
     let mut s = lock(&state.settings).clone();
     store::import_profiles(&raw, &mut s)?;
     store::save(&state.settings_path, &s).map_err(|e| format!("não foi possível gravar: {e}"))?;
     *lock(&state.settings) = s.clone();
+    refresh_tray(&app);
     Ok(s)
 }
 
@@ -287,6 +293,7 @@ fn save_settings(app: AppHandle, state: Shared, settings: Settings) -> Result<Se
     s.start_with_windows = auto.is_enabled().unwrap_or(was);
     store::save(&state.settings_path, &s).map_err(|e| format!("não foi possível gravar as preferências: {e}"))?;
     *lock(&state.settings) = s.clone();
+    refresh_tray(&app);
     Ok(s)
 }
 
@@ -343,15 +350,46 @@ fn shortcut_label(sc: &Shortcut) -> String {
     s.replace("control", "Ctrl").replace("alt", "Alt").replace("shift", "Shift").replace("Key", "").replace("Arrow", "")
 }
 
-fn target_monitor(state: &AppState) -> Option<String> {
-    let wanted = lock(&state.settings).default_monitor.clone();
-    let engine = lock(&state.engine);
-    wanted.filter(|id| engine.has_monitor(id)).or_else(|| engine.primary_id())
+/// Idioma das mensagens nativas: "en" ou "pt" ("auto" segue o Windows).
+fn lang_en(state: &AppState) -> bool {
+    match lock(&state.settings).language.as_str() {
+        "en" => true,
+        "pt" => false,
+        _ => !sys_locale::get_locale().map(|l| l.to_lowercase().starts_with("pt")).unwrap_or(true),
+    }
 }
 
-fn on_hotkey(app: &AppHandle, sc: &Shortcut) {
+fn tr(state: &AppState, pt: &str, en: &str) -> String {
+    if lang_en(state) { en.to_string() } else { pt.to_string() }
+}
+
+/// Monitores alvo dos atalhos e da bandeja (padrão ou todos).
+fn targets(state: &AppState) -> Vec<String> {
+    let settings = lock(&state.settings).clone();
+    let engine = lock(&state.engine);
+    goat_core::watcher::target_monitors(&settings, &engine)
+}
+
+fn apply_profile_now(app: &AppHandle, profile_id: &str) {
     let state = app.state::<Arc<AppState>>();
-    let Some(action) = lock(&state.hotkeys).iter().find(|(s, _)| s == sc).map(|(_, a)| *a) else { return };
+    let Some(p) = lock(&state.settings).profiles.iter().find(|p| p.id == profile_id).cloned() else { return };
+    let mut err = None;
+    for id in targets(&state) {
+        if let Err(e) = lock(&state.engine).apply_with(&id, p.vibrance, p.tuning) {
+            err.get_or_insert(e);
+        }
+    }
+    *lock(&state.paused) = None;
+    match err {
+        None => notify(app, "ok", format!("{}: {} ({}%)", tr(&state, "Perfil", "Profile"), p.name, p.vibrance)),
+        Some(e) => notify(app, "error", e),
+    }
+    emit_monitors(app, &state);
+}
+
+/// Ações compartilhadas por atalhos e bandeja.
+fn run_action(app: &AppHandle, action: &str) {
+    let state = app.state::<Arc<AppState>>();
     match action {
         "toggle" => {
             let mut paused = lock(&state.paused);
@@ -362,7 +400,8 @@ fn on_hotkey(app: &AppHandle, sc: &Shortcut) {
                         let _ = engine.apply_with(&id, v, t);
                     }
                     drop(engine);
-                    notify(app, "ok", "Goat Filter ligado");
+                    drop(paused);
+                    notify(app, "ok", tr(&state, "Goat Filter ligado", "Goat Filter on"));
                 }
                 None => {
                     let values: Vec<(String, u8, Tuning)> = engine
@@ -376,26 +415,38 @@ fn on_hotkey(app: &AppHandle, sc: &Shortcut) {
                     engine.restore_all();
                     *paused = Some(values);
                     drop(engine);
-                    notify(app, "info", "Goat Filter desligado (aperte o atalho de novo para ligar)");
+                    drop(paused);
+                    notify(
+                        app,
+                        "info",
+                        tr(&state, "Goat Filter desligado (aperte de novo para ligar)", "Goat Filter off (press again to turn on)"),
+                    );
                 }
             }
         }
         "vibranceUp" | "vibranceDown" => {
-            let Some(id) = target_monitor(&state) else { return };
+            let ids = targets(&state);
+            if ids.is_empty() {
+                return;
+            }
             let mut engine = lock(&state.engine);
             let max = if engine.method() == SuperMethod::None { DRIVER_MAX } else { SUPER_MAX };
-            let cur = engine.current(&id).unwrap_or(50) as i16;
+            let cur = engine.current(&ids[0]).unwrap_or(50) as i16;
             let next = (cur + if action == "vibranceUp" { 10 } else { -10 }).clamp(0, max as i16) as u8;
-            let r = engine.apply(&id, next);
+            let mut err = None;
+            for id in &ids {
+                if let Err(e) = engine.apply(id, next) {
+                    err.get_or_insert(e);
+                }
+            }
             drop(engine);
             *lock(&state.paused) = None;
-            match r {
-                Ok(_) => notify(app, "ok", format!("Vibrance: {next}%")),
-                Err(e) => notify(app, "error", e),
+            match err {
+                None => notify(app, "ok", format!("Vibrance: {next}%")),
+                Some(e) => notify(app, "error", e),
             }
         }
         "nextProfile" => {
-            let Some(id) = target_monitor(&state) else { return };
             let profiles = lock(&state.settings).profiles.clone();
             if profiles.is_empty() {
                 return;
@@ -405,17 +456,18 @@ fn on_hotkey(app: &AppHandle, sc: &Shortcut) {
                 *n = (*n + 1) % profiles.len();
                 *n
             };
-            let p = &profiles[i];
-            let r = lock(&state.engine).apply_with(&id, p.vibrance, p.tuning);
-            *lock(&state.paused) = None;
-            match r {
-                Ok(_) => notify(app, "ok", format!("Perfil: {} ({}%)", p.name, p.vibrance)),
-                Err(e) => notify(app, "error", e),
-            }
+            apply_profile_now(app, &profiles[i].id);
+            return;
         }
-        _ => {}
+        _ => return,
     }
     emit_monitors(app, &state);
+}
+
+fn on_hotkey(app: &AppHandle, sc: &Shortcut) {
+    let state = app.state::<Arc<AppState>>();
+    let Some(action) = lock(&state.hotkeys).iter().find(|(s, _)| s == sc).map(|(_, a)| *a) else { return };
+    run_action(app, action);
 }
 
 // ---------------------------------------------------------------------------
@@ -430,24 +482,57 @@ fn show_main(app: &AppHandle) {
     }
 }
 
+/// Menu da bandeja: liga/desliga, perfis, restaurar, abrir e sair.
+fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    use tauri::menu::{IsMenuItem, PredefinedMenuItem, Submenu};
+    let state = app.state::<Arc<AppState>>();
+    let profiles = lock(&state.settings).profiles.clone();
+    let items: Vec<MenuItem<tauri::Wry>> = profiles
+        .iter()
+        .map(|p| MenuItem::with_id(app, format!("profile:{}", p.id), format!("{} ({}%)", p.name, p.vibrance), true, None::<&str>))
+        .collect::<Result<_, _>>()?;
+    let refs: Vec<&dyn IsMenuItem<tauri::Wry>> = items.iter().map(|i| i as &dyn IsMenuItem<tauri::Wry>).collect();
+    let profiles_menu = Submenu::with_items(app, tr(&state, "Aplicar perfil", "Apply profile"), !items.is_empty(), &refs)?;
+    let toggle = MenuItem::with_id(app, "toggle", tr(&state, "Ligar / desligar filtro", "Turn filter on / off"), true, None::<&str>)?;
+    let restore = MenuItem::with_id(app, "restore", tr(&state, "Restaurar cores originais", "Restore original colors"), true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", tr(&state, "Abrir Goat Filter", "Open Goat Filter"), true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", tr(&state, "Sair", "Quit"), true, None::<&str>)?;
+    let sep1 = PredefinedMenuItem::separator(app)?;
+    let sep2 = PredefinedMenuItem::separator(app)?;
+    Menu::with_items(app, &[&toggle, &profiles_menu, &sep1, &restore, &open, &sep2, &quit])
+}
+
+/// Atualiza o menu quando perfis ou idioma mudam.
+fn refresh_tray(app: &AppHandle) {
+    if let (Some(tray), Ok(menu)) = (app.tray_by_id("goat-tray"), tray_menu(app)) {
+        let _ = tray.set_menu(Some(menu));
+    }
+}
+
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Abrir Goat Filter", true, None::<&str>)?;
-    let restore = MenuItem::with_id(app, "restore", "Restaurar cores originais", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &restore, &quit])?;
+    let menu = tray_menu(app.handle())?;
     let mut tray = TrayIconBuilder::with_id("goat-tray")
         .tooltip("Goat Filter")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, e| match e.id.as_ref() {
-            "open" => show_main(app),
-            "restore" => {
-                let st = app.state::<Arc<AppState>>();
-                lock(&st.engine).restore_all();
-                emit_monitors(app, &st);
+        .on_menu_event(|app, e| {
+            let id = e.id.as_ref();
+            match id {
+                "open" => show_main(app),
+                "restore" => {
+                    let st = app.state::<Arc<AppState>>();
+                    lock(&st.engine).restore_all();
+                    *lock(&st.paused) = None;
+                    emit_monitors(app, &st);
+                }
+                "quit" => app.exit(0),
+                "toggle" => run_action(app, "toggle"),
+                _ => {
+                    if let Some(pid) = id.strip_prefix("profile:") {
+                        apply_profile_now(app, pid);
+                    }
+                }
             }
-            "quit" => app.exit(0),
-            _ => {}
         })
         .on_tray_icon_event(|tray, e| {
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
@@ -459,6 +544,26 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     }
     tray.build(app)?;
     Ok(())
+}
+
+/// Aviso do Windows quando um perfil liga, pausa ou desliga.
+fn notify_game(app: &AppHandle, state: &AppState, status: &GameStatus) {
+    if !lock(&state.settings).notify {
+        return;
+    }
+    use tauri_plugin_notification::NotificationExt;
+    let profile = status
+        .profile_id
+        .as_ref()
+        .and_then(|id| lock(&state.settings).profiles.iter().find(|p| &p.id == id).cloned());
+    let body = match (status.state, &profile) {
+        (GameState::Active, Some(p)) => format!("{} · {}%", p.name, p.vibrance),
+        (GameState::Active, None) => tr(state, "Perfil ligado", "Profile on"),
+        (GameState::Paused, _) => tr(state, "Jogo em segundo plano: cores normais", "Game in background: normal colors"),
+        (GameState::Idle, _) => tr(state, "Jogo fechado: cores restauradas", "Game closed: colors restored"),
+        (GameState::Unavailable, _) => return,
+    };
+    let _ = app.notification().builder().title("Goat Filter").body(body).show();
 }
 
 // ---------------------------------------------------------------------------
@@ -483,6 +588,7 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                         lock(&state.watcher).tick(&procs, foreground.as_deref(), &settings, &mut engine, &mut perf)
                     };
                     if let Some(status) = changed {
+                        notify_game(&app, &state, &status);
                         *lock(&state.game) = status.clone();
                         let _ = app.emit("game-status", status);
                         let list = lock(&state.engine).monitors();
@@ -520,6 +626,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![MINIMIZED_ARG])))
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
@@ -668,6 +775,7 @@ pub fn run() {
             perf_status,
             set_game_mode,
             find_valorant,
+            find_games,
             check_update,
             open_release,
             open_logs,

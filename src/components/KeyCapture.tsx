@@ -1,4 +1,5 @@
 import { KeyboardEvent as ReactKeyboardEvent, useState } from "react";
+import { useT } from "../lib/useT";
 
 const MODIFIER_CODES = new Set(["ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight", "MetaLeft", "MetaRight"]);
 
@@ -48,6 +49,7 @@ export function KeyCapture({
   conflict?: string | null;
   disabled?: boolean;
 }) {
+  const t = useT();
   const [listening, setListening] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
@@ -62,7 +64,7 @@ export function KeyCapture({
     }
     const b = bindingFromEvent(e);
     if (!b) {
-      if (!MODIFIER_CODES.has(e.code)) setHint("Use Ctrl ou Alt junto com a tecla.");
+      if (!MODIFIER_CODES.has(e.code)) setHint(t("Use Ctrl ou Alt junto com a tecla."));
       return;
     }
     setListening(false);
@@ -77,7 +79,7 @@ export function KeyCapture({
         <button
           type="button"
           className={`bind-key ${listening ? "listening" : ""} ${conflict ? "conflict" : ""}`}
-          aria-label={`${label}: ${prettyBinding(value)}. Clique para trocar.`}
+          aria-label={t("{label}: {key}. Clique para trocar.", { label, key: prettyBinding(value) })}
           disabled={disabled}
           onClick={() => {
             setListening((v) => !v);
@@ -86,7 +88,7 @@ export function KeyCapture({
           onKeyDown={onKey}
           onBlur={() => setListening(false)}
         >
-          {listening ? "Aperte a combinação…" : prettyBinding(value)}
+          {listening ? t("Aperte a combinação…") : prettyBinding(value)}
         </button>
         {(hint || conflict) && <span className="field-error">{hint ?? conflict}</span>}
       </div>
