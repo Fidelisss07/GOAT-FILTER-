@@ -67,7 +67,7 @@ jobs:
           }
           # Pedaços .ts com o codificador do Windows (software) e junta em .mp4.
           $tmp = New-Item -ItemType Directory "$env:RUNNER_TEMP/rec" -Force
-          & $ff -hide_banner -loglevel error -f lavfi -i "testsrc2=size=640x360:rate=30:duration=7" -f lavfi -i "sine=duration=7" `
+          & $ff -hide_banner -loglevel error -f lavfi -i "testsrc2=size=640x360:rate=30:duration=7" -f lavfi -i "anullsrc=r=48000:cl=stereo" -shortest `
             -map 0:v -map 1:a -vf format=nv12 -c:v h264_mf -g 60 -bsf:v dump_extra=freq=keyframe -c:a aac `
             -f segment -segment_time 2 -segment_format mpegts -reset_timestamps 0 "$tmp/seg-%06d.ts"
           if ($LASTEXITCODE -ne 0) { Write-Warning "Media Foundation indisponível no runner; teste do clipe pulado"; exit 0 }
