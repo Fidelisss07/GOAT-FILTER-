@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y mingw-w64 nasm pkg-config
-          scripts/build-ffmpeg.sh "$RUNNER_TEMP/ffbuild" ffmpeg-out/ffmpeg.exe
+          bash scripts/build-ffmpeg.sh "$RUNNER_TEMP/ffbuild" ffmpeg-out/ffmpeg.exe
 
       - uses: actions/upload-artifact@v4
         with:
