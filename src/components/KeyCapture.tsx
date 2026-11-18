@@ -16,7 +16,8 @@ export function prettyBinding(b: string): string {
         .replace("ArrowUp", "↑")
         .replace("ArrowDown", "↓")
         .replace("ArrowLeft", "←")
-        .replace("ArrowRight", "→"),
+        .replace("ArrowRight", "→")
+        .replace(/^Mouse([45])$/, "Mouse $1"),
     )
     .join(" + ");
 }
@@ -111,6 +112,14 @@ export function KeyCapture({
             setHint(null);
           }}
           onKeyDown={onKey}
+          onMouseDown={(e) => {
+            // Botões laterais do mouse (4 e 5) só nos atalhos de gravação.
+            if (!listening || !allowBare || (e.button !== 3 && e.button !== 4)) return;
+            e.preventDefault();
+            setListening(false);
+            setHint(null);
+            onChange(e.button === 3 ? "Mouse4" : "Mouse5");
+          }}
           onBlur={() => setListening(false)}
         >
           {listening ? t(allowBare ? "Aperte a tecla…" : "Aperte a combinação…") : prettyBinding(value)}

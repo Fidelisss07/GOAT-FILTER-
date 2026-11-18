@@ -70,6 +70,17 @@ export interface NativeApi {
   revealClip(path?: string): Promise<void>;
   deleteClip(path: string): Promise<void>;
   listMicrophones(): Promise<string[]>;
+  /** Miniatura do clipe (data URL) ou null. */
+  clipThumbnail(path: string): Promise<string | null>;
+  clipMarkers(path: string): Promise<number[]>;
+  renameClip(path: string, name: string): Promise<string>;
+  trimClip(path: string, start: number, end: number): Promise<string>;
+  compressClip(path: string, mb: number): Promise<string>;
+  verticalClip(path: string): Promise<string>;
+  sendClipDiscord(path: string): Promise<void>;
+  addMarker(): Promise<number>;
+  /** Endereço para o player do editor (null fora do app). */
+  videoSrc(path: string): Promise<string | null>;
   pickFolder(current: string): Promise<string | null>;
   onClipsChanged(cb: () => void): Promise<() => void>;
   /** Procura jogos competitivos instalados (Steam, Epic, Riot). */
@@ -136,6 +147,19 @@ async function tauriApi(): Promise<NativeApi> {
     revealClip: (path) => invoke<void>("reveal_clip", { path: path ?? null }),
     deleteClip: (path) => invoke<void>("delete_clip", { path }),
     listMicrophones: () => invoke<string[]>("list_microphones"),
+    clipThumbnail: (path) => invoke<string | null>("clip_thumbnail", { path }),
+    clipMarkers: (path) => invoke<number[]>("clip_markers", { path }),
+    renameClip: (path, name) => invoke<string>("rename_clip", { path, name }),
+    trimClip: (path, start, end) => invoke<string>("trim_clip", { path, start, end }),
+    compressClip: (path, mb) => invoke<string>("compress_clip", { path, mb }),
+    verticalClip: (path) => invoke<string>("vertical_clip", { path }),
+    sendClipDiscord: (path) => invoke<void>("send_clip_discord", { path }),
+    addMarker: () => invoke<number>("add_marker"),
+    videoSrc: async (path) => {
+      const { convertFileSrc } = await import("@tauri-apps/api/core");
+      await invoke("allow_clip_folder");
+      return convertFileSrc(path);
+    },
     pickFolder: async (current) => {
       const { open } = await import("@tauri-apps/plugin-dialog");
       const r = await open({ directory: true, multiple: false, defaultPath: current || undefined });
@@ -216,6 +240,13 @@ function loadDemoSettings(): Settings {
 
 export function createDemoApi(): NativeApi {
   const demoRec: { recording: number | null; clips: ClipInfo[] } = { recording: null, clips: [] };
+  const demoDerive = (path: string, tag: string, size: number) => {
+    const c = demoRec.clips.find((x) => x.path === path);
+    if (!c) throw new Error("Clipe não encontrado.");
+    const name = `${c.name.replace(/\.mp4$/, "")} (${tag}).mp4`;
+    demoRec.clips.unshift({ name, path: `demo/${name}`, size, modified: Date.now() });
+    return `demo/${name}`;
+  };
   const monitors: MonitorInfo[] = [
     { id: "demo-1", name: "Monitor principal", primary: true, driver: "nvidia", current: 50, driverDefault: 50, original: 50, tuning: DEFAULT_TUNING },
     { id: "demo-2", name: "Monitor 2", primary: false, driver: "none", current: 50, driverDefault: null, original: 50, tuning: DEFAULT_TUNING },
@@ -310,6 +341,29 @@ export function createDemoApi(): NativeApi {
       demoRec.clips = demoRec.clips.filter((c) => c.path !== path);
     },
     listMicrophones: async () => ["Microfone (Realtek(R) Audio)", "Headset (HyperX Cloud II)"],
+    clipThumbnail: async () => null,
+    clipMarkers: async (path) => (path.includes("Gameplay") ? [4.2, 11.5] : []),
+    renameClip: async (path, name) => {
+      const c = demoRec.clips.find((x) => x.path === path);
+      if (!c) throw new Error("Clipe não encontrado.");
+      const clean = name.trim().replace(/\.mp4$/i, "").replace(/[\\/:*?"<>|]/g, "");
+      if (!clean) throw new Error("Nome inválido.");
+      if (demoRec.clips.some((x) => x !== c && x.name === `${clean}.mp4`)) throw new Error("Já existe um clipe com esse nome.");
+      c.name = `${clean}.mp4`;
+      c.path = `demo/${c.name}`;
+      return c.path;
+    },
+    trimClip: async (path, start, end) => demoDerive(path, "corte", (end - start) * 2_000_000),
+    compressClip: async (path, mb) => demoDerive(path, `${mb} MB`, mb * 900_000),
+    verticalClip: async (path) => demoDerive(path, "vertical", 12_000_000),
+    sendClipDiscord: async () => {
+      if (!loadDemoSettings().recorder.discordWebhook) throw new Error("Configure o webhook do Discord na aba Gravação.");
+    },
+    addMarker: async () => {
+      if (demoRec.recording == null) throw new Error("Os marcadores funcionam durante a gravação de gameplay.");
+      return Math.round((Date.now() - demoRec.recording) / 100) / 10;
+    },
+    videoSrc: async () => null,
     pickFolder: async () => null,
     onClipsChanged: async () => () => {},
     displayModes: async () => [

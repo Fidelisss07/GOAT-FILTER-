@@ -87,6 +87,8 @@ export interface Bindings {
   saveClip: string;
   /** Começa/para a gravação de gameplay. */
   toggleRecord: string;
+  /** Marca um momento durante a gravação. */
+  addMarker: string;
 }
 
 export const DEFAULT_BINDINGS: Bindings = {
@@ -96,6 +98,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   nextProfile: "Ctrl+Alt+KeyP",
   saveClip: "Alt+F8",
   toggleRecord: "Alt+F7",
+  addMarker: "",
 };
 
 export type RecQuality = "light" | "balanced" | "high";
@@ -115,6 +118,18 @@ export interface RecorderSettings {
   mic: string;
   /** "" = Vídeos\Goat Filter. */
   folder: string;
+  /** Bipe curto ao salvar um clipe. */
+  saveSound: boolean;
+  /** Som do PC e microfone também em faixas separadas. */
+  separateTracks: boolean;
+  /** Apaga clipes com mais de N dias (0 = nunca). */
+  keepDays: number;
+  /** Limite da pasta em GB (0 = sem limite). */
+  maxGb: number;
+  /** Webhook de um canal do Discord. */
+  discordWebhook: string;
+  /** Nomes dos clipes favoritos (a limpeza não apaga). */
+  favorites: string[];
 }
 
 export const DEFAULT_RECORDER: RecorderSettings = {
@@ -127,7 +142,16 @@ export const DEFAULT_RECORDER: RecorderSettings = {
   systemAudio: true,
   mic: "",
   folder: "",
+  saveSound: true,
+  separateTracks: false,
+  keepDays: 0,
+  maxGb: 0,
+  discordWebhook: "",
+  favorites: [],
 };
+
+export const isDiscordWebhook = (u: string) =>
+  /^https:\/\/(ptb\.|canary\.)?discord(app)?\.com\/api\/webhooks\/\S{10,}$/.test(u.trim());
 
 export const CLIP_CHOICES = [15, 20, 25, 30, 35, 45, 60];
 

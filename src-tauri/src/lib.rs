@@ -486,6 +486,11 @@ fn finish_export(app: &AppHandle, st: &AppState, r: Result<PathBuf, String>, cli
     use tauri_plugin_notification::NotificationExt;
     match r {
         Ok(p) => {
+            let rec = lock(&st.settings).recorder.clone();
+            if rec.save_sound {
+                goat_core::clips::play_beep();
+            }
+            st.recorder.cleanup(&rec);
             let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let title = if clip { tr(st, "Clipe salvo", "Clip saved") } else { tr(st, "Gravação salva", "Recording saved") };
             notify(app, "ok", format!("{title}: {name}"));
@@ -531,8 +536,96 @@ fn reveal_clip(app: AppHandle, state: Shared, path: Option<String>) -> Result<()
 
 #[tauri::command]
 fn delete_clip(state: Shared, path: String) -> Result<(), String> {
-    let p = state.recorder.checked_clip(&path)?;
-    std::fs::remove_file(p).map_err(|e| e.to_string())
+    state.recorder.delete(&path)
+}
+
+#[tauri::command]
+async fn clip_thumbnail(app: AppHandle, path: String) -> Option<String> {
+    let rec = app.state::<Arc<AppState>>().recorder.clone();
+    tauri::async_runtime::spawn_blocking(move || rec.thumbnail(&path)).await.ok().flatten()
+}
+
+/// Libera a pasta dos clipes (só ela) para o player do editor de corte.
+#[tauri::command]
+fn allow_clip_folder(app: AppHandle, state: Shared) -> Result<(), String> {
+    let dir = state.recorder.folder();
+    app.asset_protocol_scope().allow_directory(&dir, false).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clip_markers(state: Shared, path: String) -> Vec<f64> {
+    state.recorder.markers(&path)
+}
+
+#[tauri::command]
+fn rename_clip(app: AppHandle, state: Shared, path: String, name: String) -> Result<String, String> {
+    let p = state.recorder.rename(&path, &name)?;
+    // Favorito acompanha o nome novo.
+    let old = PathBuf::from(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let new = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let mut s = lock(&state.settings).clone();
+    if let Some(f) = s.recorder.favorites.iter_mut().find(|f| **f == old) {
+        *f = new;
+        let s = store::sanitize(s);
+        let _ = store::save(&state.settings_path, &s);
+        *lock(&state.settings) = s;
+    }
+    let _ = app.emit("clips-changed", ());
+    Ok(p.to_string_lossy().into_owned())
+}
+
+/// Ferramentas demoradas (corte, compressão, vertical) rodam fora da interface.
+async fn clip_tool(
+    app: AppHandle,
+    f: impl FnOnce(&recorder::Recorder) -> Result<PathBuf, String> + Send + 'static,
+) -> Result<String, String> {
+    let rec = app.state::<Arc<AppState>>().recorder.clone();
+    let p = tauri::async_runtime::spawn_blocking(move || f(&rec)).await.map_err(|e| e.to_string())??;
+    let _ = app.emit("clips-changed", ());
+    Ok(p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+async fn trim_clip(app: AppHandle, path: String, start: f64, end: f64) -> Result<String, String> {
+    clip_tool(app, move |r| r.trim(&path, start, end)).await
+}
+
+#[tauri::command]
+async fn compress_clip(app: AppHandle, path: String, mb: u32) -> Result<String, String> {
+    let mb = mb.clamp(5, 500);
+    clip_tool(app, move |r| r.compress(&path, mb)).await
+}
+
+#[tauri::command]
+async fn vertical_clip(app: AppHandle, path: String) -> Result<String, String> {
+    clip_tool(app, move |r| r.vertical(&path)).await
+}
+
+#[tauri::command]
+async fn send_clip_discord(app: AppHandle, path: String) -> Result<(), String> {
+    let st = app.state::<Arc<AppState>>().inner().clone();
+    let hook = lock(&st.settings).recorder.discord_webhook.clone();
+    let rec = st.recorder.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let agent = http_agent()?;
+        rec.send_discord(&path, &hook, &agent)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let _ = app.emit("clips-changed", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn add_marker(app: AppHandle, state: Shared) -> Result<f64, String> {
+    let at = state.recorder.add_marker()?;
+    notify(&app, "ok", format!("{} {}", tr(&state, "Marcador em", "Marker at"), format_secs(at)));
+    Ok(at)
+}
+
+fn format_secs(s: f64) -> String {
+    let s = s.max(0.0) as u64;
+    format!("{:02}:{:02}", s / 60, s % 60)
 }
 
 #[tauri::command]
@@ -556,7 +649,7 @@ fn parse_bindings(b: &Bindings) -> (Vec<(Shortcut, &'static str)>, Vec<String>) 
     let mut ok = Vec::new();
     let mut errs = Vec::new();
     for (action, text) in b.all() {
-        if text.trim().is_empty() {
+        if text.trim().is_empty() || goat_core::input::is_mouse_binding(text) {
             continue;
         }
         match Shortcut::from_str(text) {
@@ -710,6 +803,14 @@ fn run_action(app: &AppHandle, action: &str) {
                 let secs = lock(&st.settings).recorder.clip_seconds;
                 let _ = finish_export(&app, &st, st.recorder.save_clip(secs), true);
             });
+            return;
+        }
+        "addMarker" => {
+            if let Err(e) = state.recorder.add_marker().map(|at| {
+                notify(app, "ok", format!("{} {}", tr(&state, "Marcador em", "Marker at"), format_secs(at)));
+            }) {
+                notify(app, "error", e);
+            }
             return;
         }
         "toggleRecord" => {
@@ -1015,6 +1116,27 @@ pub fn run() {
             if !errs.is_empty() {
                 log::warn!("Atalhos: {errs:?}");
             }
+            // Botões laterais do mouse (Raw Input: só lê, não bloqueia).
+            let mouse_app = app.handle().clone();
+            goat_core::input::spawn_mouse_listener(move |button| {
+                let Some(name) = goat_core::input::button_name(button) else { return };
+                let st = mouse_app.state::<Arc<AppState>>();
+                let s = lock(&st.settings).clone();
+                if !s.hotkeys {
+                    return;
+                }
+                let action = s.bindings.all().into_iter().find(|(_, b)| *b == name).map(|(a, _)| a);
+                if let Some(a) = action {
+                    run_action(&mouse_app, a);
+                }
+            });
+            {
+                let st = state.clone();
+                std::thread::spawn(move || {
+                    let rec = lock(&st.settings).recorder.clone();
+                    st.recorder.cleanup(&rec);
+                });
+            }
             spawn_background(app.handle().clone(), state);
 
             // Verifica atualização uma vez, alguns segundos depois de abrir.
@@ -1102,6 +1224,15 @@ pub fn run() {
             open_clip,
             reveal_clip,
             delete_clip,
+            clip_thumbnail,
+            clip_markers,
+            allow_clip_folder,
+            rename_clip,
+            trim_clip,
+            compress_clip,
+            vertical_clip,
+            send_clip_discord,
+            add_marker,
             list_microphones,
             executable_exists
         ])

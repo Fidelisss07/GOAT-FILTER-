@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { ToggleRow } from "../components/Controls";
 import { ChevronDown, FolderIcon, RecordIcon, SlidersIcon, TrashIcon } from "../components/Icons";
+import { ClipEditor } from "../components/ClipEditor";
 import { KeyCapture } from "../components/KeyCapture";
 import { getNative } from "../lib/native";
 import { bitrateKbps, clipMegabytes, formatClock, formatSize, outputSize } from "../lib/rec";
-import { Bindings, CLIP_CHOICES, ClipInfo, RecQuality, RecorderSettings, RecorderStatus } from "../lib/types";
+import { Bindings, CLIP_CHOICES, ClipInfo, isDiscordWebhook, RecQuality, RecorderSettings, RecorderStatus } from "../lib/types";
 import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
 
@@ -27,6 +28,7 @@ const BIND_LABELS: Record<keyof Bindings, string> = {
   nextProfile: "Próximo perfil",
   saveClip: "Salvar clipe",
   toggleRecord: "Gravar / parar",
+  addMarker: "Marcar momento",
 };
 
 function useRecorder() {
@@ -74,6 +76,81 @@ function Seg<T extends string | number>({
   );
 }
 
+function ClipRow({
+  clip,
+  favorite,
+  onFavorite,
+  onEdit,
+  onDeleted,
+}: {
+  clip: ClipInfo;
+  favorite: boolean;
+  onFavorite(): void;
+  onEdit(): void;
+  onDeleted(): void;
+}) {
+  const t = useT();
+  const s = useStore();
+  const [thumb, setThumb] = useState<string | null>(null);
+  const fail = (e: unknown) => s.showToast({ kind: "error", text: String(e) });
+  useEffect(() => {
+    let alive = true;
+    void getNative()
+      .then((n) => n.clipThumbnail(clip.path))
+      .then((x) => alive && setThumb(x))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [clip.path, clip.size]);
+  return (
+    <li className="row clip-row">
+      <button type="button" className="clip-thumb" aria-label={t("Editar {name}", { name: clip.name })} onClick={onEdit}>
+        {thumb ? <img src={thumb} alt="" /> : <RecordIcon />}
+      </button>
+      <span className="clip-name">
+        <strong>{clip.name.replace(/\.mp4$/i, "")}</strong>
+        <small>
+          {formatSize(clip.size)} · {new Date(clip.modified).toLocaleString()}
+        </small>
+      </span>
+      <span className="state-group">
+        <button
+          type="button"
+          className={`btn small icon-only star ${favorite ? "on" : ""}`}
+          aria-label={favorite ? t("Tirar dos favoritos") : t("Favoritar")}
+          aria-pressed={favorite}
+          onClick={onFavorite}
+        >
+          {favorite ? "★" : "☆"}
+        </button>
+        <button type="button" className="btn small" onClick={() => getNative().then((n) => n.openClip(clip.path)).catch(fail)}>
+          {t("Assistir")}
+        </button>
+        <button type="button" className="btn small" onClick={onEdit}>
+          {t("Editar")}
+        </button>
+        <button type="button" className="btn small" onClick={() => getNative().then((n) => n.revealClip(clip.path)).catch(fail)}>
+          {t("Mostrar")}
+        </button>
+        <button
+          type="button"
+          className="btn small icon-only"
+          aria-label={t("Excluir {name}", { name: clip.name })}
+          onClick={() =>
+            getNative()
+              .then((n) => n.deleteClip(clip.path))
+              .then(onDeleted)
+              .catch(fail)
+          }
+        >
+          <TrashIcon />
+        </button>
+      </span>
+    </li>
+  );
+}
+
 function StatusPill({ st, rec }: { st: RecorderStatus | null; rec: RecorderSettings }) {
   const t = useT();
   if (!st) return null;
@@ -93,7 +170,13 @@ export function RecordingPage() {
   const [clips, setClips] = useState<ClipInfo[]>([]);
   const [mics, setMics] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<ClipInfo | null>(null);
+  const [onlyFav, setOnlyFav] = useState(false);
+  const [hook, setHook] = useState(rec.discordWebhook);
   const micId = useId();
+  const keepId = useId();
+  const gbId = useId();
+  const hookId = useId();
 
   const set = (patch: Partial<RecorderSettings>) => s.updateSettings({ recorder: { ...rec, ...patch } }).then(refresh);
   const loadClips = useCallback(
@@ -234,7 +317,16 @@ export function RecordingPage() {
               conflict={conflict("toggleRecord")}
               onChange={(v) => s.updateSettings({ bindings: { ...b, toggleRecord: v } })}
             />
+            <KeyCapture
+              label={t("Marcar momento")}
+              allowBare
+              value={b.addMarker}
+              disabled={!s.settings.hotkeys}
+              conflict={conflict("addMarker")}
+              onChange={(v) => s.updateSettings({ bindings: { ...b, addMarker: v } })}
+            />
           </div>
+          <p className="note">{t("Os marcadores aparecem no editor do vídeo para pular direto para as jogadas.")}</p>
           {!s.settings.hotkeys && <p className="note">{t("Os atalhos estão desligados na aba Desempenho.")}</p>}
         </section>
       </div>
@@ -262,6 +354,67 @@ export function RecordingPage() {
                 </select>
                 <ChevronDown />
               </div>
+            </div>
+          </div>
+          <div className="section">
+            <div className="section-head">
+              <h3>{t("Mais opções")}</h3>
+            </div>
+            <div className="rows">
+              <ToggleRow label={t("Bipe ao salvar um clipe")} checked={rec.saveSound} onChange={(v) => set({ saveSound: v })} />
+              <ToggleRow
+                label={t("Jogo e microfone em faixas separadas")}
+                checked={rec.separateTracks}
+                disabled={!rec.mic}
+                onChange={(v) => set({ separateTracks: v })}
+              />
+              <div className="row">
+                <label htmlFor={keepId}>{t("Apagar clipes antigos")}</label>
+                <div className="select small-select">
+                  <select id={keepId} value={rec.keepDays} onChange={(e) => set({ keepDays: Number(e.target.value) })}>
+                    <option value={0}>{t("Nunca")}</option>
+                    {[7, 14, 30, 90].map((d) => (
+                      <option key={d} value={d}>{t("Depois de {n} dias", { n: d })}</option>
+                    ))}
+                  </select>
+                  <ChevronDown />
+                </div>
+              </div>
+              <div className="row">
+                <label htmlFor={gbId}>{t("Limite da pasta")}</label>
+                <div className="select small-select">
+                  <select id={gbId} value={rec.maxGb} onChange={(e) => set({ maxGb: Number(e.target.value) })}>
+                    <option value={0}>{t("Sem limite")}</option>
+                    {[10, 25, 50, 100].map((g) => (
+                      <option key={g} value={g}>{g} GB</option>
+                    ))}
+                  </select>
+                  <ChevronDown />
+                </div>
+              </div>
+            </div>
+            <p className="note">{t("A limpeza nunca apaga os favoritos (★).")}</p>
+            <div className="conv-field hook-field">
+              <label htmlFor={hookId}>{t("Webhook do Discord (opcional)")}</label>
+              <div className="hook-row">
+                <input
+                  id={hookId}
+                  className="input mono"
+                  placeholder="https://discord.com/api/webhooks/…"
+                  value={hook}
+                  aria-invalid={hook !== "" && !isDiscordWebhook(hook)}
+                  onChange={(e) => setHook(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn small"
+                  disabled={hook === rec.discordWebhook || (hook !== "" && !isDiscordWebhook(hook))}
+                  onClick={() => set({ discordWebhook: hook.trim() }).then(() => s.showToast({ kind: "ok", text: t("Webhook salvo.") }))}
+                >
+                  {t("Salvar")}
+                </button>
+              </div>
+              {hook !== "" && !isDiscordWebhook(hook) && <p className="field-error">{t("Cole o link do webhook do canal (Discord › Editar canal › Integrações › Webhooks).")}</p>}
             </div>
           </div>
           <p className="note">
@@ -302,42 +455,39 @@ export function RecordingPage() {
           {clips.length === 0 ? (
             <p className="note">{t("Nenhum clipe ainda.")}</p>
           ) : (
-            <ul className="clips" aria-label={t("Clipes salvos")}>
-              {clips.slice(0, 30).map((c) => (
-                <li key={c.path} className="row clip-row">
-                  <span className="clip-name">
-                    <strong>{c.name.replace(/\.mp4$/i, "")}</strong>
-                    <small>
-                      {formatSize(c.size)} · {new Date(c.modified).toLocaleString()}
-                    </small>
-                  </span>
-                  <span className="state-group">
-                    <button type="button" className="btn small" onClick={() => getNative().then((n) => n.openClip(c.path)).catch(fail)}>
-                      {t("Assistir")}
-                    </button>
-                    <button type="button" className="btn small" onClick={() => getNative().then((n) => n.revealClip(c.path)).catch(fail)}>
-                      {t("Mostrar")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn small icon-only"
-                      aria-label={t("Excluir {name}", { name: c.name })}
-                      onClick={() =>
-                        getNative()
-                          .then((n) => n.deleteClip(c.path))
-                          .then(loadClips)
-                          .catch(fail)
+            <>
+              <div className="seg clip-filter" role="radiogroup" aria-label={t("Mostrar")}>
+                <button type="button" role="radio" aria-checked={!onlyFav} onClick={() => setOnlyFav(false)}>
+                  {t("Todos")} ({clips.length})
+                </button>
+                <button type="button" role="radio" aria-checked={onlyFav} onClick={() => setOnlyFav(true)}>
+                  ★ {t("Favoritos")} ({clips.filter((c) => rec.favorites.includes(c.name)).length})
+                </button>
+              </div>
+              <ul className="clips" aria-label={t("Clipes salvos")}>
+                {clips
+                  .filter((c) => !onlyFav || rec.favorites.includes(c.name))
+                  .slice(0, 60)
+                  .map((c) => (
+                    <ClipRow
+                      key={c.path}
+                      clip={c}
+                      favorite={rec.favorites.includes(c.name)}
+                      onFavorite={() =>
+                        set({
+                          favorites: rec.favorites.includes(c.name) ? rec.favorites.filter((f) => f !== c.name) : [...rec.favorites, c.name],
+                        })
                       }
-                    >
-                      <TrashIcon />
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
+                      onEdit={() => setEditing(c)}
+                      onDeleted={loadClips}
+                    />
+                  ))}
+              </ul>
+            </>
           )}
         </section>
       </div>
+      {editing && <ClipEditor clip={editing} onClose={() => setEditing(null)} onChanged={loadClips} />}
     </div>
   );
 }

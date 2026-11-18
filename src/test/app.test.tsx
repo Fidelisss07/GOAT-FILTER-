@@ -372,6 +372,63 @@ describe("Gravação v1.7", () => {
   });
 });
 
+describe("Clipes v1.8", () => {
+  it("favorita, edita (corte, vertical, comprimir) e renomeia", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Gravação" }));
+    const replayRow = screen.getAllByText("Replay instantâneo").find((el) => el.closest(".row"))!.closest(".row") as HTMLElement;
+    await userEvent.click(within(replayRow).getByRole("switch"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Últimos 20s" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Últimos 20s" }));
+    await screen.findByText("Clipe 20s 1");
+
+    await userEvent.click(screen.getByRole("button", { name: "Favoritar" }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).recorder.favorites).toEqual(["Clipe 20s 1.mp4"]));
+    expect(screen.getByRole("button", { name: "Tirar dos favoritos" })).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+    const dlg = await screen.findByRole("dialog", { name: "Editar clipe" });
+    await userEvent.click(within(dlg).getByRole("button", { name: "Vertical (TikTok, Reels, Shorts)" }));
+    expect(await screen.findByText(/Vertical salvo: Clipe 20s 1 \(vertical\)\.mp4/, { selector: ".toast" })).toBeInTheDocument();
+    await userEvent.click(within(dlg).getByRole("button", { name: "Comprimir 10 MB (Discord)" }));
+    expect(await screen.findByText(/Versão de 10 MB salva/, { selector: ".toast" })).toBeInTheDocument();
+    // Sem webhook, sem botão do Discord.
+    expect(within(dlg).queryByRole("button", { name: "Enviar para o Discord" })).not.toBeInTheDocument();
+
+    const name = within(dlg).getByLabelText("Nome");
+    await userEvent.clear(name);
+    await userEvent.type(name, "Ace no Ascent");
+    await userEvent.click(within(dlg).getByRole("button", { name: "Renomear" }));
+    expect(await screen.findByText("Ace no Ascent")).toBeInTheDocument();
+  });
+
+  it("webhook do Discord valida o link e marcador só grava durante a gravação", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Gravação" }));
+    const hook = screen.getByLabelText("Webhook do Discord (opcional)");
+    await userEvent.type(hook, "https://site.com/x");
+    expect(screen.getByText(/Cole o link do webhook/)).toBeInTheDocument();
+    await userEvent.clear(hook);
+    await userEvent.type(hook, "https://discord.com/api/webhooks/123456789/abcdefghijk");
+    await userEvent.click(within(hook.closest(".hook-row") as HTMLElement).getByRole("button", { name: "Salvar" }));
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).recorder.discordWebhook).toBe("https://discord.com/api/webhooks/123456789/abcdefghijk"),
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Apagar clipes antigos"), "30");
+    await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).recorder.keepDays).toBe(30));
+  });
+
+  it("botão lateral do mouse vira atalho de clipe", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Gravação" }));
+    const key = screen.getByRole("button", { name: /Salvar clipe: Alt \+ F8/ });
+    await userEvent.click(key);
+    fireEvent.mouseDown(key, { button: 3 });
+    await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).bindings.saveClip).toBe("Mouse4"));
+    expect(screen.getByRole("button", { name: /Salvar clipe: Mouse 4/ })).toBeInTheDocument();
+  });
+});
+
 describe("Configurações", () => {
   it("troca o método do Super Vibrance e persiste", async () => {
     await renderApp();

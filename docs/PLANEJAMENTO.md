@@ -43,6 +43,7 @@ Redragon de 144 Hz.
 | Taxa do monitor, Game DVR, HAGS, Não perturbe, fechar apps ao jogar, painel da máquina | ✅ feito (v1.5) |
 | Aba Treino: aquecer e jogar, mira, reação, polling, clique duplo, sensibilidade, miras | ✅ feito (v1.6) |
 | Gravação: replay instantâneo (15–60 s) e gameplay até 2K 60 fps, pela GPU | ✅ feito (v1.7) |
+| Clipes: mouse lateral, editor/corte, vertical, comprimir, Discord, marcadores, miniaturas, favoritos, limpeza | ✅ feito (v1.8) |
 | Remapear teclas do jogo / macros | ❌ descartado: risco de ban (Vanguard) |
 | Assinatura gratuita (SignPath / Microsoft Store / winget) | 🟡 pronta no workflow; depende do dono criar a conta (docs/ASSINATURA.md) |
 
