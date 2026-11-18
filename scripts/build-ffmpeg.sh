@@ -38,9 +38,9 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --enable-w32threads \
   --enable-indev=lavfi --enable-indev=dshow \
   --enable-filter=ddagrab,hwdownload,hwupload,hwmap,format,scale,scale_d3d11,fps,null,color,testsrc2 \
-  --enable-filter=aresample,amix,anull,aformat,anullsrc,volume,apad \
+  --enable-filter=aresample,amix,anull,aformat,anullsrc,volume,apad,trim,atrim,setpts,asetpts,split,asplit \
   --enable-encoder=h264_nvenc,hevc_nvenc,h264_amf,hevc_amf,h264_mf,hevc_mf,aac,rawvideo,pcm_s16le \
-  --enable-decoder=wrapped_avframe,pcm_f32le,pcm_s16le,rawvideo,h264,aac \
+  --enable-decoder=wrapped_avframe,pcm_u8,pcm_f32le,pcm_f64le,pcm_s16le,pcm_s32le,rawvideo,h264,aac \
   --enable-parser=h264,hevc,aac \
   --enable-demuxer=pcm_f32le,pcm_s16le,concat,mpegts,mov,wav \
   --enable-muxer=segment,mpegts,mp4,mov,null,wav \

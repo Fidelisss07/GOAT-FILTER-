@@ -71,7 +71,7 @@ jobs:
           "Tamanho: {0:N1} MB" -f ((Get-Item $ff).Length / 1MB)
           $filters = & $ff -hide_banner -filters 2>&1 | Out-String
           $encoders = & $ff -hide_banner -encoders 2>&1 | Out-String
-          foreach ($f in "ddagrab", "scale_d3d11", "hwdownload", "amix", "aresample") {
+          foreach ($f in "ddagrab", "scale_d3d11", "hwdownload", "amix", "aresample", "trim", "atrim", "format", "scale") {
             if ($filters -notmatch "\b$f\b") { throw "filtro $f ausente" }
           }
           $bsfs = & $ff -hide_banner -bsfs 2>&1 | Out-String
