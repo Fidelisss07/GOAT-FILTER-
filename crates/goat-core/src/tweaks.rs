@@ -114,6 +114,7 @@ pub struct WindowsTweaks {
 #[cfg(windows)]
 mod win {
     use super::*;
+    use std::path::Path;
     use std::os::windows::process::CommandExt;
     use windows::core::{w, PCWSTR};
     use windows::Win32::Foundation::{ERROR_SUCCESS, FILETIME};
@@ -235,6 +236,74 @@ mod win {
     }
 
     /// Fecha com calma (como clicar no X), sem forçar.
+    /// Caminho completo dos processos com esses nomes (para reabrir depois).
+    pub fn running_paths(names: &[String]) -> Vec<String> {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+        };
+        use windows::Win32::System::Threading::{
+            OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        let wanted: Vec<String> = closable(names).into_iter().map(|n| n.to_lowercase()).collect();
+        let mut out: Vec<String> = Vec::new();
+        unsafe {
+            let Ok(snap) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return out };
+            let mut e = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+            let mut ok = Process32FirstW(snap, &mut e).is_ok();
+            while ok {
+                let len = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
+                let name = String::from_utf16_lossy(&e.szExeFile[..len]).to_lowercase();
+                if wanted.contains(&name) {
+                    if let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, e.th32ProcessID) {
+                        let mut buf = [0u16; 1024];
+                        let mut size = buf.len() as u32;
+                        if QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, windows::core::PWSTR(buf.as_mut_ptr()), &mut size).is_ok() {
+                            let p = String::from_utf16_lossy(&buf[..size as usize]);
+                            if !out.iter().any(|x| x.eq_ignore_ascii_case(&p)) {
+                                out.push(p);
+                            }
+                        }
+                        let _ = CloseHandle(h);
+                    }
+                }
+                ok = Process32NextW(snap, &mut e).is_ok();
+            }
+            let _ = CloseHandle(snap);
+        }
+        // Um por app: o primeiro caminho de cada nome.
+        let mut seen = Vec::new();
+        out.retain(|p| {
+            let n = Path::new(p).file_name().map(|x| x.to_string_lossy().to_lowercase()).unwrap_or_default();
+            if seen.contains(&n) {
+                false
+            } else {
+                seen.push(n);
+                true
+            }
+        });
+        out
+    }
+
+    /// Reabre apps fechados ao jogar (minimizados quando o app aceita).
+    pub fn reopen(paths: &[String]) -> usize {
+        let mut n = 0;
+        for p in paths {
+            let path = Path::new(p);
+            if !path.is_file() || path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("exe")) != Some(true) {
+                continue;
+            }
+            let mut cmd = std::process::Command::new(path);
+            if let Some(dir) = path.parent() {
+                cmd.current_dir(dir);
+            }
+            if cmd.spawn().is_ok() {
+                n += 1;
+            }
+        }
+        n
+    }
+
     pub fn close_apps(names: &[String]) -> usize {
         let mut n = 0;
         for exe in closable(names) {
@@ -267,7 +336,7 @@ mod win {
 }
 
 #[cfg(windows)]
-pub use win::{close_apps, display_mode, game_dvr, hags, request_hags, set_game_dvr, set_refresh};
+pub use win::{close_apps, reopen, running_paths, display_mode, game_dvr, hags, request_hags, set_game_dvr, set_refresh};
 
 #[cfg(not(windows))]
 pub fn display_mode(_gdi: &str) -> Option<DisplayMode> {
@@ -293,6 +362,16 @@ pub fn hags() -> Option<bool> {
 pub fn request_hags(_on: bool) -> Result<(), String> {
     Err("disponível apenas no Windows".into())
 }
+#[cfg(not(windows))]
+pub fn running_paths(_names: &[String]) -> Vec<String> {
+    Vec::new()
+}
+
+#[cfg(not(windows))]
+pub fn reopen(_paths: &[String]) -> usize {
+    0
+}
+
 #[cfg(not(windows))]
 pub fn close_apps(_names: &[String]) -> usize {
     0

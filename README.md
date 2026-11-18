@@ -107,6 +107,14 @@ de GPU por hardware (HAGS, pede permissão de administrador e vale após reinici
 - **Miniaturas, favoritos (★) e limpeza automática** por dias ou por tamanho da pasta (favoritos nunca são apagados).
 - **Bipe ao salvar** e opção de **faixas de áudio separadas** (jogo e microfone) para editar depois.
 
+**Desempenho+ (v1.9):**
+
+- **Raio-X do PC:** nota de 0 a 100 com o que falta ajustar para jogar no máximo.
+- **Reabrir apps** que o Goat Filter fechou quando o jogo abriu, assim que ele fecha.
+- **Aviso de temperatura** da placa de vídeo durante o jogo (NVIDIA; 75–90 °C, no máximo 1 a cada 10 min).
+- **Sua semana:** tempo jogado, partidas, clipes e temperatura máxima, com gráfico por dia.
+- **Limpeza** de arquivos temporários e do cache de shaders antigo (só arquivos com mais de 1 dia; com o jogo fechado).
+
 **Fechar ao abrir o jogo:** você marca apps pesados (navegadores, OneDrive, launchers…) e o Goat
 Filter fecha esses apps quando o jogo abre, como se você clicasse no X (nunca à força, nunca o jogo).
 

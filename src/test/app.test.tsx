@@ -6,6 +6,8 @@ import { createDemoApi, setNativeForTests } from "../lib/native";
 import { matrixFactor } from "../lib/vibrance";
 import { cmPer360, convertSens } from "../lib/sens";
 import { bitrateKbps, formatClock, outputSize } from "../lib/rec";
+import { xrayItems, xrayScore } from "../lib/xray";
+import { DEFAULT_SETTINGS } from "../lib/types";
 import { isCrosshairCode } from "../lib/types";
 import { bindingFromEvent, prettyBinding } from "../components/KeyCapture";
 import { useStore } from "../state/store";
@@ -171,7 +173,7 @@ describe("Desempenho", () => {
   it("liga o Modo de Jogo do Windows", async () => {
     await renderApp();
     await userEvent.click(screen.getByRole("button", { name: "Desempenho" }));
-    const row = (await screen.findByText("Modo de Jogo do Windows")).closest(".row") as HTMLElement;
+    const row = (await screen.findByText("Modo de Jogo do Windows", { selector: ".row span" })).closest(".row") as HTMLElement;
     await userEvent.click(within(row).getByRole("button", { name: "Ligar" }));
     expect(await screen.findByText("Ligado", { selector: ".state" })).toBeInTheDocument();
   });
@@ -426,6 +428,35 @@ describe("Clipes v1.8", () => {
     fireEvent.mouseDown(key, { button: 3 });
     await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).bindings.saveClip).toBe("Mouse4"));
     expect(screen.getByRole("button", { name: /Salvar clipe: Mouse 4/ })).toBeInTheDocument();
+  });
+});
+
+describe("Desempenho+ v1.9", () => {
+  it("nota do Raio-X só conta o que dá para medir", () => {
+    const base = { modes: null, tweaks: null, perf: null, settings: DEFAULT_SETTINGS };
+    expect(xrayScore(xrayItems(base))).toBe(0); // só "apps pesados" conhecido e falso
+    const items = xrayItems({
+      modes: [{ monitorId: "a", name: "M", mode: { width: 1920, height: 1080, hz: 144, maxHz: 144, rates: [60, 144] } }],
+      tweaks: { gameDvr: false, hags: true },
+      perf: { supported: true, mouseAccel: false, keyboardDelay: 0, keyboardSpeed: 31, powerHigh: true, gameMode: true, applied: false },
+      settings: { ...DEFAULT_SETTINGS, closeOnGame: ["chrome.exe"] },
+    });
+    expect(xrayScore(items)).toBe(100);
+    expect(xrayScore([])).toBeNull();
+  });
+
+  it("mostra Raio-X, limpa cache e salva o aviso de temperatura", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Desempenho" }));
+    expect(await screen.findByRole("img", { name: /Nota \d+ de 100/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Ver quanto dá para limpar" }));
+    const clean = await screen.findByRole("button", { name: /Limpar 1\.6 GB/ });
+    await userEvent.click(clean);
+    expect(await screen.findByText("1.6 GB liberados.", { selector: ".toast" })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Avisar se a GPU passar de"), "80");
+    await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).tempAlert).toBe(80));
+    expect(screen.getByText("Sua semana")).toBeInTheDocument();
+    expect(screen.getByText("5h45")).toBeInTheDocument();
   });
 });
 

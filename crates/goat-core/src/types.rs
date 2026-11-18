@@ -196,6 +196,10 @@ pub struct Settings {
     pub language: String,
     /// Apps (nome do .exe) fechados quando um jogo abre.
     pub close_on_game: Vec<String>,
+    /// Reabre esses apps quando o jogo fecha.
+    pub reopen_apps: bool,
+    /// Aviso quando a GPU passa desta temperatura (°C) com o jogo aberto. 0 = desligado.
+    pub temp_alert: u32,
     /// Biblioteca de códigos de mira do Valorant.
     pub crosshairs: Vec<Crosshair>,
     /// Gravação e replay instantâneo.
@@ -220,6 +224,8 @@ impl Default for Settings {
             notify: true,
             language: "auto".into(),
             close_on_game: Vec::new(),
+            reopen_apps: true,
+            temp_alert: 85,
             crosshairs: Vec::new(),
             recorder: Default::default(),
             start_with_windows: false,

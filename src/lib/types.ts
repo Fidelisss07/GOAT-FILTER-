@@ -203,6 +203,10 @@ export interface Settings {
   language: Language;
   /** Apps (nome do .exe) fechados quando um jogo abre. */
   closeOnGame: string[];
+  /** Reabre esses apps quando o jogo fecha. */
+  reopenApps: boolean;
+  /** Aviso de temperatura da GPU (°C); 0 = desligado. */
+  tempAlert: number;
   /** Biblioteca de códigos de mira do Valorant. */
   crosshairs: Crosshair[];
   /** Gravação e replay instantâneo. */
@@ -306,6 +310,31 @@ export interface HeavyApp {
   running: boolean;
 }
 
+export interface CacheGroup {
+  name: string;
+  files: number;
+  bytes: number;
+}
+
+export interface CacheReport {
+  groups: CacheGroup[];
+  bytes: number;
+  freed: number;
+}
+
+export interface SessionRecord {
+  game: string;
+  start: number;
+  end: number;
+  clips: number;
+  maxGpuTemp: number | null;
+}
+
+export interface HistoryView {
+  summary: { weekMinutes: number; weekSessions: number; weekClips: number; weekMaxTemp: number | null; days: number[] };
+  recent: SessionRecord[];
+}
+
 export interface SystemStats {
   cpuUsage: number | null;
   ramUsedGb: number | null;
@@ -374,6 +403,8 @@ export const DEFAULT_SETTINGS: Settings = {
   notify: true,
   language: "auto",
   closeOnGame: [],
+  reopenApps: true,
+  tempAlert: 85,
   crosshairs: [],
   recorder: DEFAULT_RECORDER,
   startWithWindows: false,
