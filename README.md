@@ -98,6 +98,15 @@ de GPU por hardware (HAGS, pede permissão de administrador e vale após reinici
   vídeo fica em pedaços de 2 s; salvar um clipe só junta os pedaços, sem recodificar.
 - Não toca no jogo: é a mesma captura da área de trabalho que o OBS usa.
 
+**Clipes (v1.8):**
+
+- **Botão lateral do mouse** (4 ou 5) como atalho de clipe, além de teclas sozinhas (F8, Insert, teclado numérico).
+- **Editor:** assistir, cortar sem perder qualidade, renomear e pular para os **marcadores** (tecla "Marcar momento" durante a gravação).
+- **Versões prontas:** vertical 1080×1920 (TikTok, Reels, Shorts) e comprimida para 10 MB (Discord) ou 25 MB.
+- **Enviar para o Discord** por webhook do seu canal (comprime sozinho se passar de 10 MB).
+- **Miniaturas, favoritos (★) e limpeza automática** por dias ou por tamanho da pasta (favoritos nunca são apagados).
+- **Bipe ao salvar** e opção de **faixas de áudio separadas** (jogo e microfone) para editar depois.
+
 **Fechar ao abrir o jogo:** você marca apps pesados (navegadores, OneDrive, launchers…) e o Goat
 Filter fecha esses apps quando o jogo abre, como se você clicasse no X (nunca à força, nunca o jogo).
 

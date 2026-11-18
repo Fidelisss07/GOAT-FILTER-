@@ -40,6 +40,15 @@ export function App() {
   const [native, setNative] = useState<NativeApi | null>(null);
   const theme = s.settings.theme;
 
+  // Botões laterais do mouse fazem "voltar/avançar" no navegador interno: bloqueia.
+  useEffect(() => {
+    const block = (e: MouseEvent) => {
+      if (e.button === 3 || e.button === 4) e.preventDefault();
+    };
+    window.addEventListener("mouseup", block);
+    return () => window.removeEventListener("mouseup", block);
+  }, []);
+
   useEffect(() => {
     void s.init().catch((e) => s.showToast({ kind: "error", text: String(e) }));
     void getNative().then(setNative);

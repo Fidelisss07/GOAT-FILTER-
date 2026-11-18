@@ -603,3 +603,33 @@ h1, h2, h3 { margin: 0; }
 .clip-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 14px; }
 .clip-name small { color: var(--text-2); font-size: 12px; }
 .clip-row .btn.icon-only svg { width: 16px; height: 16px; }
+
+/* ---------- Clipes (v1.8) ---------- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.62); display: grid; place-items: center; z-index: 50; padding: 24px; }
+.modal { width: min(920px, 100%); max-height: calc(100vh - 48px); overflow: auto; background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 22px; display: grid; gap: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); }
+.modal .section-head { margin: 0; }
+.modal .section-head .btn { margin-left: auto; }
+.clip-video { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius-sm); }
+.clip-video.placeholder { display: grid; place-items: center; color: var(--text-2); font-size: 14px; }
+.markers { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.trim { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.trim .conv-field { min-width: 110px; width: 120px; }
+.clip-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.rename { display: flex; gap: 10px; align-items: end; }
+.note.busy { color: var(--accent); font-weight: 600; }
+.clip-thumb { width: 88px; height: 50px; flex: none; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-soft); background: var(--field); display: grid; place-items: center; color: var(--text-2); cursor: pointer; padding: 0; }
+.clip-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.clip-thumb svg { width: 20px; height: 20px; }
+.clip-filter { margin: 4px 0 6px; }
+.star { font-size: 16px; line-height: 1; min-width: 32px; }
+.star.on { color: #ffcc33; border-color: rgba(255, 204, 51, 0.6); }
+.small-select { min-width: 0; width: 190px; }
+.small-select select { width: 100%; }
+.hook-field { margin-top: 10px; }
+.hook-row { display: flex; gap: 8px; }
+.hook-row .input { flex: 1; min-width: 0; }
+.clip-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); grid-template-areas: "thumb name" "thumb actions"; column-gap: 12px; row-gap: 6px; align-items: center; padding: 10px 0; }
+.clip-row .clip-thumb { grid-area: thumb; width: 88px; height: 50px; align-self: start; }
+.clip-row .clip-name { grid-area: name; }
+.clip-row .state-group { grid-area: actions; justify-content: flex-start; flex-wrap: wrap; }
+.clip-row .btn.small { padding: 5px 10px; }
