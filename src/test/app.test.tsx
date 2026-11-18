@@ -182,6 +182,16 @@ describe("Desempenho", () => {
     expect(bindingFromEvent({ code: "KeyW", ctrlKey: false, altKey: false, shiftKey: false })).toBeNull();
     expect(bindingFromEvent({ code: "ControlLeft", ctrlKey: true, altKey: false, shiftKey: false })).toBeNull();
     expect(prettyBinding("Ctrl+Alt+ArrowUp")).toBe("Ctrl + Alt + ↑");
+    // Atalhos de gravação: tecla sozinha só se não atrapalhar o jogo/chat.
+    expect(bindingFromEvent({ code: "F8", ctrlKey: false, altKey: false, shiftKey: false }, true)).toBe("F8");
+    expect(bindingFromEvent({ code: "Numpad0", ctrlKey: false, altKey: false, shiftKey: false }, true)).toBe("Numpad0");
+    expect(bindingFromEvent({ code: "Insert", ctrlKey: false, altKey: false, shiftKey: true }, true)).toBe("Shift+Insert");
+    expect(bindingFromEvent({ code: "KeyC", ctrlKey: false, altKey: false, shiftKey: false }, true)).toBeNull();
+    expect(bindingFromEvent({ code: "Space", ctrlKey: false, altKey: false, shiftKey: false }, true)).toBeNull();
+    expect(bindingFromEvent({ code: "NumpadEnter", ctrlKey: false, altKey: false, shiftKey: false }, true)).toBeNull();
+    expect(bindingFromEvent({ code: "F8", ctrlKey: false, altKey: false, shiftKey: false })).toBeNull();
+    expect(prettyBinding("F8")).toBe("F8");
+    expect(prettyBinding("Numpad0")).toBe("Num 0");
   });
 });
 

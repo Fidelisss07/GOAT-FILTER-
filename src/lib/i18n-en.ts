@@ -336,4 +336,7 @@ export const EN: Record<string, string> = {
   "Equilibrada": "Balanced",
   "Alta": "High",
   "Gravação": "Recording",
+  "Sozinhas só F1–F12, Insert, Home, End, Page Up/Down, Pause ou o teclado numérico. Letras precisam de Ctrl ou Alt.": "On their own only F1–F12, Insert, Home, End, Page Up/Down, Pause or the numpad. Letters need Ctrl or Alt.",
+  "Aperte a tecla…": "Press the key…",
+  "Pode ser uma tecla sozinha, como F8, Insert ou uma do teclado numérico.": "Can be a single key, like F8, Insert or a numpad key.",
 };

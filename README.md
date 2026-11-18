@@ -90,7 +90,7 @@ de GPU por hardware (HAGS, pede permissão de administrador e vale após reinici
 **Gravação (v1.7):** replay instantâneo e gravação de gameplay, feitos para pesar pouco:
 
 - **Replay instantâneo:** guarda os últimos segundos o tempo todo (por padrão só com o jogo aberto).
-  Aperte `Alt` + `F8` e os últimos 30 s (ou 15, 20, 25, 35, 45, 60) viram um `.mp4`.
+  Aperte `Alt` + `F8` (ou uma tecla sozinha, como `F8`, `Insert` ou do teclado numérico) e os últimos 30 s (ou 15, 20, 25, 35, 45, 60) viram um `.mp4`.
 - **Gravar gameplay:** `Alt` + `F7` começa e para. Usa a mesma captura do replay.
 - **Até 1440p (2K) a 60 fps**, com som do PC e microfone opcional. Clipes em `Vídeos\Goat Filter`.
 - **Leve:** a tela é capturada pela própria GPU (Desktop Duplication) e codificada pelo chip de vídeo
