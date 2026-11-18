@@ -187,12 +187,14 @@ export function RecordingPage() {
             />
             <KeyCapture
               label={t("Salvar clipe")}
+              allowBare
               value={b.saveClip}
               disabled={!s.settings.hotkeys}
               conflict={conflict("saveClip")}
               onChange={(v) => s.updateSettings({ bindings: { ...b, saveClip: v } })}
             />
           </div>
+          <p className="note">{t("Pode ser uma tecla sozinha, como F8, Insert ou uma do teclado numérico.")}</p>
           <div className="section">
             <div className="section-head">
               <h3>{t("Salvar agora")}</h3>
@@ -226,6 +228,7 @@ export function RecordingPage() {
           <div className="rows">
             <KeyCapture
               label={t("Gravar / parar")}
+              allowBare
               value={b.toggleRecord}
               disabled={!s.settings.hotkeys}
               conflict={conflict("toggleRecord")}

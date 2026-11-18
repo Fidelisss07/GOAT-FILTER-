@@ -22,12 +22,29 @@ export function prettyBinding(b: string): string {
 }
 
 /**
- * Converte uma tecla apertada no formato aceito pelo app.
- * Exige Ctrl ou Alt para não roubar teclas usadas no jogo ou no chat.
+ * Teclas que podem ser atalho sozinhas: não são usadas para andar, mirar ou
+ * digitar no chat (o atalho global "rouba" a tecla do jogo).
  */
-export function bindingFromEvent(e: { code: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }): string | null {
+export function isBareSafe(code: string): boolean {
+  return (
+    /^F([1-9]|1[0-9]|2[0-4])$/.test(code) ||
+    // Enter do teclado numérico é o mesmo Enter do chat no Windows: fica de fora.
+    /^Numpad([0-9]|Add|Decimal|Divide|Multiply|Subtract)$/.test(code) ||
+    ["Insert", "Home", "End", "PageUp", "PageDown", "Pause", "ScrollLock", "PrintScreen"].includes(code)
+  );
+}
+
+/**
+ * Converte uma tecla apertada no formato aceito pelo app.
+ * Exige Ctrl ou Alt para não roubar teclas usadas no jogo ou no chat; com
+ * `allowBare`, aceita sozinhas as teclas de isBareSafe (ex.: F8, Insert, Num 0).
+ */
+export function bindingFromEvent(
+  e: { code: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },
+  allowBare = false,
+): string | null {
   if (MODIFIER_CODES.has(e.code)) return null;
-  if (!e.ctrlKey && !e.altKey) return null;
+  if (!e.ctrlKey && !e.altKey && !(allowBare && isBareSafe(e.code))) return null;
   const parts: string[] = [];
   if (e.ctrlKey) parts.push("Ctrl");
   if (e.altKey) parts.push("Alt");
@@ -42,12 +59,15 @@ export function KeyCapture({
   onChange,
   conflict,
   disabled,
+  allowBare = false,
 }: {
   label: string;
   value: string;
   onChange(v: string): void;
   conflict?: string | null;
   disabled?: boolean;
+  /** Aceita F1–F12, Insert, Home, teclado numérico etc. sem Ctrl/Alt. */
+  allowBare?: boolean;
 }) {
   const t = useT();
   const [listening, setListening] = useState(false);
@@ -62,9 +82,14 @@ export function KeyCapture({
       setHint(null);
       return;
     }
-    const b = bindingFromEvent(e);
+    const b = bindingFromEvent(e, allowBare);
     if (!b) {
-      if (!MODIFIER_CODES.has(e.code)) setHint(t("Use Ctrl ou Alt junto com a tecla."));
+      if (!MODIFIER_CODES.has(e.code))
+        setHint(
+          allowBare
+            ? t("Sozinhas só F1–F12, Insert, Home, End, Page Up/Down, Pause ou o teclado numérico. Letras precisam de Ctrl ou Alt.")
+            : t("Use Ctrl ou Alt junto com a tecla."),
+        );
       return;
     }
     setListening(false);
@@ -88,7 +113,7 @@ export function KeyCapture({
           onKeyDown={onKey}
           onBlur={() => setListening(false)}
         >
-          {listening ? t("Aperte a combinação…") : prettyBinding(value)}
+          {listening ? t(allowBare ? "Aperte a tecla…" : "Aperte a combinação…") : prettyBinding(value)}
         </button>
         {(hint || conflict) && <span className="field-error">{hint ?? conflict}</span>}
       </div>
