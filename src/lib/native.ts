@@ -9,6 +9,8 @@ import {
   DEFAULT_RECORDER,
   DEFAULT_SETTINGS,
   RecorderStatus,
+  CacheReport,
+  HistoryView,
   DEFAULT_TUNING,
   FoundGame,
   HeavyApp,
@@ -58,6 +60,9 @@ export interface NativeApi {
   heavyApps(): Promise<HeavyApp[]>;
   closeAppsNow(names: string[]): Promise<number>;
   systemStats(): Promise<SystemStats>;
+  /** Mede (apply=false) ou apaga arquivos temporários e cache de shaders. */
+  cleanCaches(apply: boolean): Promise<CacheReport>;
+  gameHistory(): Promise<HistoryView>;
   openWindowsSettings(page: string): Promise<void>;
   recorderStatus(): Promise<RecorderStatus>;
   /** Salva os últimos segundos; devolve o caminho do arquivo. */
@@ -137,6 +142,8 @@ async function tauriApi(): Promise<NativeApi> {
     heavyApps: () => invoke<HeavyApp[]>("heavy_apps"),
     closeAppsNow: (names) => invoke<number>("close_apps_now", { names }),
     systemStats: () => invoke<SystemStats>("system_stats"),
+    cleanCaches: (apply) => invoke<CacheReport>("clean_caches", { apply }),
+    gameHistory: () => invoke<HistoryView>("game_history", { offsetMinutes: -new Date().getTimezoneOffset() }),
     openWindowsSettings: (page) => invoke<void>("open_windows_settings", { page }),
     recorderStatus: () => invoke<RecorderStatus>("recorder_status"),
     saveClip: (seconds) => invoke<string>("save_clip", { seconds: seconds ?? null }),
@@ -240,6 +247,7 @@ function loadDemoSettings(): Settings {
 
 export function createDemoApi(): NativeApi {
   const demoRec: { recording: number | null; clips: ClipInfo[] } = { recording: null, clips: [] };
+  const demoCache = { cleaned: false };
   const demoDerive = (path: string, tag: string, size: number) => {
     const c = demoRec.clips.find((x) => x.path === path);
     if (!c) throw new Error("Clipe não encontrado.");
@@ -341,6 +349,25 @@ export function createDemoApi(): NativeApi {
       demoRec.clips = demoRec.clips.filter((c) => c.path !== path);
     },
     listMicrophones: async () => ["Microfone (Realtek(R) Audio)", "Headset (HyperX Cloud II)"],
+    cleanCaches: async (apply) => {
+      const groups = demoCache.cleaned
+        ? []
+        : [
+            { name: "Arquivos temporários", files: 412, bytes: 1_240_000_000 },
+            { name: "Cache de shaders da NVIDIA", files: 38, bytes: 310_000_000 },
+          ];
+      const bytes = groups.reduce((a, g) => a + g.bytes, 0);
+      if (apply) demoCache.cleaned = true;
+      return { groups, bytes, freed: apply ? bytes : 0 };
+    },
+    gameHistory: async () => {
+      const now = Date.now();
+      const s = (h: number, mins: number, clips: number, t: number) => ({ game: "Valorant", start: now - h * 3_600_000, end: now - h * 3_600_000 + mins * 60_000, clips, maxGpuTemp: t });
+      return {
+        summary: { weekMinutes: 345, weekSessions: 5, weekClips: 9, weekMaxTemp: 78, days: [40, 0, 95, 60, 0, 110, 40] },
+        recent: [s(3, 40, 2, 74), s(26, 110, 4, 78), s(50, 60, 1, 72)],
+      };
+    },
     clipThumbnail: async () => null,
     clipMarkers: async (path) => (path.includes("Gameplay") ? [4.2, 11.5] : []),
     renameClip: async (path, name) => {

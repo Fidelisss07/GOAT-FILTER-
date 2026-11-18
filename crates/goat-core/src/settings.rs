@@ -71,6 +71,9 @@ pub fn sanitize(mut s: Settings) -> Settings {
     s.crosshairs.retain(|c| crate::games::is_crosshair_code(&c.code) && !c.name.trim().is_empty());
     s.crosshairs.truncate(200);
     s.recorder = std::mem::take(&mut s.recorder).sanitized();
+    if s.temp_alert != 0 {
+        s.temp_alert = s.temp_alert.clamp(60, 100);
+    }
     s
 }
 

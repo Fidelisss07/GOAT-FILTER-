@@ -96,6 +96,16 @@ struct AppState {
     perf: Mutex<PerfManager>,
     stats: Mutex<goat_core::tweaks::StatsSampler>,
     recorder: Arc<recorder::Recorder>,
+    /// Apps fechados ao abrir o jogo (caminho completo) para reabrir depois.
+    reopen: Mutex<Vec<String>>,
+    /// Partida em andamento: jogo, início (ms), clipes, maior temperatura da GPU.
+    session: Mutex<Option<(String, u64, u32, Option<u32>)>>,
+    last_temp_alert: Mutex<Option<u64>>,
+    history_path: PathBuf,
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -491,6 +501,9 @@ fn finish_export(app: &AppHandle, st: &AppState, r: Result<PathBuf, String>, cli
                 goat_core::clips::play_beep();
             }
             st.recorder.cleanup(&rec);
+            if let Some(sess) = lock(&st.session).as_mut() {
+                sess.2 += 1;
+            }
             let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let title = if clip { tr(st, "Clipe salvo", "Clip saved") } else { tr(st, "Gravação salva", "Recording saved") };
             notify(app, "ok", format!("{title}: {name}"));
@@ -632,6 +645,39 @@ fn format_secs(s: f64) -> String {
 async fn list_microphones(app: AppHandle) -> Vec<String> {
     let rec = app.state::<Arc<AppState>>().recorder.clone();
     tauri::async_runtime::spawn_blocking(move || rec.microphones()).await.unwrap_or_default()
+}
+
+// ---------------------------------------------------------------------------
+// Cuidados (v1.9): limpeza e histórico
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+async fn clean_caches(app: AppHandle, apply: bool) -> Result<goat_core::care::CacheReport, String> {
+    let st = app.state::<Arc<AppState>>().inner().clone();
+    if apply && lock(&st.session).is_some() {
+        return Err(tr(&st, "Feche o jogo antes de limpar.", "Close the game before cleaning."));
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        goat_core::care::clean_caches(&goat_core::care::cache_dirs(), apply, std::time::SystemTime::now())
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryView {
+    summary: goat_core::care::HistorySummary,
+    recent: Vec<goat_core::care::SessionRecord>,
+}
+
+/// `offset_minutes`: fuso local em minutos (positivo a leste de UTC).
+#[tauri::command]
+fn game_history(state: Shared, offset_minutes: i64) -> HistoryView {
+    let all = goat_core::care::load_history(&state.history_path);
+    let summary = goat_core::care::summarize(&all, now_ms(), offset_minutes * 60_000);
+    let recent = all.iter().rev().take(10).cloned().collect();
+    HistoryView { summary, recent }
 }
 
 #[tauri::command]
@@ -966,9 +1012,39 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                         // Jogo acabou de abrir: fecha os apps escolhidos.
                         let was_active = matches!(lock(&state.game).state, GameState::Active | GameState::Paused);
                         if status.state == GameState::Active && !was_active && !settings.close_on_game.is_empty() {
+                            let paths = if settings.reopen_apps {
+                                goat_core::tweaks::running_paths(&settings.close_on_game)
+                            } else {
+                                Vec::new()
+                            };
                             let n = goat_core::tweaks::close_apps(&settings.close_on_game);
                             if n > 0 {
                                 log::info!("{n} app(s) fechados ao abrir o jogo");
+                                *lock(&state.reopen) = paths;
+                            }
+                        }
+                        // Começo e fim da partida (histórico e reabrir apps).
+                        let is_on = matches!(status.state, GameState::Active | GameState::Paused);
+                        if is_on && !was_active {
+                            let game = status
+                                .profile_id
+                                .as_ref()
+                                .and_then(|id| settings.profiles.iter().find(|p| &p.id == id))
+                                .map(|p| p.name.clone())
+                                .unwrap_or_else(|| "Jogo".into());
+                            *lock(&state.session) = Some((game, now_ms(), 0, None));
+                        }
+                        if !is_on && was_active {
+                            if let Some((game, start, clips, temp)) = lock(&state.session).take() {
+                                let rec = goat_core::care::SessionRecord { game, start, end: now_ms(), clips, max_gpu_temp: temp };
+                                if let Err(e) = goat_core::care::push_history(&state.history_path, rec) {
+                                    log::warn!("Histórico: {e}");
+                                }
+                            }
+                            let paths = std::mem::take(&mut *lock(&state.reopen));
+                            if settings.reopen_apps && !paths.is_empty() {
+                                let n = goat_core::tweaks::reopen(&paths);
+                                log::info!("{n} app(s) reabertos depois do jogo");
                             }
                         }
                         notify_game(&app, &state, &status);
@@ -983,6 +1059,28 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                     let rec = lock(&state.settings).recorder.clone();
                     let in_game = matches!(lock(&state.game).state, GameState::Active | GameState::Paused);
                     state.recorder.tick(&rec, in_game);
+                }
+
+                // Temperatura da GPU durante a partida (a cada 2 s).
+                if tick % 4 == 0 && lock(&state.session).is_some() {
+                    let temp = lock(&state.stats).sample().gpu_temp;
+                    if let Some(sess) = lock(&state.session).as_mut() {
+                        sess.3 = sess.3.max(temp);
+                    }
+                    let limit = lock(&state.settings).temp_alert;
+                    let now = now_ms();
+                    let last = *lock(&state.last_temp_alert);
+                    if goat_core::care::should_alert(temp, limit, last, now) {
+                        *lock(&state.last_temp_alert) = Some(now);
+                        use tauri_plugin_notification::NotificationExt;
+                        let body = format!(
+                            "{} {}°C",
+                            tr(&state, "A placa de vídeo está em", "Your graphics card is at"),
+                            temp.unwrap_or_default()
+                        );
+                        notify(&app, "error", body.clone());
+                        let _ = app.notification().builder().title("Goat Filter").body(body).show();
+                    }
                 }
 
                 if tick % 6 == 0 {
@@ -1099,6 +1197,10 @@ pub fn run() {
                         .unwrap_or_else(|_| dir.clone())
                         .join("Goat Filter"),
                 ),
+                reopen: Mutex::new(Vec::new()),
+                session: Mutex::new(None),
+                last_temp_alert: Mutex::new(None),
+                history_path: dir.join("history.json"),
             });
             app.manage(state.clone());
             let state_for_keys = state.clone();
@@ -1234,6 +1336,8 @@ pub fn run() {
             send_clip_discord,
             add_marker,
             list_microphones,
+            clean_caches,
+            game_history,
             executable_exists
         ])
         .build(tauri::generate_context!())

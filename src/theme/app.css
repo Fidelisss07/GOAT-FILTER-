@@ -633,3 +633,31 @@ h1, h2, h3 { margin: 0; }
 .clip-row .clip-name { grid-area: name; }
 .clip-row .state-group { grid-area: actions; justify-content: flex-start; flex-wrap: wrap; }
 .clip-row .btn.small { padding: 5px 10px; }
+
+/* ---------- Desempenho+ (v1.9) ---------- */
+.xray-body { display: flex; gap: 20px; align-items: flex-start; }
+.xray-score { flex: none; width: 112px; height: 112px; border-radius: 50%; display: grid; place-content: center; text-align: center; border: 6px solid var(--border); background: var(--field); }
+.xray-score strong { font-size: 36px; line-height: 1; font-variant-numeric: tabular-nums; }
+.xray-score span { color: var(--text-2); font-size: 12px; }
+.xray-score.good { border-color: #3ecf74; }
+.xray-score.mid { border-color: #ffb547; }
+.xray-score.bad { border-color: var(--danger); }
+.xray-text { min-width: 0; flex: 1; }
+.xray-text p { margin: 4px 0 8px; font-weight: 600; }
+.xray-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.xray-list li { display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: center; }
+.xray-list li svg { width: 14px; height: 14px; color: #3ecf74; }
+.xray-list li .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); justify-self: center; }
+.xray-list li.muted { color: var(--text-2); }
+.xray-list li.muted .dot { background: var(--border); }
+.xray-list li small { grid-column: 2; color: var(--text-2); font-size: 12px; }
+.cache-list { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 4px; font-size: 13px; }
+.cache-list li { display: flex; justify-content: space-between; }
+.week-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.week-stats div { display: grid; gap: 2px; padding: 10px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.week-stats strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.week-stats span { color: var(--text-2); font-size: 12px; }
+.week-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; height: 110px; margin-top: 14px; align-items: end; }
+.bar-col { display: grid; grid-template-rows: 1fr auto; height: 100%; align-items: end; justify-items: center; gap: 4px; }
+.bar-col .bar { width: 100%; max-width: 28px; border-radius: 4px 4px 0 0; background: rgba(var(--accent-rgb), 0.75); }
+.bar-col span { font-size: 11px; color: var(--text-2); }

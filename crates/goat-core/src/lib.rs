@@ -4,6 +4,7 @@
 //! driver da GPU (NVAPI/ADL) ou pela composição do Windows (Magnification API).
 
 pub mod backends;
+pub mod care;
 pub mod clips;
 pub mod color;
 pub mod engine;

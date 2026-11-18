@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Toggle, ToggleRow } from "../components/Controls";
 import { BoltIcon, CheckIcon, CheckSquareIcon, KeyboardIcon } from "../components/Icons";
+import { CarePanel, HistoryPanel, XrayPanel } from "../components/CarePanels";
 import { CloseApps } from "../components/CloseApps";
 import { KeyCapture } from "../components/KeyCapture";
 import { MachinePanel } from "../components/MachinePanel";
@@ -75,6 +76,7 @@ export function PerformancePage() {
   return (
     <div className="perf-grid">
       <div className="stack">
+        <XrayPanel />
         <section className="panel" aria-label={t("Checklist de latência")}>
           <div className="section-head">
             <CheckSquareIcon />
@@ -145,6 +147,9 @@ export function PerformancePage() {
               <h3>{t("Fechar ao abrir o jogo")}</h3>
             </div>
             <CloseApps />
+            <div className="rows">
+              <ToggleRow label={t("Reabrir esses apps quando o jogo fechar")} checked={s.settings.reopenApps} onChange={(v) => s.updateSettings({ reopenApps: v })} />
+            </div>
           </div>
         </section>
       </div>
@@ -174,6 +179,8 @@ export function PerformancePage() {
         <p className="note">{t("Clique numa tecla e aperte a nova combinação, com Ctrl ou Alt. Os atalhos não mudam as teclas do jogo nem simulam teclas.")}</p>
       </section>
       <MachinePanel />
+      <HistoryPanel />
+      <CarePanel />
       </div>
     </div>
   );
