@@ -131,6 +131,11 @@ de GPU por hardware (HAGS, pede permissão de administrador e vale após reinici
 - **Bandeja:** "Salvar clipe agora" e ligar/desligar o replay sem abrir o app.
 - **Fundo preto (OLED).**
 
+**Miras prontas (v1.12):** 21 miras na aba Treino › Miras — de pros (TenZ, aspas, Demon1, Less,
+cauanzin, mwzera…), estilos (ponto, cruz pequena…) e divertidas — com prévia desenhada a partir do
+código, busca, filtro, copiar e salvar em "Minhas miras". Reunidas de sites de miras e de
+configurações de pros; pros trocam de mira com frequência.
+
 **Fechar ao abrir o jogo:** você marca apps pesados (navegadores, OneDrive, launchers…) e o Goat
 Filter fecha esses apps quando o jogo abre, como se você clicasse no X (nunca à força, nunca o jogo).
 

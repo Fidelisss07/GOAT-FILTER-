@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Goat Filter — vídeo TikTok</title>
+<style>
+@font-face { font-family: "Barlow"; src: url(assets/barlow-condensed-latin-900-normal.woff2) format("woff2"); font-weight: 900; }
+@font-face { font-family: "Inter"; src: url(assets/inter-latin-800-normal.woff2) format("woff2"); font-weight: 800; }
+@font-face { font-family: "Inter"; src: url(assets/inter-latin-600-normal.woff2) format("woff2"); font-weight: 600; }
+:root { --p: #ad78ff; --p2: #7c4dff; --y: #ffd629; --iv: #f8f2ea; --ink: #0f0d16; --line: rgba(248, 242, 234, 0.07); --green: #3ecf74; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: var(--ink); }
+#stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; font-family: "Inter", sans-serif; color: var(--iv); background: var(--ink); }
+/* grade fina de fundo */
+#grid { position: absolute; inset: -200px; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 72px 72px; }
+.scene { position: absolute; inset: 0; visibility: hidden; perspective: 1800px; }
+.abs { position: absolute; }
+
+/* Títulos com revelação por máscara */
+.head { position: absolute; left: 72px; width: 936px; font-family: "Barlow", sans-serif; font-weight: 900; text-transform: uppercase; line-height: 0.9; letter-spacing: 0.005em; }
+.line { display: block; overflow: hidden; padding-bottom: 0.04em; }
+.line > span { display: inline-block; will-change: transform; }
+.p { color: var(--p); } .y { color: var(--y); }
+.kicker { position: absolute; left: 72px; font-weight: 800; font-size: 26px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--p); display: flex; gap: 14px; align-items: center; }
+.kicker::before { content: ""; width: 44px; height: 4px; background: var(--p); display: inline-block; }
+
+/* Janela do app com câmera */
+.win { position: absolute; overflow: hidden; border-radius: 22px; background: #1d1c1d; box-shadow: 0 0 0 2px rgba(173,120,255,.45), 0 40px 90px rgba(0,0,0,.6); transform-style: preserve-3d; }
+.win > img.cam { position: absolute; left: 0; top: 0; width: 2560px; height: 1600px; transform-origin: 0 0; will-change: transform; }
+.cursor { position: absolute; width: 46px; height: 46px; pointer-events: none; z-index: 5; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+.ripple { position: absolute; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%; border: 5px solid var(--y); pointer-events: none; z-index: 4; }
+
+/* Etiquetas e destaques */
+.tag { position: absolute; font-weight: 800; font-size: 30px; padding: 14px 22px; border-radius: 14px; background: var(--p); color: #14101f; white-space: nowrap; box-shadow: 0 16px 40px rgba(0,0,0,.4); }
+.tag.dark { background: #19152a; color: var(--iv); border: 2px solid rgba(173,120,255,.6); }
+.tag.green { background: #123323; color: #b9f5cf; border: 2px solid rgba(62,207,116,.7); }
+.callout-line { position: absolute; height: 4px; background: var(--y); transform-origin: 0 50%; border-radius: 2px; }
+.callout-dot { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: var(--y); box-shadow: 0 0 0 8px rgba(255,214,41,.25); }
+.big-num { position: absolute; font-family: "Barlow"; font-weight: 900; line-height: .8; font-variant-numeric: tabular-nums; }
+.toast { position: absolute; display: flex; gap: 18px; align-items: center; padding: 22px 26px; border-radius: 18px; background: #1b1827; border: 2px solid rgba(173,120,255,.5); box-shadow: 0 24px 60px rgba(0,0,0,.55); white-space: nowrap; }
+.toast b { display: block; font-size: 30px; } .toast small { display: block; font-size: 24px; color: rgba(248,242,234,.7); font-weight: 600; margin-top: 4px; }
+.toast img { width: 64px; height: 64px; }
+.keycap { position: absolute; width: 200px; height: 200px; border-radius: 34px; background: linear-gradient(165deg, #3b3450, #1d1829); border: 3px solid #6c5c8e;
+  box-shadow: 0 26px 0 #110d1a, 0 40px 70px rgba(0,0,0,.55), inset 0 6px 0 rgba(255,255,255,.12); display: grid; place-items: center; font-family: "Barlow"; font-size: 116px; }
+.mouse { position: absolute; width: 200px; height: 300px; }
+.phone { position: absolute; border-radius: 46px; border: 12px solid #08070c; background: #000; overflow: hidden; box-shadow: 0 0 0 3px #3a3350, 0 40px 90px rgba(0,0,0,.6); }
+.phone img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ring { position: absolute; width: 420px; height: 420px; border-radius: 50%; display: grid; place-items: center; }
+.ring b { font-family: "Barlow"; font-size: 190px; line-height: .9; display: block; text-align: center; }
+.ring small { display: block; text-align: center; font-weight: 800; font-size: 30px; color: rgba(248,242,234,.65); }
+.check { position: absolute; left: 72px; width: 936px; display: flex; justify-content: space-between; align-items: center; padding: 22px 28px; border-radius: 18px;
+  background: #17141f; border: 2px solid rgba(248,242,234,.08); font-weight: 800; font-size: 34px; }
+.check i { font-style: normal; font-size: 28px; padding: 8px 16px; border-radius: 10px; }
+.check i.bad { background: rgba(255,107,107,.15); color: #ff8b8b; } .check i.ok { background: rgba(62,207,116,.18); color: #8ff0b4; }
+.card3 { position: absolute; width: 760px; height: 620px; border-radius: 24px; overflow: hidden; background: #1d1c1d; box-shadow: 0 0 0 2px rgba(173,120,255,.45), 0 30px 70px rgba(0,0,0,.55); }
+.card3 > img { position: absolute; left: 0; top: 0; width: 2560px; height: 1600px; transform-origin: 0 0; }
+.card3 .lbl { position: absolute; left: 20px; bottom: 20px; }
+
+/* HUD */
+#hud { position: absolute; inset: 0; pointer-events: none; }
+#hud .idx { position: absolute; right: 72px; top: 150px; font-weight: 800; font-size: 24px; letter-spacing: .14em; color: rgba(248,242,234,.55); }
+#hud .brand { position: absolute; left: 72px; top: 146px; height: 34px; opacity: .9; }
+#progress { position: absolute; left: 72px; right: 72px; top: 196px; height: 4px; background: rgba(248,242,234,.08); border-radius: 2px; overflow: hidden; }
+#progress i { display: block; height: 100%; background: var(--p); width: 0; }
+
+/* Transição diagonal da marca */
+.wipe { position: absolute; top: -400px; width: 1500px; height: 2800px; transform: skewX(-18deg); pointer-events: none; z-index: 20; }
+#w1 { background: var(--p); } #w2 { background: #120f1c; }
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 21; mix-blend-mode: screen; }
+#vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(130% 90% at 50% 45%, transparent 60%, rgba(0,0,0,.55) 100%); z-index: 19; }
+#grain { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .06; mix-blend-mode: overlay; z-index: 22; }
+.full { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+
+  <!-- 1. Gancho -->
+  <section class="scene" id="s1">
+    <img class="full" id="s1-img" src="assets/cidade-antes.webp" data-slot="jogo">
+    <div class="abs" style="inset:0;background:linear-gradient(180deg,rgba(15,13,22,.2),rgba(15,13,22,.75))"></div>
+    <div class="head safe" id="s1-h" style="top:470px;font-size:205px">
+      <span class="line"><span>Seu jogo</span></span>
+      <span class="line"><span>tá com cor</span></span>
+      <span class="line p"><span>de lavado?</span></span>
+    </div>
+  </section>
+
+  <!-- 2. Vibrance -->
+  <section class="scene" id="s2">
+    <div class="kicker safe" style="top:250px">01 · Cores</div>
+    <div class="head safe" id="s2-h" style="top:300px;font-size:150px">
+      <span class="line"><span>Vibrance</span></span>
+      <span class="line p"><span>até 200%</span></span>
+    </div>
+    <div class="win safe" id="s2-win" style="left:72px;top:620px;width:936px;height:700px"><img class="cam" id="s2-cam" src="assets/ui/vib-00.jpg"></div>
+    <div class="big-num safe" id="s2-num" style="left:72px;top:1370px;font-size:180px">50%</div>
+    <div class="tag dark safe" id="s2-t1" style="left:540px;top:1380px">Limite do driver: 100%</div>
+    <div class="tag safe" id="s2-t2" style="left:540px;top:1460px">Super Vibrance ✦</div>
+    <img class="cursor" id="s2-cur" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M4 2l15 11-6.5 1.2L16 21l-3 1.4-3.4-6.8L4 20z' fill='white' stroke='black' stroke-width='1.4' stroke-linejoin='round'/></svg>">
+    <div class="ripple" id="s2-rip"></div>
+  </section>
+
+  <!-- 3. Perfil automático -->
+  <section class="scene" id="s3">
+    <div class="kicker safe" style="top:250px">02 · Perfil automático</div>
+    <div class="head safe" id="s3-h" style="top:300px;font-size:150px">
+      <span class="line"><span>Abriu o jogo?</span></span>
+      <span class="line p"><span>Ligou sozinho.</span></span>
+    </div>
+    <div class="win safe" id="s3-win" style="left:72px;top:620px;width:936px;height:700px"><img class="cam" id="s3-cam" src="assets/ui/profiles.jpg"></div>
+    <div class="toast safe" id="s3-toast" style="left:120px;top:1370px"><img src="assets/goat-filter-roxo-simbolo.svg"><div><b>Goat Filter</b><small>Valorant aberto · perfil aplicado</small></div></div>
+  </section>
+
+  <!-- 4. Replay e clipes -->
+  <section class="scene" id="s4">
+    <div class="kicker safe" style="top:250px">03 · Replay instantâneo</div>
+    <div class="head safe" id="s4-h" style="top:300px;font-size:150px">
+      <span class="line"><span>Fez a jogada?</span></span>
+      <span class="line p"><span>Clipa na hora.</span></span>
+    </div>
+    <div class="win safe" id="s4-win" style="left:72px;top:620px;width:936px;height:700px"><img class="cam" id="s4-cam" src="assets/ui/rec-off.jpg"></div>
+    <img class="cursor" id="s4-cur" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M4 2l15 11-6.5 1.2L16 21l-3 1.4-3.4-6.8L4 20z' fill='white' stroke='black' stroke-width='1.4' stroke-linejoin='round'/></svg>">
+    <div class="ripple" id="s4-rip"></div>
+    <div class="tag green safe" id="s4-t1" style="left:72px;top:1370px">Leve: usa o chip de vídeo da placa</div>
+    <div class="keycap safe" id="s4-key" style="left:150px;top:840px">F8</div>
+    <svg class="mouse safe" id="s4-mouse" style="left:700px;top:790px" viewBox="0 0 100 150">
+      <rect x="10" y="5" width="80" height="140" rx="40" fill="#1d1829" stroke="#6c5c8e" stroke-width="4"/>
+      <line x1="50" y1="5" x2="50" y2="55" stroke="#6c5c8e" stroke-width="4"/>
+      <rect x="45" y="20" width="10" height="22" rx="5" fill="#6c5c8e"/>
+      <rect id="s4-side" x="4" y="62" width="12" height="34" rx="5" fill="#ad78ff"/>
+    </svg>
+    <div class="abs safe" id="s4-or" style="left:470px;top:890px;font-family:Barlow;font-size:96px;color:rgba(248,242,234,.7)">ou</div>
+    <div class="toast safe" id="s4-toast" style="left:120px;top:1370px"><img src="assets/goat-filter-roxo-simbolo.svg"><div><b>Clipe salvo ✓</b><small>últimos 30 s · 1440p 60 fps</small></div></div>
+    <!-- vertical pro TikTok -->
+    <div class="phone safe" id="s4-phone" style="left:310px;top:620px;width:460px;height:740px"><img id="slot-clip" src="assets/cidade-depois.webp" data-slot="clip"></div>
+    <div class="tag safe" id="s4-t2" style="left:72px;top:1400px">Vertical 9:16 pro TikTok</div>
+    <div class="tag dark safe" id="s4-t3" style="left:560px;top:1400px">10 MB pro Discord</div>
+  </section>
+
+  <!-- 5. Raio-X -->
+  <section class="scene" id="s5">
+    <div class="kicker safe" style="top:250px">04 · Desempenho</div>
+    <div class="head safe" id="s5-h" style="top:300px;font-size:150px">
+      <span class="line"><span>Raio-X</span></span>
+      <span class="line p"><span>do seu PC.</span></span>
+    </div>
+    <div class="ring safe" id="s5-ring" style="left:330px;top:620px"><div><b id="s5-score">0</b><small>/100</small></div></div>
+    <div class="check safe" id="s5-c0" style="top:1080px"><span>Monitor em 144 Hz</span><i class="bad">60 Hz</i></div>
+    <div class="check safe" id="s5-c1" style="top:1180px"><span>Gravação do Xbox</span><i class="bad">ligada</i></div>
+    <div class="check safe" id="s5-c2" style="top:1280px"><span>Apps pesados ao jogar</span><i class="bad">abertos</i></div>
+    <div class="check safe" id="s5-c3" style="top:1380px"><span>Aviso de temperatura</span><i class="bad">sem aviso</i></div>
+  </section>
+
+  <!-- 6. Treino -->
+  <section class="scene" id="s6">
+    <div class="kicker safe" style="top:250px">05 · Treino</div>
+    <div class="head safe" id="s6-h" style="top:300px;font-size:128px">
+      <span class="line"><span>Aquece a mira</span></span>
+      <span class="line p"><span>antes da ranked.</span></span>
+    </div>
+    <div class="win safe" id="s6-win" style="left:72px;top:620px;width:936px;height:700px"><img class="cam" id="s6-cam" src="assets/ui/aim-00.jpg"></div>
+    <div class="tag dark safe" id="s6-t1" style="left:72px;top:1370px">Flick · Micro · Peek · Tracking</div>
+    <div class="tag safe" id="s6-t2" style="left:72px;top:1460px">🔥 7 dias seguidos</div>
+    <div class="abs safe" id="s6-hits" style="left:640px;top:1360px;text-align:right;width:368px"><div class="big-num" id="s6-n" style="position:static;font-size:150px;color:var(--y)">0</div><div style="font-weight:800;font-size:28px;letter-spacing:.12em;color:rgba(248,242,234,.7)">ACERTOS</div></div>
+  </section>
+
+  <!-- 7. E mais -->
+  <section class="scene" id="s7">
+    <div class="kicker safe" style="top:250px">06 · E mais</div>
+    <div class="head safe" id="s7-h" style="top:300px;font-size:150px">
+      <span class="line"><span>Tudo num</span></span>
+      <span class="line p"><span>app só.</span></span>
+    </div>
+    <div id="s7-cards"></div>
+  </section>
+
+  <!-- 8. Final -->
+  <section class="scene" id="s8">
+    <div class="head safe" id="s8-h" style="top:270px;font-size:170px">
+      <span class="line"><span>Grátis.</span></span>
+      <span class="line"><span>Sem conta.</span></span>
+      <span class="line p"><span>Código</span></span>
+      <span class="line p"><span>aberto.</span></span>
+    </div>
+    <img class="abs safe" id="s8-logo" src="assets/goat-filter-roxo-simbolo.svg" style="left:72px;top:950px;width:170px">
+    <img class="abs safe" id="s8-word" src="assets/goat-filter-roxo-lettering.svg" style="left:270px;top:995px;width:620px">
+    <div class="abs safe" id="s8-cta" style="left:72px;top:1200px;font-family:Barlow;font-size:120px;text-transform:uppercase">Link na <span class="y">bio</span></div>
+    <div class="abs safe" id="s8-url" style="left:72px;top:1340px;font-weight:800;font-size:36px;color:rgba(248,242,234,.75)">goat-filter-site.vercel.app</div>
+  </section>
+
+  <div id="hud">
+    <img class="brand" id="hud-brand" src="assets/goat-filter-roxo-lettering.svg">
+    <div class="idx" id="hud-idx"></div>
+    <div id="progress"><i id="hud-bar"></i></div>
+  </div>
+  <div class="wipe" id="w1"></div>
+  <div class="wipe" id="w2"></div>
+  <div id="vignette"></div>
+  <div id="flash"></div>
+  <canvas id="grain" width="360" height="640"></canvas>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const E = {
+  out: (k) => 1 - Math.pow(1 - k, 3),
+  out5: (k) => 1 - Math.pow(1 - k, 5),
+  in: (k) => k * k * k,
+  inOut: (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2),
+  back: (k) => { const c = 1.6; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); },
+};
+const tw = (t, t0, t1, a, b, e = E.out) => lerp(a, b, e(clamp((t - t0) / (t1 - t0))));
+const rnd = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const css = (el, o) => Object.assign(el.style, o);
+
+/* ---------- câmera sobre uma captura do app (2560x1600) ---------- */
+function cam(img, rect, vw, vh) {
+  const [x, y, w, h] = rect;
+  const s = Math.min(vw / w, vh / h);
+  const tx = vw / 2 - (x + w / 2) * s, ty = vh / 2 - (y + h / 2) * s;
+  img.style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
+  return { s, tx, ty };
+}
+const lerpRect = (a, b, k) => a.map((v, i) => lerp(v, b[i], k));
+/** posição na tela de um ponto da captura */
+const toScreen = (win, c, px, py) => [win.offsetLeft + c.tx + px * c.s, win.offsetTop + c.ty + py * c.s];
+function setSrc(img, src) { if (!img.src.endsWith(src)) img.src = src; }
+function cursor(el, x, y, show = true) { css(el, { left: `${x - 6}px`, top: `${y - 4}px`, opacity: show ? 1 : 0 }); }
+function ripple(el, x, y, t, t0) {
+  const k = (t - t0) / 0.45;
+  css(el, { left: `${x}px`, top: `${y}px`, opacity: k >= 0 && k <= 1 ? 1 - k : 0, transform: `scale(${0.3 + k * 1.2})` });
+}
+/** título por máscara: linhas sobem com atraso */
+function head(el, t, t0, out) {
+  [...el.querySelectorAll(".line > span")].forEach((s, i) => {
+    const a = t0 + i * 0.12;
+    const yIn = tw(t, a, a + 0.5, 110, 0, E.out5);
+    const yOut = out != null ? tw(t, out + i * 0.05, out + 0.3 + i * 0.05, 0, -110, E.in) : 0;
+    s.style.transform = `translateY(${yIn + yOut}%)`;
+  });
+}
+const pop = (el, t, t0, d = 0.35) => css(el, { opacity: tw(t, t0, t0 + 0.12, 0, 1), transform: `translateY(${tw(t, t0, t0 + d, 40, 0, E.back)}px) scale(${tw(t, t0, t0 + d, 0.85, 1, E.back)})` });
+
+/* ---------- gravações do usuário (slots.json) ---------- */
+let SLOTS = {};
+async function loadSlots() { try { SLOTS = await (await fetch("slots.json", { cache: "no-store" })).json(); } catch { SLOTS = {}; } }
+function slotFrame(name, localT) {
+  const s = SLOTS[name];
+  const img = document.querySelector(`[data-slot="${name}"]`);
+  if (!s || !img) return false;
+  const i = Math.min(s.frames - 1, Math.max(0, Math.floor((localT + (s.offset || 0)) * (s.fps || 30))));
+  setSrc(img, `${s.dir}/${String(i + 1).padStart(5, "0")}.jpg`);
+  return true;
+}
+
+/* ---------- linha do tempo (s) ---------- */
+const T = { s1: [0, 3], s2: [3, 10.5], s3: [10.5, 14.5], s4: [14.5, 24], s5: [24, 29], s6: [29, 33.5], s7: [33.5, 39], s8: [39, 45] };
+const DURATION = 45;
+const CUTS = [3, 10.5, 14.5, 24, 29, 33.5, 39];
+const LABELS = { s2: "01 / 06", s3: "02 / 06", s4: "03 / 06", s5: "04 / 06", s6: "05 / 06", s7: "06 / 06" };
+const R = {
+  full: [0, 0, 2560, 1600],
+  vibAll: [460, 230, 2080, 1330],
+  vibPanel: [1560, 520, 960, 660],
+  vibPreview: [480, 250, 1100, 1300],
+  apply: [1642, 874, 394, 92],
+  profAll: [500, 230, 2040, 1400],
+  profZoom: [1340, 820, 1180, 840],
+  recAll: [480, 230, 2080, 1330],
+  recTop: [500, 250, 1140, 780],
+  aim: [530, 560, 1950, 1250],
+};
+
+const g = $("grain").getContext("2d");
+function grain(f) {
+  const img = g.createImageData(360, 640);
+  let seed = f * 9973 + 17;
+  for (let i = 0; i < img.data.length; i += 4) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; const v = seed & 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  g.putImageData(img, 0, 0);
+}
+
+function show(id, t) {
+  const [a, b] = T[id];
+  const on = t >= a && t < b;
+  $(id).style.visibility = on ? "visible" : "hidden";
+  return on ? t - a : null;
+}
+
+function seek(t, frame = Math.round(t * 30)) {
+  /* transição diagonal: cobre a tela no instante do corte */
+  let w1 = 1700, w2 = 1700;
+  for (const c of CUTS) {
+    if (t > c - 0.35 && t < c + 0.4) {
+      w1 = tw(t, c - 0.35, c + 0.3, 1300, -1900, E.inOut);
+      w2 = tw(t, c - 0.3, c + 0.4, 1350, -1850, E.inOut);
+    }
+  }
+  $("w1").style.left = `${w1}px`;
+  $("w2").style.left = `${w2}px`;
+  $("grid").style.transform = `translate(${(t * 18) % 72}px, ${(t * 30) % 72}px)`;
+
+  // HUD
+  const hudOn = t >= 3 && t < 39;
+  $("hud").style.opacity = hudOn ? 1 : 0;
+  const cur = Object.keys(LABELS).find((k) => t >= T[k][0] && t < T[k][1]);
+  $("hud-idx").textContent = cur ? LABELS[cur] : "";
+  $("hud-bar").style.width = `${clamp((t - 3) / 36) * 100}%`;
+  $("flash").style.opacity = Math.max(0, 1 - Math.abs(t - 3.0) / 0.1) * 0.6 + Math.max(0, 1 - Math.abs(t - 39) / 0.1) * 0.5;
+
+  /* 1. Gancho */
+  let k = show("s1", t);
+  if (k != null) {
+    const slot = slotFrame("jogo", k);
+    css($("s1-img"), { transform: `scale(${1.25 - k * 0.06}) translateX(${-k * 12}px)`, filter: slot ? "saturate(.25) brightness(.8)" : "saturate(.1) brightness(.7)" });
+    head($("s1-h"), t, 0.15);
+    const sh = (k > 0.4 && k < 0.6) || (k > 0.9 && k < 1.05) ? (rnd(frame) - 0.5) * 14 : 0;
+    $("s1-h").style.transform = `translateX(${sh}px)`;
+  }
+
+  /* 2. Vibrance */
+  k = show("s2", t);
+  if (k != null) {
+    head($("s2-h"), k, 0.05);
+    const win = $("s2-win"), img = $("s2-cam");
+    css(win, { opacity: tw(k, 0.2, 0.5, 0, 1), transform: `translateY(${tw(k, 0.2, 0.7, 60, 0)}px) scale(${tw(k, 0.2, 0.8, 0.94, 1)})` });
+    // 0.8–5.0: sequência do slider (50 → 190)
+    const f = Math.round(tw(k, 0.8, 5.0, 0, 35, E.inOut));
+    setSrc(img, k > 6.0 ? "assets/ui/vib-applied.jpg" : `assets/ui/vib-${String(f).padStart(2, "0")}.jpg`);
+    const r = k < 1.0 ? lerpRect(R.vibAll, R.vibPanel, E.inOut(clamp(k / 1.0))) : k < 5.2 ? R.vibPanel : lerpRect(R.vibPanel, [1600, 640, 900, 560], E.inOut(clamp((k - 5.2) / 0.6)));
+    const c = cam(img, r, 936, 700);
+    const val = 50 + f * 4;
+    $("s2-num").textContent = `${Math.min(190, val)}%`;
+    $("s2-num").style.color = val > 100 ? "var(--y)" : "var(--iv)";
+    css($("s2-num"), { opacity: tw(k, 0.6, 0.8, 0, 1) });
+    pop($("s2-t1"), k, 2.4);
+    pop($("s2-t2"), k, 3.4);
+    // cursor arrasta o botão do slider e depois clica em Aplicar
+    const knobX = 1662 + 776 * clamp((Math.min(190, val)) / 200) , knobY = 728;
+    let [cx, cy] = toScreen(win, c, knobX, knobY);
+    if (k > 5.2) {
+      const [ax, ay] = toScreen(win, c, 1642 + 197, 874 + 46);
+      const m = E.inOut(clamp((k - 5.4) / 0.6));
+      cx = lerp(cx, ax, m); cy = lerp(cy, ay, m);
+    }
+    cursor($("s2-cur"), cx, cy, k > 0.7 && k < 7.2);
+    ripple($("s2-rip"), cx, cy, k, 6.0);
+  }
+
+  /* 3. Perfil automático */
+  k = show("s3", t);
+  if (k != null) {
+    head($("s3-h"), k, 0.05);
+    const win = $("s3-win"), img = $("s3-cam");
+    css(win, { opacity: tw(k, 0.15, 0.4, 0, 1), transform: `translateY(${tw(k, 0.15, 0.6, 60, 0)}px)` });
+    cam(img, lerpRect(R.profAll, R.profZoom, E.inOut(clamp((k - 0.6) / 1.4))), 936, 700);
+    css($("s3-toast"), { opacity: tw(k, 1.8, 2.0, 0, 1), transform: `translateX(${tw(k, 1.8, 2.3, 300, 0, E.back)}px)` });
+  }
+
+  /* 4. Replay */
+  k = show("s4", t);
+  if (k != null) {
+    head($("s4-h"), k, 0.05);
+    const win = $("s4-win"), img = $("s4-cam");
+    const phase2 = k > 5.4; // clipe vira vertical
+    const keyTime = k > 2.5 && k < 4.4;
+    css(win, { opacity: phase2 ? tw(k, 5.4, 5.7, 1, 0) : keyTime ? 0.18 : tw(k, 0.15, 0.4, 0, 1), transform: `translateY(${tw(k, 0.15, 0.6, 60, 0)}px)`, filter: keyTime ? "blur(6px)" : "none" });
+    setSrc(img, k < 1.4 ? "assets/ui/rec-off.jpg" : k < 4.4 ? "assets/ui/rec-on.jpg" : "assets/ui/rec-saved.jpg");
+    const r = lerpRect(R.recAll, R.recTop, E.inOut(clamp((k - 0.4) / 0.8)));
+    const c = cam(img, r, 936, 700);
+    // cursor liga o replay em 1.3 s
+    const [cx, cy] = toScreen(win, c, 1521, 514);
+    cursor($("s4-cur"), cx + (k < 1.0 ? tw(k, 0.5, 1.0, 220, 0) : 0), cy + (k < 1.0 ? tw(k, 0.5, 1.0, 160, 0) : 0), k > 0.5 && k < 1.9);
+    ripple($("s4-rip"), cx, cy, k, 1.3);
+    css($("s4-t1"), { opacity: k > 1.6 && k < 2.6 ? 1 : 0, transform: `translateY(${tw(k, 1.6, 1.9, 30, 0, E.back)}px)` });
+    // tecla e botão do mouse
+    const keyOn = k > 2.6 && k < 4.3;
+    const press = (k > 3.2 && k < 3.4) || (k > 3.7 && k < 3.9);
+    css($("s4-key"), { opacity: keyOn ? tw(k, 2.6, 2.75, 0, 1) : 0, transform: `translateY(${press && k < 3.4 ? 22 : 0}px) scale(${tw(k, 2.6, 2.9, 0.7, 1, E.back)})` });
+    css($("s4-mouse"), { opacity: keyOn ? tw(k, 2.75, 2.9, 0, 1) : 0, transform: `scale(${tw(k, 2.75, 3.05, 0.7, 1, E.back)})` });
+    $("s4-side").setAttribute("fill", k > 3.7 && k < 3.95 ? "#ffd629" : "#ad78ff");
+    css($("s4-or"), { opacity: keyOn ? tw(k, 2.9, 3.0, 0, 1) : 0 });
+    css($("s4-toast"), { opacity: k > 4.0 && k < 5.4 ? tw(k, 4.0, 4.15, 0, 1) : 0, transform: `translateY(${tw(k, 4.0, 4.35, 40, 0, E.back)}px)` });
+    // 16:9 vira 9:16
+    const ph = $("s4-phone");
+    const m = E.inOut(clamp((k - 5.6) / 0.9));
+    css(ph, { opacity: phase2 ? tw(k, 5.4, 5.6, 0, 1) : 0, left: `${lerp(72, 310, m)}px`, width: `${lerp(936, 460, m)}px`, top: `${lerp(706, 620, m)}px`, height: `${lerp(526, 740, m)}px`, borderRadius: `${lerp(22, 46, m)}px` });
+    slotFrame("clip", k - 5.4);
+    pop($("s4-t2"), k, 6.5);
+    pop($("s4-t3"), k, 6.9);
+  }
+
+  /* 5. Raio-X */
+  k = show("s5", t);
+  if (k != null) {
+    head($("s5-h"), k, 0.05);
+    const fixedAt = [1.2, 1.7, 2.2, 2.7];
+    const done = fixedAt.filter((x) => k > x).length;
+    const score = Math.round(tw(k, 0.3, 1.0, 0, 58) + done * 10.5);
+    $("s5-score").textContent = Math.min(100, score);
+    const col = score >= 85 ? "#3ecf74" : score >= 60 ? "#ffb547" : "#ff6b6b";
+    $("s5-ring").style.background = `radial-gradient(circle, var(--ink) 0 64%, transparent 65%), conic-gradient(${col} ${Math.min(100, score) * 3.6}deg, rgba(255,255,255,.08) 0)`;
+    css($("s5-ring"), { opacity: tw(k, 0.2, 0.4, 0, 1), transform: `scale(${tw(k, 0.2, 0.6, 0.8, 1, E.back) * (k > 2.7 && k < 3.0 ? 1.05 : 1)})`, boxShadow: `0 0 ${score >= 99 ? 90 : 0}px ${col}` });
+    const after = ["144 Hz ✓", "desligada ✓", "fechados ✓", "85 °C ✓"];
+    for (let i = 0; i < 4; i++) {
+      const el = $(`s5-c${i}`);
+      pop(el, k, 0.5 + i * 0.12);
+      const ok = k > fixedAt[i];
+      const tag = el.querySelector("i");
+      tag.className = ok ? "ok" : "bad";
+      tag.textContent = ok ? after[i] : ["60 Hz", "ligada", "abertos", "sem aviso"][i];
+      el.style.borderColor = ok ? "rgba(62,207,116,.55)" : "rgba(248,242,234,.08)";
+    }
+  }
+
+  /* 6. Treino */
+  k = show("s6", t);
+  if (k != null) {
+    head($("s6-h"), k, 0.05);
+    const win = $("s6-win"), img = $("s6-cam");
+    css(win, { opacity: tw(k, 0.15, 0.4, 0, 1), transform: `translateY(${tw(k, 0.15, 0.6, 60, 0)}px)` });
+    if (!slotFrame("treino", k)) setSrc(img, `assets/ui/aim-${String(Math.min(47, Math.floor(clamp((k - 0.3) / 3.4) * 47))).padStart(2, "0")}.jpg`);
+    cam(img, lerpRect(R.full, R.aim, E.inOut(clamp((k - 0.2) / 0.9))), 936, 700);
+    const af = Math.min(47, Math.floor(clamp((k - 0.3) / 3.4) * 47));
+    $("s6-n").textContent = Math.floor((af + 1) / 6);
+    css($("s6-hits"), { opacity: tw(k, 0.6, 0.8, 0, 1) });
+    pop($("s6-t1"), k, 1.2);
+    pop($("s6-t2"), k, 1.7);
+  }
+
+  /* 7. E mais: cartões com zoom em telas reais */
+  k = show("s7", t);
+  if (k != null) {
+    head($("s7-h"), k, 0.05);
+    const box = $("s7-cards");
+    const items = [
+      ["crosshairs.jpg", [540, 480, 1300, 600], "Biblioteca de miras"],
+      ["sens.jpg", [540, 490, 1300, 640], "Conversor de sensibilidade"],
+      ["mouse.jpg", [540, 490, 1930, 800], "Teste de polling, clique e DPI"],
+      ["rec-on.jpg", [1660, 250, 860, 1000], "Qualidade até 2K 60 fps"],
+      ["settings.jpg", [490, 250, 2030, 1000], "Temas, idioma e backup"],
+    ];
+    if (!box.childElementCount) items.forEach(([src, , lbl]) => {
+      const d = document.createElement("div");
+      d.className = "card3 safe";
+      d.innerHTML = `<img src="assets/ui/${src}"><div class="tag lbl">${lbl}</div>`;
+      box.appendChild(d);
+    });
+    [...box.children].forEach((d, i) => {
+      const t0 = 0.6 + i * 0.9;
+      const a = clamp((k - t0) / 0.45);
+      const out = clamp((k - t0 - 0.85) / 0.4);
+      const visible = k > t0 - 0.01 && (i === items.length - 1 || k < t0 + 1.3);
+      css(d, {
+        left: `${160}px`, top: `${680 + i * 14}px`, zIndex: 10 + i,
+        opacity: visible ? Math.min(1, a * 2.5) : 0,
+        transform: `translate(${lerp(0, -14 * (items.length - i), E.out(out))}px, ${lerp(120, 0, E.out5(a))}px) rotate(${lerp(-4, (i - 2) * 1.6, E.out5(a))}deg) scale(${lerp(0.7, 1, E.back(a)) * lerp(1, 0.94, out)})`,
+      });
+      cam(d.querySelector("img"), items[i][1], 760, 620);
+    });
+  }
+
+  /* 8. Final */
+  k = show("s8", t);
+  if (k != null) {
+    head($("s8-h"), k, 0.15);
+    css($("s8-logo"), { opacity: tw(k, 0.8, 1.0, 0, 1), transform: `rotate(${tw(k, 0.8, 1.4, -90, 0, E.back)}deg) scale(${tw(k, 0.8, 1.3, 0.4, 1, E.back)})` });
+    css($("s8-word"), { opacity: tw(k, 1.0, 1.3, 0, 1), transform: `translateX(${tw(k, 1.0, 1.5, 60, 0)}px)` });
+    pop($("s8-cta"), k, 1.5, 0.45);
+    css($("s8-url"), { opacity: tw(k, 1.8, 2.1, 0, 1) });
+  }
+  grain(frame);
+}
+
+window.DURATION = DURATION;
+window.ready = (async () => {
+  await loadSlots();
+  await document.fonts.ready;
+  // pré-carrega as sequências
+  const pre = [];
+  for (let i = 0; i < 36; i++) pre.push(`assets/ui/vib-${String(i).padStart(2, "0")}.jpg`);
+  for (let i = 0; i < 48; i++) pre.push(`assets/ui/aim-${String(i).padStart(2, "0")}.jpg`);
+  await Promise.all(pre.map((s) => new Promise((r) => { const im = new Image(); im.onload = im.onerror = r; im.src = s; })));
+  await Promise.all([...document.images].map((i) => (i.complete ? 0 : new Promise((r) => (i.onload = i.onerror = r)))));
+  seek(0);
+})();
+window.seek = seek;
+</script>
+</body>
+</html>

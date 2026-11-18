@@ -7,6 +7,7 @@ import { matrixFactor } from "../lib/vibrance";
 import { cmPer360, convertSens } from "../lib/sens";
 import { bitrateKbps, formatClock, outputSize } from "../lib/rec";
 import { xrayItems, xrayScore } from "../lib/xray";
+import { CROSSHAIR_PRESETS, crosshairRects, parseCrosshair, primaryValues } from "../lib/crosshair";
 import { decodeProfile, encodeProfile } from "../lib/profileCode";
 import { dailyBest, streak, TrainResult } from "../lib/trainStats";
 import { DEFAULT_SETTINGS } from "../lib/types";
@@ -531,6 +532,49 @@ describe("Conforto v1.11", () => {
     await userEvent.click(screen.getByRole("button", { name: "Voltar ao normal" }));
     await userEvent.click(screen.getByRole("button", { name: "Clique de novo para confirmar" }));
     expect(await screen.findByText("Tudo voltou ao normal.", { selector: ".toast" })).toBeInTheDocument();
+  });
+});
+
+describe("Miras prontas", () => {
+  it("todos os códigos do catálogo são válidos e únicos", () => {
+    const codes = CROSSHAIR_PRESETS.map((p) => p.code);
+    expect(new Set(codes).size).toBe(codes.length);
+    for (const c of codes) expect(isCrosshairCode(c)).toBe(true);
+    expect(CROSSHAIR_PRESETS.filter((p) => p.kind === "pro").length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("lê o código e desenha a mira", () => {
+    // seção S (sniper) não mistura com a principal
+    expect(primaryValues("0;s;1;P;c;5;h;0;S;c;1;o;1").get("c")).toBe("5");
+    const tenz = parseCrosshair("0;s;1;P;c;5;h;0;0l;4;0o;2;0a;1;0f;0;1b;0");
+    expect(tenz.color).toBe("#00ffff");
+    expect(tenz.outline).toBe(false);
+    expect(tenz.inner).toMatchObject({ show: true, length: 4, offset: 2, alpha: 1, thickness: 2 });
+    expect(tenz.outer.show).toBe(false);
+    expect(crosshairRects(tenz)).toHaveLength(4);
+    // cor personalizada e ponto com contorno
+    const less = parseCrosshair("0;P;c;8;u;000000FF;h;0;b;1;f;0;0l;4;0v;3;0o;0;0a;1;0f;0;1b;0");
+    expect(less.color).toBe("#000000");
+    expect(less.inner.vertical).toBe(3);
+    const dot = parseCrosshair("0;P;c;1;s;1;d;1;z;2;a;1;0b;0;1b;0");
+    const r = crosshairRects(dot);
+    expect(r).toHaveLength(2); // contorno + ponto
+    expect(r[0].fill).toBe("#000000");
+  });
+
+  it("filtra, copia e salva uma mira pronta", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Treino" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Miras" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Pros" }));
+    await userEvent.type(screen.getByLabelText("Buscar mira"), "tenz");
+    const grid = screen.getByRole("list", { name: "Miras prontas" });
+    expect(within(grid).getAllByRole("listitem")).toHaveLength(1);
+    await userEvent.click(within(grid).getByRole("button", { name: "Salvar TenZ em Minhas miras" }));
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).crosshairs[0]).toMatchObject({ name: "TenZ", code: CROSSHAIR_PRESETS[0].code }),
+    );
+    expect(within(grid).getByRole("button", { name: "Salvar TenZ em Minhas miras" })).toBeDisabled();
   });
 });
 
