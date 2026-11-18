@@ -28,6 +28,64 @@ pub fn rates_for(modes: &[(u32, u32, u32)], width: u32, height: u32) -> Vec<u32>
     r
 }
 
+/// Uma resolução para jogar esticado (ex.: 1280x960 em 4:3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Resolution {
+    pub width: u32,
+    pub height: u32,
+    pub max_hz: u32,
+    /// "4:3", "5:4", "16:10"…
+    pub aspect: String,
+}
+
+fn gcd(a: u32, b: u32) -> u32 {
+    if b == 0 { a } else { gcd(b, a % b) }
+}
+
+/// Proporção comum mais próxima (1280x1024 = 5:4, 1440x1080 = 4:3, 1366x768 ≈ 16:9).
+pub fn aspect_label(w: u32, h: u32) -> String {
+    if h == 0 {
+        return String::new();
+    }
+    let r = w as f64 / h as f64;
+    for (label, v) in [("4:3", 4.0 / 3.0), ("5:4", 1.25), ("16:10", 1.6), ("16:9", 16.0 / 9.0), ("3:2", 1.5), ("21:9", 64.0 / 27.0)] {
+        if (r - v).abs() < 0.02 {
+            return label.to_string();
+        }
+    }
+    let g = gcd(w, h).max(1);
+    format!("{}:{}", w / g, h / g)
+}
+
+/// Resoluções boas para esticar: menores que a nativa e com outra proporção
+/// (4:3 primeiro, que é o mais usado), sem repetir, cada uma com a maior taxa.
+pub fn stretch_choices(modes: &[(u32, u32, u32)], native: (u32, u32)) -> Vec<Resolution> {
+    let native_aspect = aspect_label(native.0, native.1);
+    let mut out: Vec<Resolution> = Vec::new();
+    for &(w, h, hz) in modes {
+        if w < 800 || h < 600 || h > native.1 || w > native.0 {
+            continue;
+        }
+        let aspect = aspect_label(w, h);
+        if aspect == native_aspect {
+            continue;
+        }
+        match out.iter_mut().find(|r| r.width == w && r.height == h) {
+            Some(r) => r.max_hz = r.max_hz.max(hz),
+            None => out.push(Resolution { width: w, height: h, max_hz: hz, aspect }),
+        }
+    }
+    let rank = |a: &str| match a {
+        "4:3" => 0,
+        "5:4" => 1,
+        "16:10" => 2,
+        _ => 3,
+    };
+    out.sort_by(|a, b| rank(&a.aspect).cmp(&rank(&b.aspect)).then(b.height.cmp(&a.height)));
+    out
+}
+
 /// Programas comuns que pesam enquanto se joga (nome do .exe, nome exibido).
 pub const HEAVY_APPS: &[(&str, &str)] = &[
     ("chrome.exe", "Google Chrome"),
@@ -170,6 +228,57 @@ mod win {
                 rates,
             })
         }
+    }
+
+    /// Todos os modos de vídeo do monitor (largura, altura, Hz).
+    pub fn all_modes(gdi: &str) -> Vec<(u32, u32, u32)> {
+        let name = wide(gdi);
+        let mut modes = Vec::new();
+        unsafe {
+            let mut i = 0u32;
+            loop {
+                let mut m = devmode();
+                if !EnumDisplaySettingsW(PCWSTR(name.as_ptr()), ENUM_DISPLAY_SETTINGS_MODE(i), &mut m).as_bool() || i > 4000 {
+                    break;
+                }
+                modes.push((m.dmPelsWidth, m.dmPelsHeight, m.dmDisplayFrequency));
+                i += 1;
+            }
+        }
+        modes
+    }
+
+    /// Resolução temporária (não fica salva no Windows) com a imagem esticada
+    /// pela placa de vídeo. Volta com `reset_resolution`.
+    pub fn set_resolution(gdi: &str, width: u32, height: u32, hz: u32) -> Result<(), String> {
+        use windows::Win32::Graphics::Gdi::{CDS_FULLSCREEN, DMDFO_STRETCH, DM_DISPLAYFIXEDOUTPUT};
+        let name = wide(gdi);
+        let mut m = devmode();
+        m.dmPelsWidth = width;
+        m.dmPelsHeight = height;
+        m.dmDisplayFrequency = hz;
+        m.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_DISPLAYFIXEDOUTPUT;
+        m.Anonymous1.Anonymous2.dmDisplayFixedOutput = DMDFO_STRETCH;
+        unsafe {
+            let mut r = ChangeDisplaySettingsExW(PCWSTR(name.as_ptr()), Some(&m), None, CDS_FULLSCREEN, None);
+            if r != DISP_CHANGE_SUCCESSFUL {
+                // Alguns drivers não aceitam pedir o "esticar": tenta só a resolução.
+                m.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY;
+                r = ChangeDisplaySettingsExW(PCWSTR(name.as_ptr()), Some(&m), None, CDS_FULLSCREEN, None);
+            }
+            if r == DISP_CHANGE_SUCCESSFUL {
+                Ok(())
+            } else {
+                Err(format!("o Windows recusou {width}x{height} (código {})", r.0))
+            }
+        }
+    }
+
+    /// Volta o monitor à resolução salva no Windows.
+    pub fn reset_resolution(gdi: &str) -> Result<(), String> {
+        let name = wide(gdi);
+        let r = unsafe { ChangeDisplaySettingsExW(PCWSTR(name.as_ptr()), None, None, Default::default(), None) };
+        if r == DISP_CHANGE_SUCCESSFUL { Ok(()) } else { Err(format!("código {}", r.0)) }
     }
 
     pub fn set_refresh(gdi: &str, hz: u32) -> Result<(), String> {
@@ -336,12 +445,27 @@ mod win {
 }
 
 #[cfg(windows)]
-pub use win::{close_apps, reopen, running_paths, display_mode, game_dvr, hags, request_hags, set_game_dvr, set_refresh};
+pub use win::{all_modes, reset_resolution, set_resolution, close_apps, reopen, running_paths, display_mode, game_dvr, hags, request_hags, set_game_dvr, set_refresh};
 
 #[cfg(not(windows))]
 pub fn display_mode(_gdi: &str) -> Option<DisplayMode> {
     None
 }
+#[cfg(not(windows))]
+pub fn all_modes(_gdi: &str) -> Vec<(u32, u32, u32)> {
+    Vec::new()
+}
+
+#[cfg(not(windows))]
+pub fn set_resolution(_gdi: &str, _w: u32, _h: u32, _hz: u32) -> Result<(), String> {
+    Err("disponível apenas no Windows".into())
+}
+
+#[cfg(not(windows))]
+pub fn reset_resolution(_gdi: &str) -> Result<(), String> {
+    Ok(())
+}
+
 #[cfg(not(windows))]
 pub fn set_refresh(_gdi: &str, _hz: u32) -> Result<(), String> {
     Err("disponível apenas no Windows".into())
@@ -523,6 +647,28 @@ mod nvml {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proporcoes() {
+        assert_eq!(aspect_label(1280, 960), "4:3");
+        assert_eq!(aspect_label(1440, 1080), "4:3");
+        assert_eq!(aspect_label(1280, 1024), "5:4");
+        assert_eq!(aspect_label(1680, 1050), "16:10");
+        assert_eq!(aspect_label(1366, 768), "16:9");
+        assert_eq!(aspect_label(2560, 1080), "21:9");
+    }
+
+    #[test]
+    fn resolucoes_para_esticar() {
+        let modes = [
+            (1920, 1080, 60), (1920, 1080, 144), (1280, 960, 60), (1280, 960, 144), (1440, 1080, 120),
+            (1280, 1024, 75), (1680, 1050, 60), (1600, 900, 144), (1024, 768, 60), (640, 480, 60), (2560, 1440, 60),
+        ];
+        let c = stretch_choices(&modes, (1920, 1080));
+        let names: Vec<String> = c.iter().map(|r| format!("{}x{}@{}", r.width, r.height, r.max_hz)).collect();
+        // 4:3 primeiro (maior primeiro), depois 5:4 e 16:10; sem 16:9, sem maiores que a nativa, sem 640x480.
+        assert_eq!(names, ["1440x1080@120", "1280x960@144", "1024x768@60", "1280x1024@75", "1680x1050@60"]);
+    }
 
     #[test]
     fn rates_at_current_resolution() {

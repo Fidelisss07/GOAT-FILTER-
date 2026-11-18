@@ -716,3 +716,9 @@ h1, h2, h3 { margin: 0; }
 .xh-card strong { font-size: 15px; }
 .xh-card small { color: var(--text-2); font-size: 12px; min-height: 2.4em; }
 .xh-actions { display: flex; gap: 6px; }
+
+/* ---------- Resolução esticada ---------- */
+.stretch { margin-top: 6px; }
+.stretch-select { min-width: 0; width: 300px; }
+.stretch-select select { width: 100%; }
+.stretch-info { display: grid; gap: 8px; justify-items: start; margin: 4px 0 8px; }

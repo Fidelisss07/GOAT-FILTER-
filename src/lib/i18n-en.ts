@@ -530,4 +530,10 @@ export const EN: Record<string, string> = {
   "Bloco amarelo": "Yellow block",
   "Divertida": "Fun",
   "Cruz branca média": "Medium white cross",
+  "Desligada (resolução normal)": "Off (normal resolution)",
+  "Quando o jogo abrir, o Windows muda para essa resolução com a imagem esticada, e volta ao normal quando ele fechar. No Valorant, use “Tela cheia em janela”. Se aparecerem barras pretas, ative “Tela cheia” em Ajustar tamanho e posição da área de trabalho, no painel da NVIDIA ou no Adrenalin da AMD.": "When the game opens, Windows switches to this resolution with the image stretched, and goes back to normal when it closes. In Valorant, use “Windowed Fullscreen”. If black bars show up, turn on “Full-screen” scaling in the NVIDIA Control Panel (Adjust desktop size and position) or AMD Adrenalin.",
+  "Resolução esticada": "Stretched resolution",
+  "Tela esticada por 10 segundos.": "Screen stretched for 10 seconds.",
+  "Testar por 10 s": "Test for 10 s",
+  "A tela já está esticada.": "The screen is already stretched.",
 };

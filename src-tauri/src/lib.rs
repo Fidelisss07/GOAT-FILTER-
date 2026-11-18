@@ -102,6 +102,43 @@ struct AppState {
     session: Mutex<Option<(String, u64, u32, Option<u32>)>>,
     last_temp_alert: Mutex<Option<u64>>,
     history_path: PathBuf,
+    /// Monitor com resolução esticada agora (nome GDI) e arquivo de segurança.
+    stretched: Mutex<Option<String>>,
+    stretch_marker: PathBuf,
+}
+
+/// Monitor usado pelos perfis: o escolhido nas configurações ou o principal.
+fn game_monitor(settings: &Settings) -> Option<String> {
+    let list = monitors::enumerate();
+    settings
+        .default_monitor
+        .clone()
+        .filter(|id| list.iter().any(|d| &d.id == id))
+        .or_else(|| list.iter().find(|d| d.primary).map(|d| d.id.clone()))
+}
+
+/// Estica a tela para a resolução do perfil (temporário; volta com `unstretch`).
+fn stretch(state: &AppState, gdi: &str, w: u32, h: u32) -> Result<(), String> {
+    let hz = goat_core::tweaks::all_modes(gdi)
+        .into_iter()
+        .filter(|m| m.0 == w && m.1 == h)
+        .map(|m| m.2)
+        .max()
+        .unwrap_or(60);
+    goat_core::tweaks::set_resolution(gdi, w, h, hz)?;
+    let _ = std::fs::write(&state.stretch_marker, gdi);
+    *lock(&state.stretched) = Some(gdi.to_string());
+    log::info!("Resolução esticada {w}x{h} @ {hz} Hz em {gdi}");
+    Ok(())
+}
+
+fn unstretch(state: &AppState) {
+    if let Some(gdi) = lock(&state.stretched).take() {
+        if let Err(e) = goat_core::tweaks::reset_resolution(&gdi) {
+            log::warn!("Voltar resolução: {e}");
+        }
+    }
+    let _ = std::fs::remove_file(&state.stretch_marker);
 }
 
 fn now_ms() -> u64 {
@@ -692,6 +729,7 @@ fn reset_everything(app: AppHandle, state: Shared) {
     *lock(&state.paused) = None;
     lock(&state.perf).restore();
     state.recorder.shutdown();
+    unstretch(&state);
     emit_monitors(&app, &state);
     notify(&app, "ok", tr(&state, "Tudo voltou ao normal.", "Everything is back to normal."));
 }
@@ -725,6 +763,42 @@ fn toggle_replay(app: &AppHandle) {
             if on { tr(&st, "Replay instantâneo ligado", "Instant replay on") } else { tr(&st, "Replay instantâneo desligado", "Instant replay off") },
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Resolução esticada
+// ---------------------------------------------------------------------------
+
+/// Resoluções que dá para esticar no monitor do jogo.
+#[tauri::command]
+fn stretch_options(state: Shared) -> Vec<goat_core::tweaks::Resolution> {
+    let settings = lock(&state.settings).clone();
+    let Some(gdi) = game_monitor(&settings) else { return vec![] };
+    let modes = goat_core::tweaks::all_modes(&gdi);
+    // Nativa = o maior modo do monitor.
+    let native = modes.iter().map(|m| (m.0, m.1)).max_by_key(|m| m.0 as u64 * m.1 as u64).unwrap_or((1920, 1080));
+    goat_core::tweaks::stretch_choices(&modes, native)
+}
+
+/// Estica por 10 segundos para conferir e volta sozinho.
+#[tauri::command]
+fn test_stretch(app: AppHandle, state: Shared, width: u32, height: u32) -> Result<(), String> {
+    if lock(&state.stretched).is_some() {
+        return Err(tr(&state, "A tela já está esticada.", "The screen is already stretched."));
+    }
+    let settings = lock(&state.settings).clone();
+    let gdi = game_monitor(&settings).ok_or("monitor não encontrado")?;
+    stretch(&state, &gdi, width, height)?;
+    let st = state.inner().clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(10));
+        // Só volta se o jogo não abriu nesse meio-tempo.
+        if lock(&st.session).is_none() {
+            unstretch(&st);
+            let _ = app.emit("monitors-changed", lock(&st.engine).monitors());
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -1089,6 +1163,12 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                         // Começo e fim da partida (histórico e reabrir apps).
                         let is_on = matches!(status.state, GameState::Active | GameState::Paused);
                         if is_on && !was_active {
+                            let prof = status.profile_id.as_ref().and_then(|id| settings.profiles.iter().find(|p| &p.id == id));
+                            if let (Some(r), Some(gdi)) = (prof.and_then(|p| p.stretch), game_monitor(&settings)) {
+                                if let Err(e) = stretch(&state, &gdi, r.width, r.height) {
+                                    notify(&app, "error", format!("{}: {e}", tr(&state, "Resolução esticada", "Stretched resolution")));
+                                }
+                            }
                             let game = status
                                 .profile_id
                                 .as_ref()
@@ -1098,6 +1178,7 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                             *lock(&state.session) = Some((game, now_ms(), 0, None));
                         }
                         if !is_on && was_active {
+                            unstretch(&state);
                             if let Some((game, start, clips, temp)) = lock(&state.session).take() {
                                 let rec = goat_core::care::SessionRecord { game, start, end: now_ms(), clips, max_gpu_temp: temp };
                                 if let Err(e) = goat_core::care::push_history(&state.history_path, rec) {
@@ -1264,8 +1345,15 @@ pub fn run() {
                 session: Mutex::new(None),
                 last_temp_alert: Mutex::new(None),
                 history_path: dir.join("history.json"),
+                stretched: Mutex::new(None),
+                stretch_marker: dir.join("stretch.txt"),
             });
             app.manage(state.clone());
+            // O PC desligou com a tela esticada? Volta ao normal.
+            if let Ok(gdi) = std::fs::read_to_string(&state.stretch_marker) {
+                let _ = goat_core::tweaks::reset_resolution(gdi.trim());
+                let _ = std::fs::remove_file(&state.stretch_marker);
+            }
             let state_for_keys = state.clone();
             build_tray(app)?;
             app.handle().plugin(
@@ -1402,6 +1490,8 @@ pub fn run() {
             clean_caches,
             game_history,
             reset_everything,
+            stretch_options,
+            test_stretch,
             export_settings,
             import_settings,
             executable_exists
@@ -1416,6 +1506,7 @@ pub fn run() {
             lock(&st.engine).end_session(restore);
             lock(&st.perf).restore();
             st.recorder.shutdown();
+            unstretch(&st);
         }
     });
 }

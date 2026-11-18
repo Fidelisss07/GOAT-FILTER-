@@ -136,6 +136,11 @@ cauanzin, mwzera…), estilos (ponto, cruz pequena…) e divertidas — com pré
 código, busca, filtro, copiar e salvar em "Minhas miras". Reunidas de sites de miras e de
 configurações de pros; pros trocam de mira com frequência.
 
+**Resolução esticada (v1.13):** em cada perfil, escolha uma resolução como 1280×960 (4:3). Quando o
+jogo abre, o Windows muda para ela com a imagem esticada pela placa e volta ao normal quando o jogo
+fecha (também se o PC desligar no meio, na próxima vez que o app abrir). Não mexe em arquivos do jogo:
+no Valorant, use "Tela cheia em janela". Botão "Testar por 10 s" para conferir antes.
+
 **Fechar ao abrir o jogo:** você marca apps pesados (navegadores, OneDrive, launchers…) e o Goat
 Filter fecha esses apps quando o jogo abre, como se você clicasse no X (nunca à força, nunca o jogo).
 

@@ -92,6 +92,16 @@ pub struct Profile {
     /// Só aplica com o jogo em primeiro plano (alt-tab volta ao normal).
     #[serde(default)]
     pub focus_only: bool,
+    /// Resolução esticada enquanto o jogo está aberto (ex.: 1280x960).
+    #[serde(default)]
+    pub stretch: Option<StretchRes>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StretchRes {
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Ajustes de entrada e desempenho aplicados enquanto um jogo está aberto.
@@ -247,6 +257,7 @@ impl Default for Settings {
                 restore_on_close: true,
                 tuning: Tuning::default(),
                 focus_only: false,
+                stretch: None,
             }],
         }
     }

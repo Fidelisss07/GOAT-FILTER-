@@ -247,6 +247,7 @@ export const useStore = create<State>((set, get) => ({
         restoreOnClose: true,
         tuning: { ...DEFAULT_TUNING },
         focusOnly: false,
+        stretch: null,
       },
       draftErrors: {},
     });
@@ -316,6 +317,7 @@ export const useStore = create<State>((set, get) => ({
         applyOnOpen: true,
         restoreOnClose: true,
         focusOnly: false,
+        stretch: null,
       });
       last = g.id;
     }

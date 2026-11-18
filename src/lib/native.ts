@@ -10,6 +10,7 @@ import {
   DEFAULT_SETTINGS,
   RecorderStatus,
   CacheReport,
+  Resolution,
   HistoryView,
   DEFAULT_TUNING,
   FoundGame,
@@ -63,6 +64,10 @@ export interface NativeApi {
   /** Mede (apply=false) ou apaga arquivos temporários e cache de shaders. */
   cleanCaches(apply: boolean): Promise<CacheReport>;
   gameHistory(): Promise<HistoryView>;
+  /** Resoluções para jogar esticado no monitor do jogo. */
+  stretchOptions(): Promise<Resolution[]>;
+  /** Estica por 10 s para conferir. */
+  testStretch(width: number, height: number): Promise<void>;
   /** Desfaz cores, ajustes do Windows e para a gravação. */
   resetEverything(): Promise<void>;
   /** Backup completo das preferências. false = cancelado. */
@@ -151,6 +156,8 @@ async function tauriApi(): Promise<NativeApi> {
     cleanCaches: (apply) => invoke<CacheReport>("clean_caches", { apply }),
     gameHistory: () => invoke<HistoryView>("game_history", { offsetMinutes: -new Date().getTimezoneOffset() }),
     resetEverything: () => invoke<void>("reset_everything"),
+    stretchOptions: () => invoke<Resolution[]>("stretch_options"),
+    testStretch: (width, height) => invoke<void>("test_stretch", { width, height }),
     exportSettings: async () => {
       const { save } = await import("@tauri-apps/plugin-dialog");
       const path = await save({ defaultPath: "goat-filter-backup.json", filters: [{ name: "Backup do Goat Filter", extensions: ["json"] }] });
@@ -256,7 +263,7 @@ function loadDemoSettings(): Settings {
       s.bindings = { ...DEFAULT_SETTINGS.bindings, ...s.bindings };
       s.perf = { ...DEFAULT_SETTINGS.perf, ...s.perf };
       s.recorder = { ...DEFAULT_RECORDER, ...s.recorder };
-      s.profiles = s.profiles.map((p) => ({ ...p, focusOnly: p.focusOnly ?? false, tuning: { ...DEFAULT_TUNING, ...p.tuning } }));
+      s.profiles = s.profiles.map((p) => ({ ...p, focusOnly: p.focusOnly ?? false, stretch: p.stretch ?? null, tuning: { ...DEFAULT_TUNING, ...p.tuning } }));
       return s;
     }
   } catch {
@@ -380,6 +387,14 @@ export function createDemoApi(): NativeApi {
       if (apply) demoCache.cleaned = true;
       return { groups, bytes, freed: apply ? bytes : 0 };
     },
+    stretchOptions: async () => [
+      { width: 1440, height: 1080, maxHz: 144, aspect: "4:3" },
+      { width: 1280, height: 960, maxHz: 144, aspect: "4:3" },
+      { width: 1024, height: 768, maxHz: 144, aspect: "4:3" },
+      { width: 1280, height: 1024, maxHz: 75, aspect: "5:4" },
+      { width: 1680, height: 1050, maxHz: 120, aspect: "16:10" },
+    ],
+    testStretch: async () => {},
     resetEverything: async () => {
       for (const m of monitors) m.current = m.original;
     },
