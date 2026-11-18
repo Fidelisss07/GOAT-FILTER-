@@ -1,8 +1,35 @@
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
+import { CROSSHAIR_PRESETS, CROSSHAIR_SOURCES, crosshairRects, parseCrosshair, PresetKind } from "../lib/crosshair";
 import { Crosshair, isCrosshairCode } from "../lib/types";
 import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
 import { TrashIcon } from "./Icons";
+
+/** Desenho da mira a partir do código (prévia em escala). */
+export function CrosshairPreview({ code, size = 96 }: { code: string; size?: number }) {
+  const rects = useMemo(() => {
+    try {
+      return crosshairRects(parseCrosshair(code));
+    } catch {
+      return [];
+    }
+  }, [code]);
+  const view = 40; // pixels do jogo mostrados (−20..20)
+  return (
+    <svg className="xh-preview" width={size} height={size} viewBox={`${-view / 2} ${-view / 2} ${view} ${view}`} shapeRendering="crispEdges" aria-hidden>
+      {rects.map((r, i) => (
+        <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={r.fill} fillOpacity={r.alpha} />
+      ))}
+    </svg>
+  );
+}
+
+const KINDS: { id: PresetKind | "todas"; label: string }[] = [
+  { id: "todas", label: "Todas" },
+  { id: "pro", label: "Pros" },
+  { id: "estilo", label: "Estilos" },
+  { id: "divertida", label: "Divertidas" },
+];
 
 /** Biblioteca de códigos de mira do Valorant: salvar, copiar e colar no jogo. */
 export function CrosshairLibrary() {
@@ -26,7 +53,19 @@ export function CrosshairLibrary() {
     setError(null);
   };
 
-  const copy = async (c: Crosshair) => {
+  const [kind, setKind] = useState<PresetKind | "todas">("todas");
+  const [query, setQuery] = useState("");
+  const presets = CROSSHAIR_PRESETS.filter(
+    (p) => (kind === "todas" || p.kind === kind) && (p.name + " " + p.info).toLowerCase().includes(query.trim().toLowerCase()),
+  );
+  const saved = (code: string) => list.some((x) => x.code === code);
+  const savePreset = (name: string, code: string) => {
+    if (saved(code)) return;
+    void s.updateSettings({ crosshairs: [...list, { id: `mira-${Date.now().toString(36)}`, name, code }] });
+    s.showToast({ kind: "ok", text: t("\"{name}\" salva em Minhas miras.", { name }) });
+  };
+
+  const copy = async (c: Pick<Crosshair, "name" | "code">) => {
     try {
       await navigator.clipboard.writeText(c.code);
       s.showToast({ kind: "ok", text: t("Código de \"{name}\" copiado. No Valorant: Mira › Importar perfil.", { name: c.name }) });
@@ -63,6 +102,7 @@ export function CrosshairLibrary() {
         <div className="rows">
           {list.map((c) => (
             <div key={c.id} className="row xh-row">
+              <CrosshairPreview code={c.code} size={52} />
               <span className="xh-name">
                 <strong>{c.name}</strong>
                 <code>{c.code}</code>
@@ -82,6 +122,52 @@ export function CrosshairLibrary() {
           ))}
         </div>
       )}
+
+      <div className="section xh-presets">
+        <div className="section-head">
+          <h3>{t("Miras prontas")}</h3>
+          <span className="pill">{CROSSHAIR_PRESETS.length}</span>
+        </div>
+        <div className="xh-filter">
+          <div className="seg" role="radiogroup" aria-label={t("Tipo de mira")}>
+            {KINDS.map((k) => (
+              <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} onClick={() => setKind(k.id)}>
+                {t(k.label)}
+              </button>
+            ))}
+          </div>
+          <input className="input" aria-label={t("Buscar mira")} placeholder={t("Buscar (ex.: TenZ, ponto)")} value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+        <ul className="xh-grid" aria-label={t("Miras prontas")}>
+          {presets.map((p) => (
+            <li key={p.code} className="xh-card">
+              <CrosshairPreview code={p.code} />
+              <strong>{p.name}</strong>
+              <small>{t(p.info)}</small>
+              <span className="xh-actions">
+                <button type="button" className="btn small" onClick={() => copy(p)}>
+                  {t("Copiar")}
+                </button>
+                <button
+                  type="button"
+                  className="btn small"
+                  disabled={saved(p.code)}
+                  aria-label={t("Salvar {name} em Minhas miras", { name: p.name })}
+                  onClick={() => savePreset(p.name, p.code)}
+                >
+                  {saved(p.code) ? t("Salva") : t("Salvar")}
+                </button>
+              </span>
+            </li>
+          ))}
+          {presets.length === 0 && <li className="note">{t("Nenhuma mira encontrada.")}</li>}
+        </ul>
+        <p className="note">
+          {t("Reunidas de sites de miras e de configurações de pros ({sites}). Pros trocam de mira com frequência: confira no jogo.", {
+            sites: CROSSHAIR_SOURCES.join(", "),
+          })}
+        </p>
+      </div>
     </div>
   );
 }

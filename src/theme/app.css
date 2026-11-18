@@ -703,3 +703,16 @@ h1, h2, h3 { margin: 0; }
 .backup-row { justify-content: flex-start; flex-wrap: wrap; }
 .reset-row small { display: block; margin-top: 2px; font-size: 12px; }
 .btn.danger { border-color: var(--danger); color: var(--danger); }
+
+/* ---------- Miras prontas ---------- */
+.xh-preview { flex: none; border-radius: 10px; background: radial-gradient(circle, #5b6a74 0%, #34424b 70%); }
+.xh-row .xh-preview { border-radius: 8px; }
+.xh-presets { margin-top: 18px; }
+.xh-filter { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.xh-filter .seg { margin-top: 0; }
+.xh-filter .input { flex: 1; min-width: 180px; }
+.xh-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.xh-card { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 14px 10px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border-soft); }
+.xh-card strong { font-size: 15px; }
+.xh-card small { color: var(--text-2); font-size: 12px; min-height: 2.4em; }
+.xh-actions { display: flex; gap: 6px; }
