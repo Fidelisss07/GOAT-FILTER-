@@ -578,6 +578,21 @@ describe("Miras prontas", () => {
   });
 });
 
+describe("Resolução esticada", () => {
+  it("escolhe 4:3 no perfil e salva", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Perfis" }));
+    const sel = await screen.findByLabelText("Resolução esticada");
+    await waitFor(() => expect(within(sel).getAllByRole("option").length).toBeGreaterThan(2));
+    await userEvent.selectOptions(sel, "1280x960");
+    expect(screen.getByRole("button", { name: "Testar por 10 s" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Salvar perfil" }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).profiles[0].stretch).toEqual({ width: 1280, height: 960 }));
+    await userEvent.selectOptions(sel, "");
+    expect(screen.queryByRole("button", { name: "Testar por 10 s" })).not.toBeInTheDocument();
+  });
+});
+
 describe("Configurações", () => {
   it("troca o método do Super Vibrance e persiste", async () => {
     await renderApp();

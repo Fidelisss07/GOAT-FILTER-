@@ -2,6 +2,7 @@ import { decodeProfile, encodeProfile } from "../lib/profileCode";
 import { useEffect, useId, useRef, useState } from "react";
 import { Toggle } from "../components/Controls";
 import {
+  ChevronDown,
   DotsIcon,
   FolderIcon,
   GameIcon,
@@ -15,7 +16,7 @@ import { TuningEditor } from "../components/TuningEditor";
 import { VibranceSlider, vibranceMax } from "../components/VibranceSlider";
 import { getNative } from "../lib/native";
 import { applyPreset, matchPreset, PRESETS } from "../lib/presets";
-import { FoundGame, Profile, VALORANT_ID } from "../lib/types";
+import { FoundGame, Profile, Resolution, VALORANT_ID } from "../lib/types";
 import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
 
@@ -304,6 +305,8 @@ export function Profiles() {
               </div>
             </div>
 
+            <StretchPicker />
+
             <details
               className="advanced"
               open={d.tuning.emphasis !== "none" || d.tuning.gamma !== 100 || d.tuning.brightness !== 0 || d.tuning.contrast !== 100}
@@ -369,6 +372,69 @@ function ProfileCode() {
           {t("Aplicar")}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Resolução esticada (ex.: 4:3) enquanto o jogo do perfil está aberto. */
+function StretchPicker() {
+  const s = useStore();
+  const t = useT();
+  const id = useId();
+  const [opts, setOpts] = useState<Resolution[]>([]);
+  useEffect(() => {
+    void getNative()
+      .then((n) => n.stretchOptions())
+      .then(setOpts)
+      .catch(() => setOpts([]));
+  }, []);
+  const d = s.draft;
+  if (!d) return null;
+  const value = d.stretch ? `${d.stretch.width}x${d.stretch.height}` : "";
+  const missing = d.stretch && !opts.some((o) => o.width === d.stretch!.width && o.height === d.stretch!.height);
+  return (
+    <div className="stretch">
+      <div className="row">
+        <label htmlFor={id}>{t("Resolução esticada")}</label>
+        <div className="row-ctl select stretch-select">
+          <select
+            id={id}
+            value={value}
+            onChange={(e) => {
+              const [w, h] = e.target.value.split("x").map(Number);
+              s.updateDraft({ stretch: e.target.value ? { width: w, height: h } : null });
+            }}
+          >
+            <option value="">{t("Desligada (resolução normal)")}</option>
+            {missing && <option value={value}>{value}</option>}
+            {opts.map((o) => (
+              <option key={`${o.width}x${o.height}`} value={`${o.width}x${o.height}`}>
+                {o.width}×{o.height} · {o.aspect} · {o.maxHz} Hz
+              </option>
+            ))}
+          </select>
+          <ChevronDown />
+        </div>
+      </div>
+      {d.stretch && (
+        <div className="stretch-info">
+          <button
+            type="button"
+            className="btn small"
+            onClick={() =>
+              getNative()
+                .then((n) => n.testStretch(d.stretch!.width, d.stretch!.height))
+                .then(() => s.showToast({ kind: "ok", text: t("Tela esticada por 10 segundos.") }))
+                .catch((e) => s.showToast({ kind: "error", text: String(e) }))
+            }
+          >
+            {t("Testar por 10 s")}
+          </button>
+          <p className="note">
+            {t("Quando o jogo abrir, o Windows muda para essa resolução com a imagem esticada, e volta ao normal quando ele fechar. No Valorant, use “Tela cheia em janela”. Se aparecerem barras pretas, ative “Tela cheia” em Ajustar tamanho e posição da área de trabalho, no painel da NVIDIA ou no Adrenalin da AMD.")}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -68,6 +68,20 @@ export interface Profile {
   tuning: Tuning;
   /** Só aplica com o jogo em primeiro plano (alt-tab volta ao normal). */
   focusOnly: boolean;
+  /** Resolução esticada enquanto o jogo está aberto; null = nativa. */
+  stretch: StretchRes | null;
+}
+
+export interface StretchRes {
+  width: number;
+  height: number;
+}
+
+export interface Resolution {
+  width: number;
+  height: number;
+  maxHz: number;
+  aspect: string;
 }
 
 /** Ajustes do Windows aplicados enquanto o jogo está aberto. */
@@ -428,6 +442,7 @@ export const DEFAULT_SETTINGS: Settings = {
       restoreOnClose: true,
       tuning: DEFAULT_TUNING,
       focusOnly: false,
+      stretch: null,
     },
   ],
 };
