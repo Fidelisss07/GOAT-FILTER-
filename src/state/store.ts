@@ -138,6 +138,7 @@ export const useStore = create<State>((set, get) => ({
     n.onGameStatus((game) => set({ game }));
     n.onMonitors((list) => get().monitorsChanged(list));
     n.onNotice((t) => get().showToast(t));
+    n.onSettings((settings) => set({ settings }));
     n.onUpdate((update) => set({ update }));
     n.onUpdateReady((pending) => set({ updater: { ...get().updater, pending }, updateProgress: null }));
     n.onUpdateProgress((p) => set({ updateProgress: p }));

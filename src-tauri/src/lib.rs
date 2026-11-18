@@ -680,6 +680,53 @@ fn game_history(state: Shared, offset_minutes: i64) -> HistoryView {
     HistoryView { summary, recent }
 }
 
+// ---------------------------------------------------------------------------
+// Conforto (v1.11): voltar ao normal e backup
+// ---------------------------------------------------------------------------
+
+/// Desfaz tudo o que o Goat Filter mudou: cores, ajustes de mouse/teclado/energia
+/// e para a gravação.
+#[tauri::command]
+fn reset_everything(app: AppHandle, state: Shared) {
+    lock(&state.engine).restore_all();
+    *lock(&state.paused) = None;
+    lock(&state.perf).restore();
+    state.recorder.shutdown();
+    emit_monitors(&app, &state);
+    notify(&app, "ok", tr(&state, "Tudo voltou ao normal.", "Everything is back to normal."));
+}
+
+#[tauri::command]
+fn export_settings(state: Shared, path: String) -> Result<(), String> {
+    let s = lock(&state.settings).clone();
+    std::fs::write(&path, store::export_all(&s)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_settings(app: AppHandle, state: Shared, path: String) -> Result<Settings, String> {
+    let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let s = store::import_all(&text)?;
+    save_settings(app, state, s)
+}
+
+/// Liga/desliga o replay pela bandeja.
+fn toggle_replay(app: &AppHandle) {
+    let st = app.state::<Arc<AppState>>();
+    let mut s = lock(&st.settings).clone();
+    s.recorder.replay = !s.recorder.replay;
+    if store::save(&st.settings_path, &s).is_ok() {
+        let on = s.recorder.replay;
+        *lock(&st.settings) = s.clone();
+        let _ = app.emit("settings-changed", s);
+        refresh_tray(app);
+        notify(
+            app,
+            "ok",
+            if on { tr(&st, "Replay instantâneo ligado", "Instant replay on") } else { tr(&st, "Replay instantâneo desligado", "Instant replay off") },
+        );
+    }
+}
+
 #[tauri::command]
 fn executable_exists(path: String) -> bool {
     let p = PathBuf::from(path.trim());
@@ -915,12 +962,26 @@ fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let refs: Vec<&dyn IsMenuItem<tauri::Wry>> = items.iter().map(|i| i as &dyn IsMenuItem<tauri::Wry>).collect();
     let profiles_menu = Submenu::with_items(app, tr(&state, "Aplicar perfil", "Apply profile"), !items.is_empty(), &refs)?;
     let toggle = MenuItem::with_id(app, "toggle", tr(&state, "Ligar / desligar filtro", "Turn filter on / off"), true, None::<&str>)?;
+    let replay_on = lock(&state.settings).recorder.replay;
+    let clip = MenuItem::with_id(app, "clip", tr(&state, "Salvar clipe agora", "Save clip now"), replay_on, None::<&str>)?;
+    let replay = MenuItem::with_id(
+        app,
+        "replay",
+        if replay_on {
+            tr(&state, "Desligar replay instantâneo", "Turn off instant replay")
+        } else {
+            tr(&state, "Ligar replay instantâneo", "Turn on instant replay")
+        },
+        recorder::engine_available(),
+        None::<&str>,
+    )?;
+    let sep0 = PredefinedMenuItem::separator(app)?;
     let restore = MenuItem::with_id(app, "restore", tr(&state, "Restaurar cores originais", "Restore original colors"), true, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", tr(&state, "Abrir Goat Filter", "Open Goat Filter"), true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", tr(&state, "Sair", "Quit"), true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    Menu::with_items(app, &[&toggle, &profiles_menu, &sep1, &restore, &open, &sep2, &quit])
+    Menu::with_items(app, &[&toggle, &profiles_menu, &sep0, &clip, &replay, &sep1, &restore, &open, &sep2, &quit])
 }
 
 /// Atualiza o menu quando perfis ou idioma mudam.
@@ -948,6 +1009,8 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 }
                 "quit" => app.exit(0),
                 "toggle" => run_action(app, "toggle"),
+                "clip" => run_action(app, "saveClip"),
+                "replay" => toggle_replay(app),
                 _ => {
                     if let Some(pid) = id.strip_prefix("profile:") {
                         apply_profile_now(app, pid);
@@ -1338,6 +1401,9 @@ pub fn run() {
             list_microphones,
             clean_caches,
             game_history,
+            reset_everything,
+            export_settings,
+            import_settings,
             executable_exists
         ])
         .build(tauri::generate_context!())

@@ -63,6 +63,12 @@ export interface NativeApi {
   /** Mede (apply=false) ou apaga arquivos temporários e cache de shaders. */
   cleanCaches(apply: boolean): Promise<CacheReport>;
   gameHistory(): Promise<HistoryView>;
+  /** Desfaz cores, ajustes do Windows e para a gravação. */
+  resetEverything(): Promise<void>;
+  /** Backup completo das preferências. false = cancelado. */
+  exportSettings(): Promise<boolean>;
+  importSettings(): Promise<Settings | null>;
+  onSettings(cb: (s: Settings) => void): Promise<() => void>;
   openWindowsSettings(page: string): Promise<void>;
   recorderStatus(): Promise<RecorderStatus>;
   /** Salva os últimos segundos; devolve o caminho do arquivo. */
@@ -144,6 +150,20 @@ async function tauriApi(): Promise<NativeApi> {
     systemStats: () => invoke<SystemStats>("system_stats"),
     cleanCaches: (apply) => invoke<CacheReport>("clean_caches", { apply }),
     gameHistory: () => invoke<HistoryView>("game_history", { offsetMinutes: -new Date().getTimezoneOffset() }),
+    resetEverything: () => invoke<void>("reset_everything"),
+    exportSettings: async () => {
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const path = await save({ defaultPath: "goat-filter-backup.json", filters: [{ name: "Backup do Goat Filter", extensions: ["json"] }] });
+      if (!path) return false;
+      await invoke("export_settings", { path });
+      return true;
+    },
+    importSettings: async () => {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const path = await open({ multiple: false, filters: [{ name: "Backup do Goat Filter", extensions: ["json"] }] });
+      return typeof path === "string" ? invoke<Settings>("import_settings", { path }) : null;
+    },
+    onSettings: (cb) => listen<Settings>("settings-changed", (e) => cb(e.payload)),
     openWindowsSettings: (page) => invoke<void>("open_windows_settings", { page }),
     recorderStatus: () => invoke<RecorderStatus>("recorder_status"),
     saveClip: (seconds) => invoke<string>("save_clip", { seconds: seconds ?? null }),
@@ -360,6 +380,12 @@ export function createDemoApi(): NativeApi {
       if (apply) demoCache.cleaned = true;
       return { groups, bytes, freed: apply ? bytes : 0 };
     },
+    resetEverything: async () => {
+      for (const m of monitors) m.current = m.original;
+    },
+    exportSettings: async () => true,
+    importSettings: async () => null,
+    onSettings: async () => () => {},
     gameHistory: async () => {
       const now = Date.now();
       const s = (h: number, mins: number, clips: number, t: number) => ({ game: "Valorant", start: now - h * 3_600_000, end: now - h * 3_600_000 + mins * 60_000, clips, maxGpuTemp: t });

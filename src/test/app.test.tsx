@@ -505,6 +505,35 @@ describe("Cores e treino v1.10", () => {
   });
 });
 
+describe("Conforto v1.11", () => {
+  it("boas-vindas em 3 passos salva escolhas", async () => {
+    localStorage.setItem("goat-filter:settings", JSON.stringify({ ...DEFAULT_SETTINGS, onboarded: false }));
+    await renderApp();
+    const dlg = await screen.findByRole("dialog", { name: "Bem-vindo ao Goat Filter" });
+    await userEvent.click(within(dlg).getByRole("radio", { name: /Super/ }));
+    await userEvent.click(within(dlg).getByRole("button", { name: "Próximo" }));
+    await userEvent.click(within(dlg).getByRole("switch", { name: "Ligar o replay instantâneo" }));
+    await userEvent.click(within(dlg).getByRole("button", { name: "Próximo" }));
+    await userEvent.click(within(dlg).getByRole("button", { name: "Começar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const saved = JSON.parse(localStorage.getItem("goat-filter:settings")!);
+    expect(saved.onboarded).toBe(true);
+    expect(saved.recorder.replay).toBe(true);
+    expect(saved.profiles[0].vibrance).toBe(120);
+  });
+
+  it("OLED e voltar tudo ao normal com confirmação", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Configurações" }));
+    const oledRow = screen.getByText("Fundo preto (telas OLED)").closest(".row") as HTMLElement;
+    await userEvent.click(within(oledRow).getByRole("switch"));
+    await waitFor(() => expect(document.documentElement.dataset.oled).toBe("true"));
+    await userEvent.click(screen.getByRole("button", { name: "Voltar ao normal" }));
+    await userEvent.click(screen.getByRole("button", { name: "Clique de novo para confirmar" }));
+    expect(await screen.findByText("Tudo voltou ao normal.", { selector: ".toast" })).toBeInTheDocument();
+  });
+});
+
 describe("Configurações", () => {
   it("troca o método do Super Vibrance e persiste", async () => {
     await renderApp();

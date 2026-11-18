@@ -46,6 +46,7 @@ Redragon de 144 Hz.
 | Clipes: mouse lateral, editor/corte, vertical, comprimir, Discord, marcadores, miniaturas, favoritos, limpeza | ✅ feito (v1.8) |
 | Raio-X do PC, reabrir apps, aviso de temperatura, histórico da semana, limpeza de cache | ✅ feito (v1.9) |
 | Código de perfil, modos de mira (micro, somem, peek), evolução e sequência, calculadora de DPI, teste de visibilidade | ✅ feito (v1.10) |
+| Boas-vindas, voltar tudo ao normal, backup completo, atalhos na bandeja, tema OLED | ✅ feito (v1.11) |
 | Remapear teclas do jogo / macros | ❌ descartado: risco de ban (Vanguard) |
 | Assinatura gratuita (SignPath / Microsoft Store / winget) | 🟡 pronta no workflow; depende do dono criar a conta (docs/ASSINATURA.md) |
 

@@ -123,6 +123,14 @@ de GPU por hardware (HAGS, pede permissão de administrador e vale após reinici
 - **Calculadora de DPI:** mede a contagem real do sensor com uma régua.
 - **Teste de visibilidade:** silhuetas escondidas nas sombras, com as cores reais da tela.
 
+**Conforto (v1.11):**
+
+- **Boas-vindas** em 3 passos na primeira vez: cores no jogo, replay instantâneo e abrir com o Windows.
+- **Voltar tudo ao normal:** desfaz cores, ajustes de mouse/teclado/energia e para a gravação.
+- **Backup completo** das preferências em arquivo (perfis, atalhos, gravação, miras).
+- **Bandeja:** "Salvar clipe agora" e ligar/desligar o replay sem abrir o app.
+- **Fundo preto (OLED).**
+
 **Fechar ao abrir o jogo:** você marca apps pesados (navegadores, OneDrive, launchers…) e o Goat
 Filter fecha esses apps quando o jogo abre, como se você clicasse no X (nunca à força, nunca o jogo).
 

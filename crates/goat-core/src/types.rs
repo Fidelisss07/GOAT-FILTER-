@@ -198,6 +198,10 @@ pub struct Settings {
     pub close_on_game: Vec<String>,
     /// Reabre esses apps quando o jogo fecha.
     pub reopen_apps: bool,
+    /// Já passou pela tela de boas-vindas.
+    pub onboarded: bool,
+    /// Fundo preto puro (telas OLED).
+    pub oled: bool,
     /// Aviso quando a GPU passa desta temperatura (°C) com o jogo aberto. 0 = desligado.
     pub temp_alert: u32,
     /// Biblioteca de códigos de mira do Valorant.
@@ -225,6 +229,8 @@ impl Default for Settings {
             language: "auto".into(),
             close_on_game: Vec::new(),
             reopen_apps: true,
+            onboarded: false,
+            oled: false,
             temp_alert: 85,
             crosshairs: Vec::new(),
             recorder: Default::default(),
