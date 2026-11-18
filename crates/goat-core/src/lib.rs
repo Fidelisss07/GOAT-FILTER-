@@ -10,6 +10,7 @@ pub mod games;
 pub mod update;
 pub mod monitors;
 pub mod perf;
+pub mod recorder;
 pub mod session;
 pub mod tweaks;
 pub mod settings;

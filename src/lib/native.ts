@@ -5,7 +5,10 @@
  */
 import {
   Capabilities,
+  ClipInfo,
+  DEFAULT_RECORDER,
   DEFAULT_SETTINGS,
+  RecorderStatus,
   DEFAULT_TUNING,
   FoundGame,
   HeavyApp,
@@ -56,6 +59,19 @@ export interface NativeApi {
   closeAppsNow(names: string[]): Promise<number>;
   systemStats(): Promise<SystemStats>;
   openWindowsSettings(page: string): Promise<void>;
+  recorderStatus(): Promise<RecorderStatus>;
+  /** Salva os últimos segundos; devolve o caminho do arquivo. */
+  saveClip(seconds?: number): Promise<string>;
+  startRecording(): Promise<void>;
+  stopRecording(): Promise<string>;
+  listClips(): Promise<ClipInfo[]>;
+  openClip(path: string): Promise<void>;
+  /** Mostra o arquivo na pasta (ou abre a pasta dos clipes). */
+  revealClip(path?: string): Promise<void>;
+  deleteClip(path: string): Promise<void>;
+  listMicrophones(): Promise<string[]>;
+  pickFolder(current: string): Promise<string | null>;
+  onClipsChanged(cb: () => void): Promise<() => void>;
   /** Procura jogos competitivos instalados (Steam, Epic, Riot). */
   findGames(): Promise<FoundGame[]>;
   /** Procura o VALORANT.exe nesta máquina. */
@@ -111,6 +127,21 @@ async function tauriApi(): Promise<NativeApi> {
     closeAppsNow: (names) => invoke<number>("close_apps_now", { names }),
     systemStats: () => invoke<SystemStats>("system_stats"),
     openWindowsSettings: (page) => invoke<void>("open_windows_settings", { page }),
+    recorderStatus: () => invoke<RecorderStatus>("recorder_status"),
+    saveClip: (seconds) => invoke<string>("save_clip", { seconds: seconds ?? null }),
+    startRecording: () => invoke<void>("start_recording"),
+    stopRecording: () => invoke<string>("stop_recording"),
+    listClips: () => invoke<ClipInfo[]>("list_clips"),
+    openClip: (path) => invoke<void>("open_clip", { path }),
+    revealClip: (path) => invoke<void>("reveal_clip", { path: path ?? null }),
+    deleteClip: (path) => invoke<void>("delete_clip", { path }),
+    listMicrophones: () => invoke<string[]>("list_microphones"),
+    pickFolder: async (current) => {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const r = await open({ directory: true, multiple: false, defaultPath: current || undefined });
+      return typeof r === "string" ? r : null;
+    },
+    onClipsChanged: (cb) => listen("clips-changed", () => cb()),
     perfStatus: () => invoke<PerfStatus>("perf_status"),
     setGameMode: (on) => invoke<PerfStatus>("set_game_mode", { on }),
     updaterState: () => invoke<UpdaterState>("updater_state"),
@@ -173,6 +204,7 @@ function loadDemoSettings(): Settings {
       const s = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } as Settings;
       s.bindings = { ...DEFAULT_SETTINGS.bindings, ...s.bindings };
       s.perf = { ...DEFAULT_SETTINGS.perf, ...s.perf };
+      s.recorder = { ...DEFAULT_RECORDER, ...s.recorder };
       s.profiles = s.profiles.map((p) => ({ ...p, focusOnly: p.focusOnly ?? false, tuning: { ...DEFAULT_TUNING, ...p.tuning } }));
       return s;
     }
@@ -183,6 +215,7 @@ function loadDemoSettings(): Settings {
 }
 
 export function createDemoApi(): NativeApi {
+  const demoRec: { recording: number | null; clips: ClipInfo[] } = { recording: null, clips: [] };
   const monitors: MonitorInfo[] = [
     { id: "demo-1", name: "Monitor principal", primary: true, driver: "nvidia", current: 50, driverDefault: 50, original: 50, tuning: DEFAULT_TUNING },
     { id: "demo-2", name: "Monitor 2", primary: false, driver: "none", current: 50, driverDefault: null, original: 50, tuning: DEFAULT_TUNING },
@@ -235,6 +268,50 @@ export function createDemoApi(): NativeApi {
     monitorHw: async (id) => (find(id).primary ? { brightness: 70, contrast: 50, saturation: null } : { brightness: null, contrast: null, saturation: null }),
     findValorant: async () => null,
     launchGame: async () => {},
+    recorderStatus: async () => {
+      const r = loadDemoSettings().recorder;
+      const on = r.replay || demoRec.recording != null;
+      return {
+        available: true,
+        running: on,
+        starting: false,
+        recordingSecs: demoRec.recording == null ? null : Math.round((Date.now() - demoRec.recording) / 1000),
+        bufferedSecs: on ? Math.max(r.clipSeconds, 60) : 0,
+        encoder: on ? "NVIDIA NVENC" : null,
+        hardware: on,
+        size: on ? (r.maxHeight >= 1440 ? "2560x1440" : r.maxHeight === 720 ? "1280x720" : "1920x1080") : null,
+        fps: on ? r.fps : null,
+        error: null,
+        folder: r.folder || "C:\\Users\\voce\\Videos\\Goat Filter",
+      };
+    },
+    saveClip: async (seconds) => {
+      const r = loadDemoSettings().recorder;
+      if (!r.replay) throw new Error("O replay não está ligado agora.");
+      const name = `Clipe ${seconds ?? r.clipSeconds}s ${demoRec.clips.length + 1}.mp4`;
+      demoRec.clips.unshift({ name, path: `demo/${name}`, size: (seconds ?? r.clipSeconds) * 2_000_000, modified: Date.now() });
+      return `demo/${name}`;
+    },
+    startRecording: async () => {
+      demoRec.recording = Date.now();
+    },
+    stopRecording: async () => {
+      if (demoRec.recording == null) throw new Error("Nenhuma gravação em andamento.");
+      const secs = Math.max(1, Math.round((Date.now() - demoRec.recording) / 1000));
+      demoRec.recording = null;
+      const name = `Gameplay ${demoRec.clips.length + 1}.mp4`;
+      demoRec.clips.unshift({ name, path: `demo/${name}`, size: secs * 2_000_000, modified: Date.now() });
+      return `demo/${name}`;
+    },
+    listClips: async () => demoRec.clips.map((c) => ({ ...c })),
+    openClip: async () => {},
+    revealClip: async () => {},
+    deleteClip: async (path) => {
+      demoRec.clips = demoRec.clips.filter((c) => c.path !== path);
+    },
+    listMicrophones: async () => ["Microfone (Realtek(R) Audio)", "Headset (HyperX Cloud II)"],
+    pickFolder: async () => null,
+    onClipsChanged: async () => () => {},
     displayModes: async () => [
       { monitorId: "demo-1", name: "Monitor principal", mode: { ...demoMode } },
       { monitorId: "demo-2", name: "Monitor 2", mode: { width: 1920, height: 1080, hz: 60, maxHz: 60, rates: [60] } },

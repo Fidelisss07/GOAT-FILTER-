@@ -5,6 +5,7 @@ import { App } from "../app/App";
 import { createDemoApi, setNativeForTests } from "../lib/native";
 import { matrixFactor } from "../lib/vibrance";
 import { cmPer360, convertSens } from "../lib/sens";
+import { bitrateKbps, formatClock, outputSize } from "../lib/rec";
 import { isCrosshairCode } from "../lib/types";
 import { bindingFromEvent, prettyBinding } from "../components/KeyCapture";
 import { useStore } from "../state/store";
@@ -320,6 +321,44 @@ describe("Treino v1.6", () => {
     expect(screen.getByText("Espere o verde…")).toBeInTheDocument();
     fireEvent.mouseDown(btn);
     expect(screen.getByText(/Cedo demais/)).toBeInTheDocument();
+  });
+});
+
+describe("Gravação v1.7", () => {
+  it("mesmas contas do núcleo em Rust", () => {
+    expect(outputSize(2560, 1440, 1080)).toEqual([1920, 1080]);
+    expect(outputSize(3840, 2160, 1440)).toEqual([2560, 1440]);
+    expect(outputSize(1366, 768, 720)).toEqual([1280, 720]);
+    expect(outputSize(1365, 767, 1080)).toEqual([1364, 766]);
+    expect(bitrateKbps(1920, 1080, 60, "balanced")).toBe(16000);
+    expect(bitrateKbps(3840, 2160, 60, "high")).toBe(60000);
+    expect(formatClock(75)).toBe("01:15");
+    expect(formatClock(3725)).toBe("1:02:05");
+  });
+
+  it("liga o replay, salva um clipe e grava gameplay", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Gravação" }));
+    const save30 = await screen.findByRole("button", { name: "Últimos 30s" });
+    expect(save30).toBeDisabled();
+
+    const replayRow = screen.getAllByText("Replay instantâneo").find((el) => el.closest(".row"))!.closest(".row") as HTMLElement;
+    await userEvent.click(within(replayRow).getByRole("switch"));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).recorder.replay).toBe(true));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Últimos 30s" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Últimos 30s" }));
+    expect(await screen.findByText(/Clipe salvo: Clipe 30s 1\.mp4/, { selector: ".toast" })).toBeInTheDocument();
+    expect(await screen.findByText("Clipe 30s 1")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("radio", { name: "1440p (2K)" }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).recorder.maxHeight).toBe(1440));
+
+    await userEvent.click(screen.getByRole("button", { name: "Começar a gravar" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Parar e salvar" }));
+    expect(await screen.findByText(/Gravação salva: Gameplay 2\.mp4/, { selector: ".toast" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Excluir Gameplay 2.mp4" }));
+    await waitFor(() => expect(screen.queryByText("Gameplay 2")).not.toBeInTheDocument());
   });
 });
 

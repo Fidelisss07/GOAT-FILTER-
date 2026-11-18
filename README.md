@@ -87,6 +87,17 @@ de GPU por hardware (HAGS, pede permissão de administrador e vale após reinici
 - **Sensibilidade:** converte entre Valorant, CS2, Apex e Overwatch 2, com eDPI e cm/360°.
 - **Miras:** guarde códigos de mira do Valorant e copie com um clique.
 
+**Gravação (v1.7):** replay instantâneo e gravação de gameplay, feitos para pesar pouco:
+
+- **Replay instantâneo:** guarda os últimos segundos o tempo todo (por padrão só com o jogo aberto).
+  Aperte `Alt` + `F8` e os últimos 30 s (ou 15, 20, 25, 35, 45, 60) viram um `.mp4`.
+- **Gravar gameplay:** `Alt` + `F7` começa e para. Usa a mesma captura do replay.
+- **Até 1440p (2K) a 60 fps**, com som do PC e microfone opcional. Clipes em `Vídeos\Goat Filter`.
+- **Leve:** a tela é capturada pela própria GPU (Desktop Duplication) e codificada pelo chip de vídeo
+  da placa (NVIDIA NVENC, AMD AMF ou Intel Quick Sync via Media Foundation), como o ShadowPlay. O
+  vídeo fica em pedaços de 2 s; salvar um clipe só junta os pedaços, sem recodificar.
+- Não toca no jogo: é a mesma captura da área de trabalho que o OBS usa.
+
 **Fechar ao abrir o jogo:** você marca apps pesados (navegadores, OneDrive, launchers…) e o Goat
 Filter fecha esses apps quando o jogo abre, como se você clicasse no X (nunca à força, nunca o jogo).
 
@@ -212,3 +223,9 @@ docs/PLANEJAMENTO.md planejamento completo
 ## Licença
 
 [MIT](LICENSE).
+
+## Componentes de terceiros
+
+O gravador usa o [FFmpeg](https://ffmpeg.org) (LGPL 2.1), compilado só com as partes necessárias
+pelo script [`scripts/build-ffmpeg.sh`](scripts/build-ffmpeg.sh) a partir do código-fonte oficial
+(tag `n8.0.1`). Ele roda como um programa separado, extraído para a pasta de dados do app.

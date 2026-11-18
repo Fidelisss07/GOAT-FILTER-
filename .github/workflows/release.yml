@@ -12,7 +12,33 @@ permissions:
   contents: write
 
 jobs:
+  ffmpeg:
+    # FFmpeg mínimo do gravador (só recompila quando o script muda).
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg-out/ffmpeg.exe
+          key: ffmpeg-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+
+      - name: Compilar FFmpeg
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 nasm pkg-config
+          scripts/build-ffmpeg.sh "$RUNNER_TEMP/ffbuild" ffmpeg-out/ffmpeg.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg
+          path: ffmpeg-out/ffmpeg.exe
+          if-no-files-found: error
+
   release:
+    needs: ffmpeg
     runs-on: windows-latest
     env:
       # Assinatura gratuita (SignPath Foundation). Fica desligada até o
@@ -31,6 +57,37 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg
+          path: src-tauri/bin
+
+      - name: Conferir o FFmpeg do gravador
+        shell: pwsh
+        run: |
+          $ff = "src-tauri/bin/ffmpeg.exe"
+          "Tamanho: {0:N1} MB" -f ((Get-Item $ff).Length / 1MB)
+          $filters = & $ff -hide_banner -filters 2>&1 | Out-String
+          $encoders = & $ff -hide_banner -encoders 2>&1 | Out-String
+          foreach ($f in "ddagrab", "scale_d3d11", "hwdownload", "amix", "aresample") {
+            if ($filters -notmatch "\b$f\b") { throw "filtro $f ausente" }
+          }
+          foreach ($e in "h264_nvenc", "h264_amf", "h264_mf", "aac") {
+            if ($encoders -notmatch "\b$e\b") { throw "codificador $e ausente" }
+          }
+          # Pedaços .ts com o codificador do Windows (software) e junta em .mp4.
+          $tmp = New-Item -ItemType Directory "$env:RUNNER_TEMP/rec" -Force
+          & $ff -hide_banner -loglevel error -f lavfi -i "testsrc2=size=640x360:rate=30:duration=7" -f lavfi -i "sine=duration=7" `
+            -map 0:v -map 1:a -vf format=nv12 -c:v h264_mf -g 60 -bsf:v dump_extra=freq=keyframe -c:a aac `
+            -f segment -segment_time 2 -segment_format mpegts -reset_timestamps 0 "$tmp/seg-%06d.ts"
+          if ($LASTEXITCODE -ne 0) { Write-Warning "Media Foundation indisponível no runner; teste do clipe pulado"; exit 0 }
+          $segs = Get-ChildItem "$tmp/seg-*.ts" | Sort-Object Name
+          if ($segs.Count -lt 3) { throw "poucos pedaços: $($segs.Count)" }
+          $out = [IO.File]::Create("$tmp/all.ts"); foreach ($s in $segs) { $b = [IO.File]::ReadAllBytes($s.FullName); $out.Write($b, 0, $b.Length) }; $out.Close()
+          & $ff -hide_banner -loglevel error -sseof -4 -i "$tmp/all.ts" -map 0 -c copy -bsf:a aac_adtstoasc -movflags +faststart "$tmp/clip.mp4"
+          if ($LASTEXITCODE -ne 0) { throw "falha ao gerar mp4" }
+          "Clipe de teste: {0:N0} KB" -f ((Get-Item "$tmp/clip.mp4").Length / 1KB)
 
       - name: Instalar dependências
         run: npm ci

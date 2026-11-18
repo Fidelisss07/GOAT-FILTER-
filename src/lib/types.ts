@@ -83,6 +83,10 @@ export interface Bindings {
   vibranceUp: string;
   vibranceDown: string;
   nextProfile: string;
+  /** Salva os últimos segundos (replay instantâneo). */
+  saveClip: string;
+  /** Começa/para a gravação de gameplay. */
+  toggleRecord: string;
 }
 
 export const DEFAULT_BINDINGS: Bindings = {
@@ -90,7 +94,63 @@ export const DEFAULT_BINDINGS: Bindings = {
   vibranceUp: "Ctrl+Alt+ArrowUp",
   vibranceDown: "Ctrl+Alt+ArrowDown",
   nextProfile: "Ctrl+Alt+KeyP",
+  saveClip: "Alt+F8",
+  toggleRecord: "Alt+F7",
 };
+
+export type RecQuality = "light" | "balanced" | "high";
+
+export interface RecorderSettings {
+  /** Replay instantâneo ligado. */
+  replay: boolean;
+  /** Replay só com um jogo dos perfis aberto. */
+  onlyInGame: boolean;
+  clipSeconds: number;
+  /** 720, 1080 ou 1440 (2K). */
+  maxHeight: number;
+  fps: number;
+  quality: RecQuality;
+  systemAudio: boolean;
+  /** Nome do microfone; "" = sem microfone. */
+  mic: string;
+  /** "" = Vídeos\Goat Filter. */
+  folder: string;
+}
+
+export const DEFAULT_RECORDER: RecorderSettings = {
+  replay: false,
+  onlyInGame: true,
+  clipSeconds: 30,
+  maxHeight: 1080,
+  fps: 60,
+  quality: "balanced",
+  systemAudio: true,
+  mic: "",
+  folder: "",
+};
+
+export const CLIP_CHOICES = [15, 20, 25, 30, 35, 45, 60];
+
+export interface RecorderStatus {
+  available: boolean;
+  running: boolean;
+  starting: boolean;
+  recordingSecs: number | null;
+  bufferedSecs: number;
+  encoder: string | null;
+  hardware: boolean;
+  size: string | null;
+  fps: number | null;
+  error: string | null;
+  folder: string;
+}
+
+export interface ClipInfo {
+  name: string;
+  path: string;
+  size: number;
+  modified: number;
+}
 
 export interface PerfStatus {
   supported: boolean;
@@ -121,6 +181,8 @@ export interface Settings {
   closeOnGame: string[];
   /** Biblioteca de códigos de mira do Valorant. */
   crosshairs: Crosshair[];
+  /** Gravação e replay instantâneo. */
+  recorder: RecorderSettings;
   startWithWindows: boolean;
   minimizeToTray: boolean;
   /** Id do monitor usado pelos perfis; null = monitor principal. */
@@ -289,6 +351,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: "auto",
   closeOnGame: [],
   crosshairs: [],
+  recorder: DEFAULT_RECORDER,
   startWithWindows: false,
   minimizeToTray: true,
   defaultMonitor: null,
