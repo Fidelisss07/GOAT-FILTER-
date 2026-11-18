@@ -4,20 +4,23 @@ import { CrosshairLibrary } from "../components/CrosshairLibrary";
 import { TargetIcon } from "../components/Icons";
 import { DoubleClickTest, PollingTest, ReactionTest } from "../components/QuickTests";
 import { SensConverter } from "../components/SensConverter";
+import { DpiCalc, Progress, VisibilityTest } from "../components/TrainingExtras";
 import { getNative } from "../lib/native";
 import { VALORANT_ID } from "../lib/types";
 import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
 
-type Tab = "warmup" | "aim" | "reaction" | "mouse" | "sens" | "crosshair";
+type Tab = "warmup" | "aim" | "progress" | "reaction" | "mouse" | "sens" | "crosshair" | "visibility";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "warmup", label: "Aquecer e jogar" },
   { id: "aim", label: "Mira" },
+  { id: "progress", label: "Evolução" },
   { id: "reaction", label: "Reação" },
   { id: "mouse", label: "Mouse" },
   { id: "sens", label: "Sensibilidade" },
   { id: "crosshair", label: "Miras" },
+  { id: "visibility", label: "Visibilidade" },
 ];
 
 /** Aquecimento: treino de flick pelo tempo escolhido e, no fim, abre o jogo. */
@@ -100,6 +103,8 @@ export function TrainingPage() {
       <div className="tab-body" role="tabpanel">
         {tab === "warmup" && <WarmUp />}
         {tab === "aim" && <AimTrainer />}
+        {tab === "progress" && <Progress />}
+        {tab === "visibility" && <VisibilityTest />}
         {tab === "reaction" && <ReactionTest />}
         {tab === "mouse" && (
           <div className="two-col">
@@ -110,6 +115,10 @@ export function TrainingPage() {
             <div>
               <h3>{t("Clique duplo")}</h3>
               <DoubleClickTest />
+            </div>
+            <div>
+              <h3>{t("Calculadora de DPI")}</h3>
+              <DpiCalc />
             </div>
           </div>
         )}

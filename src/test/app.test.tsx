@@ -7,6 +7,8 @@ import { matrixFactor } from "../lib/vibrance";
 import { cmPer360, convertSens } from "../lib/sens";
 import { bitrateKbps, formatClock, outputSize } from "../lib/rec";
 import { xrayItems, xrayScore } from "../lib/xray";
+import { decodeProfile, encodeProfile } from "../lib/profileCode";
+import { dailyBest, streak, TrainResult } from "../lib/trainStats";
 import { DEFAULT_SETTINGS } from "../lib/types";
 import { isCrosshairCode } from "../lib/types";
 import { bindingFromEvent, prettyBinding } from "../components/KeyCapture";
@@ -457,6 +459,49 @@ describe("Desempenho+ v1.9", () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).tempAlert).toBe(80));
     expect(screen.getByText("Sua semana")).toBeInTheDocument();
     expect(screen.getByText("5h45")).toBeInTheDocument();
+  });
+});
+
+describe("Cores e treino v1.10", () => {
+  it("código de perfil vai e volta e rejeita lixo", () => {
+    const tuning = { ...DEFAULT_SETTINGS.profiles[0].tuning, emphasis: "red" as const, emphasisStrength: 40, gamma: 120 };
+    const code = encodeProfile({ vibrance: 130, tuning });
+    expect(code.startsWith("GF1-")).toBe(true);
+    const back = decodeProfile(code)!;
+    expect(back.vibrance).toBe(130);
+    expect(back.tuning.emphasis).toBe("red");
+    expect(back.tuning.gamma).toBe(120);
+    expect(decodeProfile("GF1-!!!")).toBeNull();
+    expect(decodeProfile("oi")).toBeNull();
+    expect(decodeProfile("GF1-" + btoa("999.9.0.0.100.100"))).toBeNull();
+  });
+
+  it("sequência de dias e melhor por dia", () => {
+    const day = 86_400_000;
+    const now = new Date(2026, 10, 18, 15).getTime();
+    const r = (daysAgo: number, score: number, mode: TrainResult["mode"] = "flick"): TrainResult => ({ mode, score, at: now - daysAgo * day });
+    expect(streak([r(0, 10), r(1, 10), r(2, 10), r(4, 10)], now)).toBe(3);
+    expect(streak([r(1, 10), r(2, 10)], now)).toBe(2); // ainda não treinou hoje
+    expect(streak([r(3, 10)], now)).toBe(0);
+    const d = dailyBest([r(0, 20), r(0, 25), r(2, 15), r(20, 99)], "flick", 7, now);
+    expect(d).toEqual([null, null, null, null, 15, null, 25]);
+    expect(dailyBest([r(0, 250, "reaction"), r(0, 210, "reaction")], "reaction", 1, now)).toEqual([210]);
+  });
+
+  it("novos modos de mira e abas de evolução e visibilidade", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Treino" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Mira" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Peek" }));
+    expect(screen.getByText(/entra pela borda/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Pequeno" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Evolução" }));
+    expect(screen.getByText(/dia\(s\) seguidos/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Visibilidade" }));
+    await userEvent.click(screen.getByRole("button", { name: "Silhueta 1" }));
+    expect(screen.getByText("Achou 1 de 8")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Mouse" }));
+    expect(screen.getByText("Calculadora de DPI")).toBeInTheDocument();
   });
 });
 
