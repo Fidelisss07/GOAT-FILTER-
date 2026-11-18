@@ -684,3 +684,22 @@ h1, h2, h3 { margin: 0; }
 .profile-code { display: grid; gap: 8px; margin-top: 12px; }
 @media (max-width: 1100px) { .two-col { grid-template-columns: 1fr; } }
 .tab-body .two-col { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+/* ---------- Conforto (v1.11) ---------- */
+:root[data-oled="true"] { --bg: #000; --sidebar: #000; --surface: #070707; --surface-2: #0e0e0e; --field: #050505; --border-soft: #1f1f1f; }
+:root[data-oled="true"] body { background: #000; }
+.welcome { width: min(620px, 100%); }
+.welcome h2 { margin: 4px 0 0; font-size: 22px; }
+.welcome-steps { display: flex; gap: 6px; }
+.welcome-steps span { flex: 1; height: 4px; border-radius: 2px; background: var(--border-soft); }
+.welcome-steps span.on { background: var(--accent); }
+.welcome-looks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.look { display: grid; gap: 6px; text-align: left; padding: 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--field); color: var(--text); font: inherit; cursor: pointer; }
+.look[aria-checked="true"] { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.12); }
+.look span:last-child { color: var(--text-2); font-size: 12px; }
+.look .swatch { height: 48px; border-radius: 6px; background: linear-gradient(90deg, #d8585a, #d6b04a, #57b06a, #4f84c9, #9a62c4); }
+.welcome .save-row { justify-content: flex-end; }
+.welcome .save-row .btn.link { margin-right: auto; }
+.backup-row { justify-content: flex-start; flex-wrap: wrap; }
+.reset-row small { display: block; margin-top: 2px; font-size: 12px; }
+.btn.danger { border-color: var(--danger); color: var(--danger); }

@@ -38,6 +38,23 @@ pub fn import_profiles(json: &str, settings: &mut Settings) -> Result<usize, Str
     Ok(n)
 }
 
+/// Backup completo das preferências (arquivo .json escolhido pelo usuário).
+pub fn export_all(s: &Settings) -> String {
+    serde_json::json!({ "app": "goat-filter", "kind": "backup", "version": 1, "settings": s }).to_string()
+}
+
+/// Lê um backup. Aceita o formato acima ou um settings.json puro.
+pub fn import_all(json: &str) -> Result<Settings, String> {
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|_| "Arquivo inválido.".to_string())?;
+    let inner = match v.get("kind").and_then(|k| k.as_str()) {
+        Some("backup") if v.get("app").and_then(|a| a.as_str()) == Some("goat-filter") => v.get("settings").cloned().unwrap_or_default(),
+        Some(_) => return Err("Arquivo inválido.".into()),
+        None => v,
+    };
+    let s: Settings = serde_json::from_value(inner).map_err(|_| "Arquivo inválido: não é um backup do Goat Filter.".to_string())?;
+    Ok(sanitize(s))
+}
+
 pub fn load(path: &Path) -> Settings {
     let s = std::fs::read_to_string(path)
         .ok()
@@ -80,6 +97,22 @@ pub fn sanitize(mut s: Settings) -> Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backup_vai_e_volta() {
+        let mut s = Settings::default();
+        s.oled = true;
+        s.recorder.clip_seconds = 45;
+        s.crosshairs.push(crate::types::Crosshair { id: "a".into(), name: "Minha".into(), code: "0;P;c;5".into() });
+        let back = import_all(&export_all(&s)).unwrap();
+        assert!(back.oled);
+        assert_eq!(back.recorder.clip_seconds, 45);
+        assert_eq!(back.crosshairs.len(), 1);
+        // settings.json puro também serve.
+        assert_eq!(import_all(&serde_json::to_string(&s).unwrap()).unwrap().recorder.clip_seconds, 45);
+        assert!(import_all("{\"kind\":\"outra\"}").is_err());
+        assert!(import_all("lixo").is_err());
+    }
 
     #[test]
     fn roundtrip_and_defaults() {

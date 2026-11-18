@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { MonitorSelect, ToggleRow } from "../components/Controls";
 import { ChevronDown, MonitorIcon, PowerIcon, SparkIcon } from "../components/Icons";
 import { UpdateActions } from "../components/UpdatePanel";
@@ -57,6 +57,7 @@ export function SettingsPage() {
                 })}
               </div>
             </div>
+            <ToggleRow label={t("Fundo preto (telas OLED)")} checked={st.oled} onChange={(v) => s.updateSettings({ oled: v })} />
             <div className="row">
               <label htmlFor={langId}>{t("Idioma")}</label>
               <div className="row-ctl select">
@@ -137,6 +138,8 @@ export function SettingsPage() {
             />
           </div>
         </div>
+
+        <BackupSection />
       </section>
 
       <section className="panel" aria-label="Super Vibrance">
@@ -228,4 +231,78 @@ function About() {
 function DemoTag() {
   const t = useT();
   return <span className="pill">{t("demonstração")}</span>;
+}
+
+/** Backup completo, voltar tudo ao normal e rever as boas-vindas. */
+function BackupSection() {
+  const s = useStore();
+  const t = useT();
+  const [confirm, setConfirm] = useState(false);
+  const fail = (e: unknown) => s.showToast({ kind: "error", text: String(e) });
+  return (
+    <div className="section" aria-label={t("Backup e restauração")}>
+      <div className="section-head">
+        <h2>{t("Backup e restauração")}</h2>
+      </div>
+      <p className="meta">{t("Guarde todas as preferências (perfis, atalhos, gravação, miras) num arquivo para formatar o PC sem perder nada.")}</p>
+      <div className="save-row backup-row">
+        <button
+          type="button"
+          className="btn small"
+          onClick={() =>
+            getNative()
+              .then((n) => n.exportSettings())
+              .then((ok) => ok && s.showToast({ kind: "ok", text: t("Backup salvo.") }))
+              .catch(fail)
+          }
+        >
+          {t("Fazer backup")}
+        </button>
+        <button
+          type="button"
+          className="btn small"
+          onClick={() =>
+            getNative()
+              .then((n) => n.importSettings())
+              .then((settings) => {
+                if (settings) {
+                  useStore.setState({ settings });
+                  s.showToast({ kind: "ok", text: t("Backup restaurado.") });
+                }
+              })
+              .catch(fail)
+          }
+        >
+          {t("Restaurar backup")}
+        </button>
+        <button type="button" className="btn small" onClick={() => s.updateSettings({ onboarded: false })}>
+          {t("Ver boas-vindas de novo")}
+        </button>
+      </div>
+      <div className="row reset-row">
+        <span>
+          {t("Voltar tudo ao normal")}
+          <small className="meta">{t("Desfaz cores, ajustes do mouse/teclado/energia e para a gravação. Suas preferências ficam.")}</small>
+        </span>
+        <button
+          type="button"
+          className={`btn small ${confirm ? "danger" : ""}`}
+          onClick={() => {
+            if (!confirm) {
+              setConfirm(true);
+              setTimeout(() => setConfirm(false), 4000);
+              return;
+            }
+            setConfirm(false);
+            getNative()
+              .then((n) => n.resetEverything())
+              .then(() => s.showToast({ kind: "ok", text: t("Tudo voltou ao normal.") }))
+              .catch(fail);
+          }}
+        >
+          {confirm ? t("Clique de novo para confirmar") : t("Voltar ao normal")}
+        </button>
+      </div>
+    </div>
+  );
 }

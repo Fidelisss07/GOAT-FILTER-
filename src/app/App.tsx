@@ -9,6 +9,7 @@ import { Overview } from "../pages/Overview";
 import { PerformancePage } from "../pages/Performance";
 import { Profiles } from "../pages/Profiles";
 import { RecordingPage } from "../pages/Recording";
+import { Welcome } from "../components/Welcome";
 import { SettingsPage } from "../pages/Settings";
 import { TrainingPage } from "../pages/Training";
 import { useT } from "../lib/useT";
@@ -58,6 +59,10 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+  const oled = s.settings.oled;
+  useEffect(() => {
+    document.documentElement.dataset.oled = oled ? "true" : "false";
+  }, [oled]);
 
   return (
     <div className="app" data-theme={theme}>
@@ -125,6 +130,7 @@ export function App() {
           {s.toast.text}
         </div>
       )}
+      {s.loaded && !s.settings.onboarded && <Welcome />}
     </div>
   );
 }

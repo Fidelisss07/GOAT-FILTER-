@@ -205,6 +205,10 @@ export interface Settings {
   closeOnGame: string[];
   /** Reabre esses apps quando o jogo fecha. */
   reopenApps: boolean;
+  /** Já viu a tela de boas-vindas. */
+  onboarded: boolean;
+  /** Fundo preto puro (telas OLED). */
+  oled: boolean;
   /** Aviso de temperatura da GPU (°C); 0 = desligado. */
   tempAlert: number;
   /** Biblioteca de códigos de mira do Valorant. */
@@ -404,6 +408,9 @@ export const DEFAULT_SETTINGS: Settings = {
   language: "auto",
   closeOnGame: [],
   reopenApps: true,
+  // No modo demonstração a tela de boas-vindas só aparece se pedida.
+  onboarded: true,
+  oled: false,
   tempAlert: 85,
   crosshairs: [],
   recorder: DEFAULT_RECORDER,
