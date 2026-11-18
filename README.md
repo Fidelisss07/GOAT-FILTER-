@@ -115,6 +115,14 @@ de GPU por hardware (HAGS, pede permissão de administrador e vale após reinici
 - **Sua semana:** tempo jogado, partidas, clipes e temperatura máxima, com gráfico por dia.
 - **Limpeza** de arquivos temporários e do cache de shaders antigo (só arquivos com mais de 1 dia; com o jogo fechado).
 
+**Cores e treino (v1.10):**
+
+- **Código de perfil** (`GF1-…`): copie a configuração de cor e mande para os amigos; eles colam e aplicam.
+- **Modos novos de mira:** micro-flick, alvos que somem e peek (o alvo sai da borda como um inimigo), com tamanho de alvo.
+- **Evolução:** sequência de dias treinando 🔥 e o melhor resultado de cada dia (14 dias).
+- **Calculadora de DPI:** mede a contagem real do sensor com uma régua.
+- **Teste de visibilidade:** silhuetas escondidas nas sombras, com as cores reais da tela.
+
 **Fechar ao abrir o jogo:** você marca apps pesados (navegadores, OneDrive, launchers…) e o Goat
 Filter fecha esses apps quando o jogo abre, como se você clicasse no X (nunca à força, nunca o jogo).
 

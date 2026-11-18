@@ -661,3 +661,26 @@ h1, h2, h3 { margin: 0; }
 .bar-col { display: grid; grid-template-rows: 1fr auto; height: 100%; align-items: end; justify-items: center; gap: 4px; }
 .bar-col .bar { width: 100%; max-width: 28px; border-radius: 4px 4px 0 0; background: rgba(var(--accent-rgb), 0.75); }
 .bar-col span { font-size: 11px; color: var(--text-2); }
+
+/* ---------- Treino+ (v1.10) ---------- */
+.trainer-bar { flex-wrap: wrap; }
+.progress { display: grid; gap: 14px; }
+.streak { display: flex; gap: 14px; align-items: center; padding: 14px 16px; border-radius: var(--radius); background: rgba(var(--accent-rgb), 0.1); border: 1px solid rgba(var(--accent-rgb), 0.35); }
+.streak .flame { font-size: 30px; }
+.streak div { display: grid; gap: 2px; }
+.streak strong { font-size: 18px; }
+.streak span { color: var(--text-2); font-size: 13px; }
+.evo-chart { display: grid; grid-template-columns: repeat(14, 1fr); gap: 6px; height: 160px; align-items: end; }
+.evo-chart .bar.empty { background: var(--border-soft); }
+.dpi-area { cursor: pointer; }
+.dpi-area.on { border-style: solid; border-color: var(--accent); }
+.vis-scene { position: relative; height: 320px; border-radius: var(--radius); overflow: hidden;
+  background: radial-gradient(ellipse at 30% 40%, #121212 0%, #070707 60%, #030303 100%); }
+.vis-spot { position: absolute; width: 22px; height: 48px; transform: translate(-50%, -50%); border: 0; padding: 0; cursor: pointer;
+  border-radius: 11px 11px 6px 6px; background: rgb(calc(4 + var(--c)) calc(4 + var(--c)) calc(4 + var(--c))); }
+.vis-spot::before { content: ""; position: absolute; left: 50%; top: -14px; width: 14px; height: 14px; transform: translateX(-50%); border-radius: 50%; background: inherit; }
+.vis-spot.found { outline: 2px solid #3ecf74; outline-offset: 4px; }
+.vis-spot.show:not(.found) { outline: 2px dashed var(--danger); outline-offset: 4px; }
+.profile-code { display: grid; gap: 8px; margin-top: 12px; }
+@media (max-width: 1100px) { .two-col { grid-template-columns: 1fr; } }
+.tab-body .two-col { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }

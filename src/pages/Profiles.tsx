@@ -1,3 +1,4 @@
+import { decodeProfile, encodeProfile } from "../lib/profileCode";
 import { useEffect, useId, useRef, useState } from "react";
 import { Toggle } from "../components/Controls";
 import {
@@ -201,6 +202,7 @@ export function Profiles() {
           <button type="button" className="btn link" onClick={s.exportProfiles}>{t("Exportar perfis")}</button>
           <button type="button" className="btn link" onClick={s.importProfiles}>{t("Importar perfis")}</button>
         </div>
+        <ProfileCode />
       </section>
 
       <section className="panel editor" aria-label={t("Editar perfil")}>
@@ -322,6 +324,51 @@ export function Profiles() {
           </form>
         )}
       </section>
+    </div>
+  );
+}
+
+/** Código curto para mandar a configuração de cor do perfil para amigos. */
+function ProfileCode() {
+  const s = useStore();
+  const t = useT();
+  const [code, setCode] = useState("");
+  const d = s.draft;
+  if (!d) return null;
+  const copy = () => {
+    const c = encodeProfile(d);
+    navigator.clipboard
+      .writeText(c)
+      .then(() => s.showToast({ kind: "ok", text: t("Código copiado: {code}", { code: c }) }))
+      .catch(() => s.showToast({ kind: "error", text: t("Não foi possível copiar.") }));
+  };
+  const apply = () => {
+    const r = decodeProfile(code);
+    if (!r) {
+      s.showToast({ kind: "error", text: t("Código inválido. Ele começa com GF1-.") });
+      return;
+    }
+    s.updateDraft({ vibrance: r.vibrance, tuning: { ...r.tuning, monitorBrightness: d.tuning.monitorBrightness, monitorContrast: d.tuning.monitorContrast, monitorSaturation: d.tuning.monitorSaturation } });
+    setCode("");
+    s.showToast({ kind: "ok", text: t("Código aplicado em \"{name}\". Salve o perfil para manter.", { name: d.name }) });
+  };
+  return (
+    <div className="profile-code">
+      <button type="button" className="btn small" onClick={copy}>
+        {t("Copiar código do perfil")}
+      </button>
+      <div className="hook-row">
+        <input
+          className="input mono"
+          aria-label={t("Colar código de perfil")}
+          placeholder="GF1-…"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+        <button type="button" className="btn small" disabled={!code.trim()} onClick={apply}>
+          {t("Aplicar")}
+        </button>
+      </div>
     </div>
   );
 }
