@@ -71,7 +71,7 @@ jobs:
           "Tamanho: {0:N1} MB" -f ((Get-Item $ff).Length / 1MB)
           $filters = & $ff -hide_banner -filters 2>&1 | Out-String
           $encoders = & $ff -hide_banner -encoders 2>&1 | Out-String
-          foreach ($f in "ddagrab", "scale_d3d11", "hwdownload", "amix", "aresample", "trim", "atrim", "format", "scale") {
+          foreach ($f in "ddagrab", "scale_d3d11", "hwdownload", "amix", "aresample", "trim", "atrim", "format", "scale", "crop", "asplit") {
             if ($filters -notmatch "\b$f\b") { throw "filtro $f ausente" }
           }
           $bsfs = & $ff -hide_banner -bsfs 2>&1 | Out-String
@@ -103,6 +103,14 @@ jobs:
           & $ff -hide_banner -loglevel error -sseof -4 -i "$tmp/all.ts" -map 0 -c copy -bsf:a aac_adtstoasc -movflags +faststart "$tmp/clip.mp4"
           if ($LASTEXITCODE -ne 0) { throw "falha ao gerar mp4" }
           "Clipe de teste: {0:N0} KB" -f ((Get-Item "$tmp/clip.mp4").Length / 1KB)
+          # Ferramentas dos clipes: miniatura, compressão e vertical.
+          & $ff -hide_banner -loglevel error -y -ss 1 -i "$tmp/clip.mp4" -frames:v 1 -vf scale=320:-2 -q:v 6 -f image2 "$tmp/thumb.jpg"
+          if ($LASTEXITCODE -ne 0) { throw "falha na miniatura" }
+          & $ff -hide_banner -loglevel error -y -i "$tmp/clip.mp4" -map 0:v:0 -map 0:a:0? -vf "scale=-2:'min(720,ih)',format=nv12" -c:v h264_mf -b:v 1000k -c:a aac -b:a 96k "$tmp/small.mp4"
+          if ($LASTEXITCODE -ne 0) { throw "falha ao comprimir" }
+          & $ff -hide_banner -loglevel error -y -i "$tmp/clip.mp4" -map 0:v:0 -vf "crop='min(iw,ih*9/16)':ih,scale=1080:1920,format=nv12" -c:v h264_mf -b:v 4000k "$tmp/vert.mp4"
+          if ($LASTEXITCODE -ne 0) { throw "falha no vertical" }
+          "Miniatura, compressão e vertical: ok"
 
       - name: Instalar dependências
         run: npm ci

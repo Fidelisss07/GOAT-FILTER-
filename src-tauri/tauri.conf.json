@@ -26,12 +26,23 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: asset:; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; img-src 'self' data: asset: http://asset.localhost; media-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": [
+            "$VIDEO/Goat Filter/*"
+          ],
+          "deny": []
+        }
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "Goat Filter",
     "shortDescription": "Digital Vibrance e Super Vibrance para jogos",
     "category": "Utility",
@@ -43,7 +54,9 @@
     ],
     "windows": {
       "nsis": {
-        "languages": ["PortugueseBR"],
+        "languages": [
+          "PortugueseBR"
+        ],
         "installMode": "currentUser"
       }
     }

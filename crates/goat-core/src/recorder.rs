@@ -52,6 +52,18 @@ pub struct RecorderSettings {
     pub mic: String,
     /// Pasta dos clipes. Vazio = Vídeos\Goat Filter.
     pub folder: String,
+    /// Bipe curto quando um clipe é salvo.
+    pub save_sound: bool,
+    /// Som do PC e microfone também em faixas separadas (para editar depois).
+    pub separate_tracks: bool,
+    /// Apaga clipes com mais de N dias (0 = nunca). Favoritos ficam.
+    pub keep_days: u32,
+    /// Limite da pasta em GB (0 = sem limite). Apaga os mais velhos.
+    pub max_gb: u32,
+    /// Webhook de um canal do Discord para enviar clipes.
+    pub discord_webhook: String,
+    /// Nomes dos clipes favoritos (nunca apagados pela limpeza).
+    pub favorites: Vec<String>,
 }
 
 impl Default for RecorderSettings {
@@ -66,6 +78,12 @@ impl Default for RecorderSettings {
             system_audio: true,
             mic: String::new(),
             folder: String::new(),
+            save_sound: true,
+            separate_tracks: false,
+            keep_days: 0,
+            max_gb: 0,
+            discord_webhook: String::new(),
+            favorites: Vec::new(),
         }
     }
 }
@@ -81,6 +99,16 @@ impl RecorderSettings {
         }
         self.mic = self.mic.trim().chars().take(200).collect();
         self.folder = self.folder.trim().chars().take(500).collect();
+        self.keep_days = self.keep_days.min(3650);
+        self.max_gb = self.max_gb.min(10_000);
+        self.discord_webhook = self.discord_webhook.trim().to_string();
+        if !self.discord_webhook.is_empty() && !crate::clips::valid_discord_webhook(&self.discord_webhook) {
+            self.discord_webhook.clear();
+        }
+        self.favorites.retain(|f| !f.trim().is_empty());
+        self.favorites.sort();
+        self.favorites.dedup();
+        self.favorites.truncate(1000);
         self
     }
 }
@@ -185,6 +213,8 @@ pub struct CaptureSpec {
     pub mic: Option<String>,
     /// Pasta dos pedaços (`seg-000001.ts`).
     pub segment_dir: String,
+    /// Som do PC e microfone também em faixas separadas.
+    pub separate_tracks: bool,
     /// Número do primeiro pedaço (continua a numeração depois de reiniciar).
     pub start_number: u64,
 }
@@ -238,6 +268,7 @@ pub fn assemble(
     mic: Option<&str>,
     segment_dir: &str,
     start_number: u64,
+    separate_tracks: bool,
 ) -> Vec<String> {
     let mut a = vec![s("-hide_banner"), s("-loglevel"), s("warning"), s("-y")];
     a.extend(video_input);
@@ -259,13 +290,28 @@ pub fn assemble(
     a.extend([s("-map"), s("0:v")]);
     match audio_inputs {
         0 => a.push(s("-an")),
-        1 => a.extend([s("-map"), s("1:a"), s("-af"), s("aresample=async=1000")]),
-        _ => a.extend([
+        1 => {
+            a.extend([s("-map"), s("1:a"), s("-af"), s("aresample=async=1000")])
+        }
+        _ if separate_tracks => {
+            // Faixa 1: mistura (a que os players tocam). 2: som do PC. 3: microfone.
+            a.extend([
+                s("-filter_complex"),
+                s("[1:a]asplit=2[s1][s2];[2:a]asplit=2[m1][m2];[s1][m1]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,aresample=async=1000[aout];[s2]aresample=async=1000[sys];[m2]aresample=async=1000[mic]"),
+                s("-map"), s("[aout]"), s("-map"), s("[sys]"), s("-map"), s("[mic]"),
+                s("-metadata:s:a:0"), s("title=Jogo + microfone"),
+                s("-metadata:s:a:1"), s("title=Jogo"),
+                s("-metadata:s:a:2"), s("title=Microfone"),
+            ])
+        }
+        _ => {
+            a.extend([
             s("-filter_complex"),
             s("[1:a][2:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,aresample=async=1000[aout]"),
             s("-map"),
             s("[aout]"),
-        ]),
+        ])
+        }
     }
     a.extend(video_codec);
     // Cabeçalho do vídeo em todo quadro-chave: cada pedaço abre sozinho.
@@ -295,6 +341,7 @@ pub fn capture_args(spec: &CaptureSpec) -> Vec<String> {
         spec.mic.as_deref(),
         &spec.segment_dir,
         spec.start_number,
+        spec.separate_tracks,
     )
 }
 
@@ -522,6 +569,7 @@ mod tests {
             system_audio: Some(AudioFormat { rate: 48_000, channels: 2 }),
             mic: None,
             segment_dir: r"C:\tmp\replay\".into(),
+            separate_tracks: false,
             start_number: 42,
         }
     }
@@ -545,6 +593,20 @@ mod tests {
         assert!(j.contains("-i audio=Microfone (Realtek)"));
         assert!(j.contains("amix=inputs=2"));
         assert!(j.contains("-map [aout]"));
+    }
+
+    #[test]
+    fn faixas_separadas() {
+        let mut sp = spec();
+        sp.mic = Some("Mic".into());
+        sp.separate_tracks = true;
+        let j = capture_args(&sp).join(" ");
+        assert!(j.contains("asplit=2"));
+        assert!(j.contains("-map [aout] -map [sys] -map [mic]"));
+        assert!(j.contains("title=Microfone"));
+        // Sem microfone não tem o que separar.
+        sp.mic = None;
+        assert!(!capture_args(&sp).join(" ").contains("asplit"));
     }
 
     #[test]
@@ -675,7 +737,7 @@ dummy: Immediate exit requested"#;
             s("-f"), s("lavfi"), s("-i"), s("sine=frequency=440:sample_rate=48000:duration=13"),
         ];
         // Reaproveita o assemble, trocando as entradas de áudio por um seno sintético.
-        let mut a = assemble(input, vcodec, None, None, seg.to_str().unwrap(), 100);
+        let mut a = assemble(input, vcodec, None, None, seg.to_str().unwrap(), 100, false);
         let an = a.iter().position(|x| x == "-an").unwrap();
         a.splice(an..=an, [s("-map"), s("1:a"), s("-c:a"), s("aac"), s("-b:a"), s("96k")]);
         let st = Command::new("ffmpeg").args(&a).output().unwrap();

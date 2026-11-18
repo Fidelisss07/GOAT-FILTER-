@@ -37,13 +37,13 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --enable-small --enable-d3d11va --enable-ffnvcodec --enable-nvenc --enable-amf --enable-mediafoundation \
   --enable-w32threads \
   --enable-indev=lavfi --enable-indev=dshow \
-  --enable-filter=ddagrab,hwdownload,hwupload,hwmap,format,scale,scale_d3d11,fps,null,color,testsrc2 \
+  --enable-filter=ddagrab,hwdownload,hwupload,hwmap,format,scale,scale_d3d11,fps,null,color,testsrc2,crop \
   --enable-filter=aresample,amix,anull,aformat,anullsrc,volume,apad,trim,atrim,setpts,asetpts,split,asplit \
-  --enable-encoder=h264_nvenc,hevc_nvenc,h264_amf,hevc_amf,h264_mf,hevc_mf,aac,rawvideo,pcm_s16le \
+  --enable-encoder=h264_nvenc,hevc_nvenc,h264_amf,hevc_amf,h264_mf,hevc_mf,aac,rawvideo,pcm_s16le,mjpeg \
   --enable-decoder=wrapped_avframe,pcm_u8,pcm_f32le,pcm_f64le,pcm_s16le,pcm_s32le,rawvideo,h264,aac \
   --enable-parser=h264,hevc,aac \
   --enable-demuxer=pcm_f32le,pcm_s16le,concat,mpegts,mov,wav \
-  --enable-muxer=segment,mpegts,mp4,mov,null,wav \
+  --enable-muxer=segment,mpegts,mp4,mov,null,wav,image2 \
   --enable-bsf=dump_extradata,aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,extract_extradata \
   --enable-protocol=file,pipe,concat
 make -j"$(nproc)"

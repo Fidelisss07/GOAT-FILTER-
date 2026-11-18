@@ -118,6 +118,10 @@ struct Inner {
     recording: Option<(u64, Instant)>,
     /// Pedaços que não podem ser apagados (juntando uma gravação).
     pinned_from: Option<u64>,
+    /// Marcadores da gravação manual (segundos desde o início).
+    markers: Vec<f64>,
+    /// Codificador que funciona com quadros na memória (cortes/compressão).
+    transcoder: Option<rc::VideoEncoder>,
     /// Caminho que funcionou nesta máquina, por (largura, altura, fps).
     pipeline: Option<(Pipeline, (u32, u32, u32))>,
     fails: u32,
@@ -140,7 +144,7 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 /// Chave da configuração que exige reiniciar a captura quando muda.
 fn config_key(s: &RecorderSettings) -> String {
-    format!("{}|{}|{:?}|{}|{}", s.max_height, s.fps, s.quality, s.system_audio, s.mic)
+    format!("{}|{}|{:?}|{}|{}|{}", s.max_height, s.fps, s.quality, s.system_audio, s.mic, s.separate_tracks)
 }
 
 /// Quanto o anel guarda (sempre dá para salvar até 60 s).
@@ -357,6 +361,7 @@ impl Recorder {
             system_audio: audio_fmt,
             mic: (!s.mic.is_empty()).then(|| s.mic.clone()),
             segment_dir: live.to_string_lossy().into_owned(),
+            separate_tracks: s.separate_tracks && !s.mic.is_empty(),
             start_number,
         };
         let log_file = match std::fs::File::create(replay.join("ffmpeg.log")) {
@@ -481,6 +486,7 @@ impl Recorder {
         };
         if g.recording.is_none() {
             g.recording = Some((first, Instant::now()));
+            g.markers.clear();
             g.fails = 0;
         }
         Ok(())
@@ -497,12 +503,16 @@ impl Recorder {
             from
         };
         let picks = rc::segments_since(&self.indices(), from);
+        let markers = std::mem::take(&mut lock(&self.inner).markers);
         let r = self.export(&picks, "Gameplay", None);
+        if let (Ok(p), false) = (&r, markers.is_empty()) {
+            let _ = std::fs::write(markers_path(p), serde_json::to_string(&markers).unwrap_or_default());
+        }
         lock(&self.inner).pinned_from = None;
         r
     }
 
-    pub fn list_clips(&self) -> Vec<ClipInfo> {
+    fn list_clips_all(&self) -> Vec<ClipInfo> {
         let mut v: Vec<ClipInfo> = std::fs::read_dir(self.folder())
             .map(|rd| {
                 rd.flatten()
@@ -529,7 +539,12 @@ impl Recorder {
             })
             .unwrap_or_default();
         v.sort_by(|a, b| b.modified.cmp(&a.modified));
-        v.truncate(100);
+        v
+    }
+
+    pub fn list_clips(&self) -> Vec<ClipInfo> {
+        let mut v = self.list_clips_all();
+        v.truncate(200);
         v
     }
 
@@ -554,6 +569,217 @@ impl Recorder {
         cmd.args(["-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"]);
         let (_, err) = run_with_timeout(cmd, Duration::from_secs(10));
         rc::parse_dshow_audio(&err)
+    }
+}
+
+/// Arquivo com os marcadores de um vídeo ("Gameplay ....mp4.markers.json").
+fn markers_path(clip: &Path) -> PathBuf {
+    let mut p = clip.as_os_str().to_owned();
+    p.push(".markers.json");
+    PathBuf::from(p)
+}
+
+/// Nome livre ("x (2).mp4") na mesma pasta.
+fn free_name(folder: &Path, name: &str) -> PathBuf {
+    let mut out = folder.join(name);
+    let base = name.trim_end_matches(".mp4");
+    let mut n = 2;
+    while out.exists() {
+        out = folder.join(format!("{base} ({n}).mp4"));
+        n += 1;
+    }
+    out
+}
+
+fn stem(p: &Path) -> String {
+    p.file_stem().map(|x| x.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+impl Recorder {
+    /// Marca o momento atual da gravação manual.
+    pub fn add_marker(&self) -> Result<f64, String> {
+        let mut g = lock(&self.inner);
+        let Some((_, t)) = g.recording else {
+            return Err("Os marcadores funcionam durante a gravação de gameplay.".into());
+        };
+        let at = (t.elapsed().as_secs_f64() * 10.0).round() / 10.0;
+        g.markers.push(at);
+        Ok(at)
+    }
+
+    pub fn markers(&self, path: &str) -> Vec<f64> {
+        self.checked_clip(path)
+            .ok()
+            .and_then(|p| std::fs::read_to_string(markers_path(&p)).ok())
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default()
+    }
+
+    /// Codificador para recodificar arquivos (testa uma vez).
+    fn transcoder(&self, exe: &Path) -> Result<rc::VideoEncoder, String> {
+        if let Some(t) = lock(&self.inner).transcoder {
+            return Ok(t);
+        }
+        for enc in [rc::VideoEncoder::Nvenc, rc::VideoEncoder::Amf, rc::VideoEncoder::MfHw, rc::VideoEncoder::MfSw] {
+            let mut cmd = command(exe);
+            cmd.args(goat_core::clips::encoder_probe_args(enc));
+            if run_with_timeout(cmd, Duration::from_secs(10)).0 {
+                lock(&self.inner).transcoder = Some(enc);
+                return Ok(enc);
+            }
+        }
+        Err("Nenhum codificador de vídeo funcionou nesta máquina.".into())
+    }
+
+    fn duration(&self, exe: &Path, input: &Path) -> Option<f64> {
+        let mut cmd = command(exe);
+        cmd.args(["-hide_banner", "-i"]).arg(input);
+        let (_, err) = run_with_timeout(cmd, Duration::from_secs(15));
+        goat_core::clips::parse_duration(&err)
+    }
+
+    fn run_tool(&self, exe: &Path, args: Vec<String>, out: &Path, limit: Duration) -> Result<PathBuf, String> {
+        let mut cmd = command(exe);
+        cmd.args(args);
+        let (ok, err) = run_with_timeout(cmd, limit);
+        if ok && out.is_file() {
+            Ok(out.to_path_buf())
+        } else {
+            let _ = std::fs::remove_file(out);
+            Err(format!("Não foi possível gerar o vídeo: {}", rc::error_tail(&err).unwrap_or_default()))
+        }
+    }
+
+    /// Corte rápido entre `start` e `end` (segundos). Gera um arquivo novo.
+    pub fn trim(&self, path: &str, start: f64, end: f64) -> Result<PathBuf, String> {
+        let src = self.checked_clip(path)?;
+        if end - start < 0.5 || start < 0.0 {
+            return Err("Escolha um trecho de pelo menos meio segundo.".into());
+        }
+        let exe = self.engine()?;
+        let out = free_name(&self.folder(), &format!("{} (corte).mp4", stem(&src)));
+        let args = goat_core::clips::trim_args(&src.to_string_lossy(), &out.to_string_lossy(), start, end);
+        self.run_tool(&exe, args, &out, Duration::from_secs(120))
+    }
+
+    /// Versão que cabe em `mb` MB (Discord grátis: 10).
+    pub fn compress(&self, path: &str, mb: u32) -> Result<PathBuf, String> {
+        let src = self.checked_clip(path)?;
+        let exe = self.engine()?;
+        let enc = self.transcoder(&exe)?;
+        let dur = self.duration(&exe, &src).ok_or("Não foi possível ler a duração do vídeo.")?;
+        let out = free_name(&self.folder(), &format!("{} ({mb} MB).mp4", stem(&src)));
+        let args = goat_core::clips::compress_args(&src.to_string_lossy(), &out.to_string_lossy(), enc, dur, mb);
+        self.run_tool(&exe, args, &out, Duration::from_secs(600))
+    }
+
+    /// Versão vertical 1080x1920 (TikTok, Reels, Shorts).
+    pub fn vertical(&self, path: &str) -> Result<PathBuf, String> {
+        let src = self.checked_clip(path)?;
+        let exe = self.engine()?;
+        let enc = self.transcoder(&exe)?;
+        let out = free_name(&self.folder(), &format!("{} (vertical).mp4", stem(&src)));
+        let args = goat_core::clips::vertical_args(&src.to_string_lossy(), &out.to_string_lossy(), enc);
+        self.run_tool(&exe, args, &out, Duration::from_secs(600))
+    }
+
+    /// Miniatura em base64 (JPEG), guardada em cache.
+    pub fn thumbnail(&self, path: &str) -> Option<String> {
+        let src = self.checked_clip(path).ok()?;
+        let meta = std::fs::metadata(&src).ok()?;
+        let stamp = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+        let key = Sha256::digest(format!("{}|{}|{}", src.to_string_lossy(), meta.len(), stamp));
+        let key: String = key.iter().take(10).map(|b| format!("{b:02x}")).collect();
+        let dir = self.data_dir.join("thumbs");
+        let file = dir.join(format!("{key}.jpg"));
+        if !file.is_file() {
+            let exe = self.engine().ok()?;
+            std::fs::create_dir_all(&dir).ok()?;
+            let mut cmd = command(&exe);
+            cmd.args(goat_core::clips::thumb_args(&src.to_string_lossy(), &file.to_string_lossy()));
+            run_with_timeout(cmd, Duration::from_secs(15));
+        }
+        let bytes = std::fs::read(&file).ok()?;
+        Some(format!("data:image/jpeg;base64,{}", goat_core::clips::base64(&bytes)))
+    }
+
+    /// Troca o nome de um clipe (devolve o caminho novo).
+    pub fn rename(&self, path: &str, name: &str) -> Result<PathBuf, String> {
+        let src = self.checked_clip(path)?;
+        let name = goat_core::clips::clean_clip_name(name).ok_or("Nome inválido.")?;
+        let dst = self.folder().join(&name);
+        if dst == src {
+            return Ok(src);
+        }
+        if dst.exists() {
+            return Err("Já existe um clipe com esse nome.".into());
+        }
+        std::fs::rename(&src, &dst).map_err(|e| e.to_string())?;
+        let _ = std::fs::rename(markers_path(&src), markers_path(&dst));
+        Ok(dst)
+    }
+
+    pub fn delete(&self, path: &str) -> Result<(), String> {
+        let p = self.checked_clip(path)?;
+        std::fs::remove_file(&p).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(markers_path(&p));
+        Ok(())
+    }
+
+    /// Limpeza automática (dias e GB). Devolve quantos apagou.
+    pub fn cleanup(&self, s: &RecorderSettings) -> usize {
+        if s.keep_days == 0 && s.max_gb == 0 {
+            return 0;
+        }
+        let clips: Vec<goat_core::clips::ClipFile> = self
+            .list_clips_all()
+            .into_iter()
+            .map(|c| goat_core::clips::ClipFile { name: c.name, size: c.size, modified: c.modified })
+            .collect();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let folder = self.folder();
+        let mut n = 0;
+        for name in goat_core::clips::clips_to_delete(&clips, now, s.keep_days, s.max_gb, &s.favorites) {
+            let p = folder.join(&name);
+            if std::fs::remove_file(&p).is_ok() {
+                let _ = std::fs::remove_file(markers_path(&p));
+                n += 1;
+            }
+        }
+        if n > 0 {
+            log::info!("Limpeza automática: {n} clipe(s) apagados");
+        }
+        n
+    }
+
+    /// Envia para um canal do Discord (webhook). Acima de 10 MB, comprime antes.
+    pub fn send_discord(&self, path: &str, webhook: &str, agent: &ureq::Agent) -> Result<(), String> {
+        if !goat_core::clips::valid_discord_webhook(webhook) {
+            return Err("Configure o webhook do Discord na aba Gravação.".into());
+        }
+        let mut file = self.checked_clip(path)?;
+        if std::fs::metadata(&file).map(|m| m.len()).unwrap_or(0) > 10_000_000 {
+            file = self.compress(path, 9)?;
+        }
+        let bytes = std::fs::read(&file).map_err(|e| e.to_string())?;
+        let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "clipe.mp4".into());
+        let boundary: String = format!(
+            "goatfilter{}",
+            Sha256::digest(&bytes[..bytes.len().min(4096)]).iter().take(8).map(|b| format!("{b:02x}")).collect::<String>()
+        );
+        let body = goat_core::clips::discord_multipart(&boundary, &name, &bytes, "🐐 Clipe do Goat Filter");
+        match agent
+            .post(webhook.trim())
+            .set("Content-Type", &format!("multipart/form-data; boundary={boundary}"))
+            .send_bytes(&body)
+        {
+            Ok(_) => Ok(()),
+            Err(ureq::Error::Status(code, _)) => Err(format!("O Discord recusou o envio (código {code}). Confira o webhook.")),
+            Err(e) => Err(format!("Sem conexão com o Discord: {e}")),
+        }
     }
 }
 

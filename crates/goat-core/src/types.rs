@@ -127,6 +127,8 @@ pub struct Bindings {
     pub save_clip: String,
     /// Começa/para a gravação de gameplay.
     pub toggle_record: String,
+    /// Marca um momento durante a gravação.
+    pub add_marker: String,
 }
 
 impl Default for Bindings {
@@ -138,12 +140,13 @@ impl Default for Bindings {
             next_profile: "Ctrl+Alt+KeyP".into(),
             save_clip: "Alt+F8".into(),
             toggle_record: "Alt+F7".into(),
+            add_marker: String::new(),
         }
     }
 }
 
 impl Bindings {
-    pub fn all(&self) -> [(&'static str, &str); 6] {
+    pub fn all(&self) -> [(&'static str, &str); 7] {
         [
             ("toggle", &self.toggle),
             ("vibranceUp", &self.vibrance_up),
@@ -151,6 +154,7 @@ impl Bindings {
             ("nextProfile", &self.next_profile),
             ("saveClip", &self.save_clip),
             ("toggleRecord", &self.toggle_record),
+            ("addMarker", &self.add_marker),
         ]
     }
 }
