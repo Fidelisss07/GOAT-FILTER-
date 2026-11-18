@@ -1,6 +1,7 @@
 //! Aplicativo Tauri: janela, bandeja, comandos da interface e o loop de detecção.
 
 use goat_core::engine::Engine;
+mod recorder;
 mod updater;
 
 use goat_core::perf::PerfManager;
@@ -94,6 +95,7 @@ struct AppState {
     next_profile: Mutex<usize>,
     perf: Mutex<PerfManager>,
     stats: Mutex<goat_core::tweaks::StatsSampler>,
+    recorder: Arc<recorder::Recorder>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -446,6 +448,99 @@ fn save_settings(app: AppHandle, state: Shared, settings: Settings) -> Result<Se
     Ok(s)
 }
 
+// ---------------------------------------------------------------------------
+// Gravação (replay instantâneo e gameplay)
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+fn recorder_status(state: Shared) -> recorder::RecorderStatus {
+    state.recorder.status()
+}
+
+#[tauri::command]
+async fn save_clip(app: AppHandle, seconds: Option<u32>) -> Result<String, String> {
+    let st = app.state::<Arc<AppState>>().inner().clone();
+    let secs = seconds.unwrap_or_else(|| lock(&st.settings).recorder.clip_seconds);
+    let rec = st.recorder.clone();
+    let r = tauri::async_runtime::spawn_blocking(move || rec.save_clip(secs)).await.map_err(|e| e.to_string())?;
+    finish_export(&app, &st, r, true)
+}
+
+#[tauri::command]
+fn start_recording(app: AppHandle, state: Shared) -> Result<(), String> {
+    state.recorder.start_recording()?;
+    notify(&app, "ok", tr(&state, "Gravando…", "Recording…"));
+    Ok(())
+}
+
+#[tauri::command]
+async fn stop_recording(app: AppHandle) -> Result<String, String> {
+    let st = app.state::<Arc<AppState>>().inner().clone();
+    let rec = st.recorder.clone();
+    let r = tauri::async_runtime::spawn_blocking(move || rec.stop_recording()).await.map_err(|e| e.to_string())?;
+    finish_export(&app, &st, r, false)
+}
+
+/// Aviso no app e no Windows depois de salvar um vídeo.
+fn finish_export(app: &AppHandle, st: &AppState, r: Result<PathBuf, String>, clip: bool) -> Result<String, String> {
+    use tauri_plugin_notification::NotificationExt;
+    match r {
+        Ok(p) => {
+            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let title = if clip { tr(st, "Clipe salvo", "Clip saved") } else { tr(st, "Gravação salva", "Recording saved") };
+            notify(app, "ok", format!("{title}: {name}"));
+            let _ = app.notification().builder().title(title).body(&name).show();
+            let _ = app.emit("clips-changed", ());
+            Ok(p.to_string_lossy().into_owned())
+        }
+        Err(e) => {
+            notify(app, "error", e.clone());
+            let _ = app.notification().builder().title("Goat Filter").body(&e).show();
+            Err(e)
+        }
+    }
+}
+
+#[tauri::command]
+fn list_clips(state: Shared) -> Vec<recorder::ClipInfo> {
+    state.recorder.list_clips()
+}
+
+#[tauri::command]
+fn open_clip(app: AppHandle, state: Shared, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let p = state.recorder.checked_clip(&path)?;
+    app.opener().open_path(p.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn reveal_clip(app: AppHandle, state: Shared, path: Option<String>) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    match path {
+        Some(p) => {
+            let p = state.recorder.checked_clip(&p)?;
+            app.opener().reveal_item_in_dir(p).map_err(|e| e.to_string())
+        }
+        None => {
+            let dir = state.recorder.folder();
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+fn delete_clip(state: Shared, path: String) -> Result<(), String> {
+    let p = state.recorder.checked_clip(&path)?;
+    std::fs::remove_file(p).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn list_microphones(app: AppHandle) -> Vec<String> {
+    let rec = app.state::<Arc<AppState>>().recorder.clone();
+    tauri::async_runtime::spawn_blocking(move || rec.microphones()).await.unwrap_or_default()
+}
+
 #[tauri::command]
 fn executable_exists(path: String) -> bool {
     let p = PathBuf::from(path.trim());
@@ -608,6 +703,36 @@ fn run_action(app: &AppHandle, action: &str) {
             apply_profile_now(app, &profiles[i].id);
             return;
         }
+        "saveClip" => {
+            let app = app.clone();
+            std::thread::spawn(move || {
+                let st = app.state::<Arc<AppState>>().inner().clone();
+                let secs = lock(&st.settings).recorder.clip_seconds;
+                let _ = finish_export(&app, &st, st.recorder.save_clip(secs), true);
+            });
+            return;
+        }
+        "toggleRecord" => {
+            let app = app.clone();
+            std::thread::spawn(move || {
+                let st = app.state::<Arc<AppState>>().inner().clone();
+                if st.recorder.recording() {
+                    let _ = finish_export(&app, &st, st.recorder.stop_recording(), false);
+                } else {
+                    match st.recorder.start_recording() {
+                        Ok(()) => {
+                            use tauri_plugin_notification::NotificationExt;
+                            let t = tr(&st, "Gravando… aperte de novo para parar", "Recording… press again to stop");
+                            notify(&app, "ok", t.clone());
+                            let _ = app.notification().builder().title("Goat Filter").body(t).show();
+                        }
+                        Err(e) => notify(&app, "error", e),
+                    }
+                }
+                let _ = app.emit("recorder-changed", ());
+            });
+            return;
+        }
         _ => return,
     }
     emit_monitors(app, &state);
@@ -753,6 +878,12 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                     }
                 }
 
+                {
+                    let rec = lock(&state.settings).recorder.clone();
+                    let in_game = matches!(lock(&state.game).state, GameState::Active | GameState::Paused);
+                    state.recorder.tick(&rec, in_game);
+                }
+
                 if tick % 6 == 0 {
                     let displays = monitors::enumerate();
                     let mut engine = lock(&state.engine);
@@ -860,6 +991,13 @@ pub fn run() {
                 next_profile: Mutex::new(0),
                 perf: Mutex::new(PerfManager::new(backends::system_tweaks(), Some(dir.join("perf.json")))),
                 stats: Mutex::new(Default::default()),
+                recorder: recorder::Recorder::new(
+                    app.path().app_local_data_dir().unwrap_or_else(|_| dir.clone()),
+                    app.path()
+                        .video_dir()
+                        .unwrap_or_else(|_| dir.clone())
+                        .join("Goat Filter"),
+                ),
             });
             app.manage(state.clone());
             let state_for_keys = state.clone();
@@ -956,6 +1094,15 @@ pub fn run() {
             import_profiles,
             restore_monitor,
             save_settings,
+            recorder_status,
+            save_clip,
+            start_recording,
+            stop_recording,
+            list_clips,
+            open_clip,
+            reveal_clip,
+            delete_clip,
+            list_microphones,
             executable_exists
         ])
         .build(tauri::generate_context!())
@@ -967,6 +1114,7 @@ pub fn run() {
             let restore = lock(&st.settings).restore_on_exit;
             lock(&st.engine).end_session(restore);
             lock(&st.perf).restore();
+            st.recorder.shutdown();
         }
     });
 }

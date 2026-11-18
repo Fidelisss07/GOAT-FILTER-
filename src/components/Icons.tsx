@@ -62,6 +62,11 @@ export const TargetIcon = (p: P) => (
     <circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4" /><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" />
   </svg>
 );
+export const RecordIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.65} {...p}>
+    <rect x="2.5" y="6" width="14" height="12" rx="2.5" /><path d="m16.5 10.5 5-3v9l-5-3" /><circle cx="9.5" cy="12" r="2.2" fill="currentColor" stroke="none" />
+  </svg>
+);
 export const SparkIcon = (p: P) => (
   <svg {...base} {...p}><path d="M12 2.5 14 9l6.5 2-6.5 2-2 6.5-2-6.5-6.5-2L10 9z" /><path d="M19 3v3M17.5 4.5h3" /></svg>
 );

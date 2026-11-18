@@ -123,6 +123,10 @@ pub struct Bindings {
     pub vibrance_up: String,
     pub vibrance_down: String,
     pub next_profile: String,
+    /// Salva os últimos segundos (replay instantâneo).
+    pub save_clip: String,
+    /// Começa/para a gravação de gameplay.
+    pub toggle_record: String,
 }
 
 impl Default for Bindings {
@@ -132,17 +136,21 @@ impl Default for Bindings {
             vibrance_up: "Ctrl+Alt+ArrowUp".into(),
             vibrance_down: "Ctrl+Alt+ArrowDown".into(),
             next_profile: "Ctrl+Alt+KeyP".into(),
+            save_clip: "Alt+F8".into(),
+            toggle_record: "Alt+F7".into(),
         }
     }
 }
 
 impl Bindings {
-    pub fn all(&self) -> [(&'static str, &str); 4] {
+    pub fn all(&self) -> [(&'static str, &str); 6] {
         [
             ("toggle", &self.toggle),
             ("vibranceUp", &self.vibrance_up),
             ("vibranceDown", &self.vibrance_down),
             ("nextProfile", &self.next_profile),
+            ("saveClip", &self.save_clip),
+            ("toggleRecord", &self.toggle_record),
         ]
     }
 }
@@ -186,6 +194,8 @@ pub struct Settings {
     pub close_on_game: Vec<String>,
     /// Biblioteca de códigos de mira do Valorant.
     pub crosshairs: Vec<Crosshair>,
+    /// Gravação e replay instantâneo.
+    pub recorder: crate::recorder::RecorderSettings,
     pub start_with_windows: bool,
     pub minimize_to_tray: bool,
     pub default_monitor: Option<String>,
@@ -207,6 +217,7 @@ impl Default for Settings {
             language: "auto".into(),
             close_on_game: Vec::new(),
             crosshairs: Vec::new(),
+            recorder: Default::default(),
             start_with_windows: false,
             minimize_to_tray: true,
             default_monitor: None,
