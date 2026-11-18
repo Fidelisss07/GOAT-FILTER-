@@ -2,15 +2,16 @@
 # Coloca uma gravação de tela num espaço do vídeo e atualiza slots.json.
 #
 # Uso: ./add-recording.sh <espaço> <arquivo.mp4> [início_em_segundos] [legenda]
-#   espaços: app (cena "Um clique"), clip (celular da jogada), treino (mira), site
+#   espaços: jogo (fundo da abertura), clip (celular vertical), treino (janela da mira)
 # Exemplo: ./add-recording.sh clip ~/Downloads/ace.mp4 12 "ACE no Ascent"
 set -euo pipefail
 cd "$(dirname "$0")"
 SLOT="$1"; SRC="$2"; START="${3:-0}"; LABEL="${4:-}"
 case "$SLOT" in
-  clip) SIZE="532:972" ;;             # tela do celular (vertical)
-  app|treino|site) SIZE="2000:1250" ;; # cartão 16:10
-  *) echo "espaço desconhecido: $SLOT (use app, clip, treino ou site)"; exit 1 ;;
+  clip) SIZE="436:716" ;;              # celular vertical
+  jogo) SIZE="1080:1920" ;;            # tela inteira
+  treino) SIZE="2560:1600" ;;          # janela do app (16:10)
+  *) echo "espaço desconhecido: $SLOT (use jogo, clip ou treino)"; exit 1 ;;
 esac
 DIR="assets/slots/$SLOT"
 rm -rf "$DIR"; mkdir -p "$DIR"

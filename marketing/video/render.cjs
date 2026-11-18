@@ -28,7 +28,34 @@ function serve() {
   await p.goto(`http://localhost:${port}/index.html`);
   await p.evaluate(() => window.ready);
   const prevArg = process.argv.indexOf("--preview");
-  if (prevArg > 0) {
+  if (process.argv.includes("--check")) {
+    // Revisão: nada de conteúdo fora da área segura do TikTok.
+    const dur = await p.evaluate(() => window.DURATION);
+    const SAFE = { l: 56, r: 1024, t: 130, b: 1560 };
+    const bad = new Map();
+    for (let t = 0; t < dur; t += 0.25) {
+      const v = await p.evaluate(([t, S]) => {
+        window.seek(t);
+        const out = [];
+        for (const el of document.querySelectorAll(".safe")) {
+          const sec = el.closest(".scene");
+          if (sec && getComputedStyle(sec).visibility === "hidden") continue;
+          let o = 1, e = el;
+          while (e && e !== document.body) { o *= parseFloat(getComputedStyle(e).opacity || "1"); e = e.parentElement; }
+          if (o < 0.3) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width === 0) continue;
+          if (r.left < S.l - 1 || r.right > S.r + 1 || r.top < S.t - 1 || r.bottom > S.b + 1) {
+            out.push(`${el.id || el.className}: ${Math.round(r.left)},${Math.round(r.top)} → ${Math.round(r.right)},${Math.round(r.bottom)}`);
+          }
+        }
+        return out;
+      }, [t, SAFE]);
+      for (const x of v) { const key = x.split(":")[0]; if (!bad.has(key)) bad.set(key, `t=${t.toFixed(2)} ${x}`); }
+    }
+    if (bad.size) { console.log("FORA DA ÁREA SEGURA:"); for (const v of bad.values()) console.log("  " + v); process.exitCode = 2; }
+    else console.log("Revisão ok: nada fora da área segura.");
+  } else if (prevArg > 0) {
     const times = process.argv[prevArg + 1].split(",").map(Number);
     fs.mkdirSync(path.join(OUT, "preview"), { recursive: true });
     for (const t of times) {

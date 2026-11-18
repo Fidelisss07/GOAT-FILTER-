@@ -10,7 +10,7 @@ import wave
 import numpy as np
 
 SR = 48_000
-DUR = 27.0
+DUR = 45.0
 BPM = 120
 BEAT = 60 / BPM
 N = int(SR * DUR)
@@ -113,74 +113,99 @@ def note(n):
 
 
 # ---------------------------------------------------------------- música
-# Lá menor → Fá → Dó → Sol (2 s cada), começa no "drop" em 2,5 s.
+# Lá menor → Fá → Dó → Sol (2 s cada). Drop em 3 s, respiro no Raio-X (24–25 s).
 CHORDS = [(57, [57, 60, 64]), (53, [53, 57, 60]), (48, [52, 55, 60]), (55, [55, 59, 62])]
-DROP = 2.5
-END = 26.0
+DROP = 3.0
+END = 44.0
+BREAK = (24.0, 25.0)
 
-# Intro: zumbido grave e batidas de "coração" no gancho.
-at(L, 0.0, pad([note(45), note(52)], 2.6), 0.5)
-for t in (0.45, 0.85):
-    at(X, t, kick(1.2), 0.9)
-    at(X, t, fft_filter(rng.standard_normal(int(0.25 * SR)), lo=200, hi=3000) * env(int(0.25 * SR), d=0.06), 0.5)
-
+at(L, 0.0, pad([note(45), note(52)], 3.1), 0.55)
 beat = DROP
 i = 0
 while beat < END - 0.01:
     bar_pos = i % 4
-    at(L, beat, kick(), 0.95)
-    if bar_pos in (1, 3):
-        at(L, beat, snare(), 0.45)
-    at(L, beat + BEAT / 2, hat(), 0.16)
-    at(L, beat, hat(), 0.07)
-    # baixo nos tempos e contratempos
+    in_break = BREAK[0] <= beat < BREAK[1]
+    if not in_break:
+        at(L, beat, kick(), 0.95)
+        if bar_pos in (1, 3):
+            at(L, beat, snare(), 0.42)
+        at(L, beat + BEAT / 2, hat(), 0.16)
+        at(L, beat, hat(), 0.07)
+        if i % 8 == 7:
+            at(L, beat + BEAT * 0.75, hat(True), 0.12)
     root = CHORDS[(i // 4) % 4][0] - 12
-    at(L, beat, tone(note(root), BEAT * 0.9, harmonics=5, decay=0.25), 0.35)
-    at(L, beat + BEAT * 0.75, tone(note(root), BEAT * 0.25, harmonics=5, decay=0.08), 0.2)
+    at(L, beat, tone(note(root), BEAT * 0.9, harmonics=5, decay=0.25), 0.33)
+    at(L, beat + BEAT * 0.75, tone(note(root), BEAT * 0.25, harmonics=5, decay=0.08), 0.18)
     if bar_pos == 0:
         chord = CHORDS[(i // 4) % 4][1]
-        at(L, beat, pad([note(n) for n in chord], BEAT * 4), 0.22)
-        # arpejo brilhante
+        at(L, beat, pad([note(n) for n in chord], BEAT * 4), 0.2)
         for k, n in enumerate(chord + [chord[0] + 12]):
-            at(L, beat + k * BEAT / 2, tone(note(n + 12), 0.4, harmonics=3, decay=0.18), 0.08)
+            at(L, beat + k * BEAT / 2, tone(note(n + 12), 0.4, harmonics=3, decay=0.18), 0.07)
     beat += BEAT
     i += 1
-
-# Final: acorde longo.
 at(L, END, pad([note(n) for n in (57, 60, 64, 69)], 1.0), 0.3)
 
-# ---------------------------------------------------------------- efeitos
-CUTS = [2.5, 6.0, 10.0, 14.5, 18.0, 21.0, 23.5]
-# Riser antes do drop.
-at(X, 0.9, sweep_noise(1.6, 300, 6000) * np.linspace(0, 1, int(1.6 * SR)) ** 2, 0.35)
-for c in CUTS:
-    w = sweep_noise(0.45, 4000, 400) * np.hanning(int(0.45 * SR))
-    at(X, c - 0.25, w, 0.35)
-    boom = kick(1.0) * 0.8 + fft_filter(rng.standard_normal(int(0.45 * SR)), hi=800) * env(int(0.45 * SR), d=0.12) * 0.4
-    at(X, c, boom, 0.6 if c in (2.5, 23.5) else 0.25)
+# ---------------------------------------------------------------- efeitos (sincronizados com o index.html)
+def click(t, g=0.8):
+    at(X, t, fft_filter(rng.standard_normal(int(0.035 * SR)), lo=1800, hi=9000) * env(int(0.035 * SR), d=0.007), g)
+    at(X, t, tone(2100, 0.04, harmonics=1, decay=0.008), g * 0.3)
 
-# Varredura do antes/depois.
-at(X, 2.9, sweep_noise(2.2, 500, 3000) * np.hanning(int(2.2 * SR)), 0.12)
-# Tecla F8: clique.
-at(X, 11.6, fft_filter(rng.standard_normal(int(0.04 * SR)), lo=1500) * env(int(0.04 * SR), d=0.008), 0.9)
-at(X, 11.6, tone(1800, 0.05, harmonics=1, decay=0.01), 0.3)
-# "Clipe salvo": dois tons subindo.
-at(X, 12.6, tone(note(81), 0.25, harmonics=2, decay=0.12), 0.35)
-at(X, 12.72, tone(note(88), 0.4, harmonics=2, decay=0.2), 0.35)
-# Contador do Raio-X: tiques e "ding".
-for k in range(26):
-    t = 14.9 + 1.6 * (1 - (1 - k / 26) ** 2)
-    at(X, t, tone(2400, 0.02, harmonics=1, decay=0.005), 0.18)
-at(X, 16.5, tone(note(84), 0.8, harmonics=3, decay=0.35), 0.35)
-for t in (15.5, 15.8, 16.1):
-    at(X, t, tone(note(76), 0.12, harmonics=2, decay=0.05), 0.25)
-# Alvos acertados.
-for k in range(6):
-    t = 18.0 + 0.5 + k * 0.4 + 0.3
-    at(X, t, tone(note(79 + (k % 3) * 2), 0.12, harmonics=2, decay=0.04), 0.3)
-    at(X, t, fft_filter(rng.standard_normal(int(0.06 * SR)), lo=2000) * env(int(0.06 * SR), d=0.015), 0.25)
-# Logo final: brilho.
-at(X, 23.6, sweep_noise(1.2, 2000, 9000) * np.linspace(1, 0, int(1.2 * SR)), 0.15)
+def chime(t, notes, g=0.32):
+    for j, n in enumerate(notes):
+        at(X, t + j * 0.11, tone(note(n), 0.5, harmonics=2, decay=0.22), g)
+
+def pop(t, n=79, g=0.25):
+    at(X, t, tone(note(n), 0.12, harmonics=2, decay=0.04), g)
+
+def whoosh(t, dur=0.45, g=0.32):
+    at(X, t - dur * 0.55, sweep_noise(dur, 4000, 400) * np.hanning(int(dur * SR)), g)
+
+def boom(t, g=0.5):
+    at(X, t, kick(1.0) * 0.8 + fft_filter(rng.standard_normal(int(0.45 * SR)), hi=800) * env(int(0.45 * SR), d=0.12) * 0.4, g)
+
+CUTS = [3, 10.5, 14.5, 24, 29, 33.5, 39]
+# Gancho: linhas batendo, tremidas, riser até o drop.
+for j in range(3):
+    pop(0.15 + j * 0.12 + 0.15, 57 + j * 3, 0.2)
+for t in (0.45, 0.95):
+    boom(t, 0.55)
+at(X, 1.1, sweep_noise(1.85, 300, 7000) * np.linspace(0, 1, int(1.85 * SR)) ** 2, 0.35)
+for c in CUTS:
+    whoosh(c)
+    boom(c, 0.6 if c in (3, 39) else 0.22)
+# Vibrance: varredura subindo com o slider, ding ao passar de 100%, clique em Aplicar.
+at(X, 3.8, sweep_noise(4.2, 400, 4000) * np.hanning(int(4.2 * SR)), 0.1)
+pop(5.4, 84, 0.3)
+pop(6.4, 88, 0.3)
+click(9.0)
+chime(9.05, [81, 88], 0.22)
+# Perfil automático: aviso do Windows.
+chime(12.3, [76, 83], 0.3)
+# Replay: liga, F8, botão do mouse, salvo, vira vertical, etiquetas.
+click(15.8)
+click(17.7, 1.0)
+click(18.2, 1.0)
+chime(18.5, [81, 85, 88], 0.3)
+whoosh(19.9 + 0.25, 0.6, 0.28)
+pop(21.0, 81)
+pop(21.4, 83)
+# Raio-X: contador e cada item corrigido.
+for j in range(20):
+    at(X, 24.3 + j * 0.035, tone(2400, 0.02, harmonics=1, decay=0.005), 0.15)
+for j, t in enumerate((25.2, 25.7, 26.2, 26.7)):
+    pop(t, 76 + j * 2, 0.3)
+chime(26.75, [84, 88, 91], 0.28)
+# Treino: acertos (cada 6 quadros da sequência).
+for f in range(5, 48, 6):
+    t = 29 + 0.3 + f / 47 * 3.4
+    pop(t, 79 + (f // 6) % 3 * 2, 0.28)
+    at(X, t, fft_filter(rng.standard_normal(int(0.05 * SR)), lo=2500) * env(int(0.05 * SR), d=0.012), 0.22)
+# E mais: um whoosh por cartão.
+for j in range(5):
+    whoosh(33.5 + 0.6 + j * 0.9 + 0.2, 0.35, 0.2)
+# Final.
+at(X, 39.8, sweep_noise(0.8, 1500, 8000) * np.hanning(int(0.8 * SR)), 0.18)
+boom(40.5, 0.35)
 
 # ---------------------------------------------------------------- mixagem
 def reverb(sig, secs=1.6, mix=0.18):
