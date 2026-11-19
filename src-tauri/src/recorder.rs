@@ -118,6 +118,16 @@ struct Inner {
     recording: Option<(u64, Instant)>,
     /// Pedaços que não podem ser apagados (juntando uma gravação).
     pinned_from: Option<u64>,
+    /// Monitor escolhido nas configurações (nome GDI); None = principal.
+    monitor: Option<String>,
+    /// Jogo estava aberto no tick anterior.
+    was_game: bool,
+    /// Reiniciar a captura neste instante (depois do jogo entrar em tela cheia).
+    restart_at: Option<Instant>,
+    /// Não reiniciar antes disso (pausa curta depois de uma queda).
+    next_start: Option<Instant>,
+    /// Tamanho do arquivo de log já conferido.
+    log_seen: u64,
     /// Marcadores da gravação manual (segundos desde o início).
     markers: Vec<f64>,
     /// Codificador que funciona com quadros na memória (cortes/compressão).
@@ -221,14 +231,32 @@ impl Recorder {
     }
 
     /// Chamado pelo loop de fundo a cada meio segundo.
-    pub fn tick(self: &Arc<Self>, settings: &RecorderSettings, game_active: bool) {
+    pub fn tick(self: &Arc<Self>, settings: &RecorderSettings, game_active: bool, monitor: Option<String>) {
         if !engine_available() {
             return;
         }
         let mut g = lock(&self.inner);
         g.settings = settings.clone();
         g.folder = self.folder_for(settings);
-        let key = config_key(settings);
+        g.monitor = monitor;
+        // A chave inclui o monitor e a resolução atual: mudou (tela esticada,
+        // jogo em tela cheia com outra resolução)? Recomeça no tamanho certo.
+        let gdi = game_monitor(&g.monitor);
+        let size = gdi.as_deref().and_then(goat_core::tweaks::current_size).unwrap_or((0, 0));
+        let key = format!("{}|{:?}|{}x{}", config_key(settings), gdi, size.0, size.1);
+        // O jogo acabou de abrir: recomeça a captura daqui a pouco (a troca para
+        // tela cheia derruba a captura da área de trabalho).
+        if game_active && !g.was_game {
+            g.restart_at = Some(Instant::now() + Duration::from_millis(3500));
+        }
+        g.was_game = game_active;
+        if g.restart_at.is_some_and(|t| Instant::now() >= t) {
+            g.restart_at = None;
+            if g.run.is_some() {
+                log::info!("Gravador: recomeçando depois do jogo abrir");
+                self.restart_locked(&mut g);
+            }
+        }
         if g.fail_key.as_deref() != Some(key.as_str()) {
             // Configuração nova: tenta de novo do zero.
             g.fails = 0;
@@ -238,7 +266,7 @@ impl Recorder {
             }
         }
 
-        // O FFmpeg parou sozinho?
+        // O FFmpeg parou sozinho (captura caiu: -xerror)?
         if let Some(r) = g.run.as_mut() {
             if let Ok(Some(_)) = r.child.try_wait() {
                 let quick = r.started.elapsed() < Duration::from_secs(8);
@@ -246,15 +274,22 @@ impl Recorder {
                 let log = std::fs::read_to_string(self.data_dir.join("replay").join("ffmpeg.log")).unwrap_or_default();
                 let tail = rc::error_tail(&log);
                 log::warn!("Gravador parou: {tail:?}");
+                // Pausa curta antes de recomeçar (a tela pode estar trocando de modo).
+                g.next_start = Some(Instant::now() + Duration::from_millis(1200));
                 if quick {
                     g.fails += 1;
                     // O caminho escolhido pode ter deixado de funcionar (driver novo etc.).
                     g.pipeline = None;
+                    if g.fails >= 4 {
+                        g.error = Some(match tail {
+                            Some(t) => format!("A gravação parou: {t}"),
+                            None => "A gravação parou.".into(),
+                        });
+                    }
+                } else {
+                    // Rodou bem e caiu (tela cheia, troca de resolução): só recomeça.
+                    g.fails = 0;
                 }
-                g.error = Some(match tail {
-                    Some(t) => format!("A gravação parou: {t}"),
-                    None => "A gravação parou.".into(),
-                });
             }
         }
 
@@ -267,7 +302,8 @@ impl Recorder {
             (true, Some(k)) if k != key && g.recording.is_none() => self.stop_locked(&mut g),
             _ => {}
         }
-        if want && g.run.is_none() && !g.starting && g.fails < 3 {
+        let can_start = g.next_start.is_none_or(|t| Instant::now() >= t);
+        if want && g.run.is_none() && !g.starting && g.fails < 4 && can_start {
             g.starting = true;
             let me = self.clone();
             let s = settings.clone();
@@ -279,6 +315,20 @@ impl Recorder {
 
         if g.last_janitor.is_none_or(|t| t.elapsed() > Duration::from_secs(2)) {
             g.last_janitor = Some(Instant::now());
+            // Captura da tela falhou mas o FFmpeg seguiu (só áudio)? Recomeça.
+            if g.run.is_some() {
+                let path = self.data_dir.join("replay").join("ffmpeg.log");
+                let len = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                if len > g.log_seen {
+                    let text = std::fs::read_to_string(&path).unwrap_or_default();
+                    let new = text.get(g.log_seen as usize..).unwrap_or("");
+                    g.log_seen = len;
+                    if new.contains("AcquireNextFrame failed") || new.contains("Failed to create desktop duplication") {
+                        log::warn!("Gravador: a captura da tela caiu; recomeçando");
+                        self.restart_locked(&mut g);
+                    }
+                }
+            }
             let protect = g.recording.map(|(i, _)| i).or(g.pinned_from);
             let keep = keep_seconds(settings);
             drop(g);
@@ -287,6 +337,15 @@ impl Recorder {
                 let _ = std::fs::remove_file(dir.join(rc::segment_name(i)));
             }
         }
+    }
+
+    /// Recomeça a captura sem apagar o vídeo guardado.
+    fn restart_locked(&self, g: &mut Inner) {
+        if let Some(mut r) = g.run.take() {
+            let _ = r.child.kill();
+            let _ = r.child.wait();
+        }
+        g.next_start = Some(Instant::now() + Duration::from_millis(800));
     }
 
     fn stop_locked(&self, g: &mut Inner) {
@@ -320,10 +379,13 @@ impl Recorder {
             Ok(p) => p,
             Err(e) => return self.fail_start(e),
         };
-        let (sw, sh) = primary_size();
+        let gdi = game_monitor(&lock(&self.inner).monitor);
+        let ((sw, sh), idx) = monitor_info(&gdi);
         let (w, h) = rc::output_size(sw, sh, s.max_height);
+        let replay_dir = self.data_dir.join("replay");
+        let _ = std::fs::create_dir_all(&replay_dir);
         let cached = lock(&self.inner).pipeline.filter(|(_, k)| *k == (w, h, s.fps)).map(|(p, _)| p);
-        let pipeline = match cached.or_else(|| probe(&exe, w, h, s.fps)) {
+        let pipeline = match cached.or_else(|| probe(&exe, &replay_dir, idx, w, h, s.fps)) {
             Some(p) => p,
             None => {
                 return self.fail_start(
@@ -337,7 +399,11 @@ impl Recorder {
         let replay = self.data_dir.join("replay");
         let live = self.live_dir();
         let key_file = replay.join("config.txt");
-        if std::fs::read_to_string(&key_file).ok().as_deref() != Some(key.as_str()) {
+        let keep = {
+            let g = lock(&self.inner);
+            g.recording.is_some() || g.pinned_from.is_some()
+        };
+        if !keep && std::fs::read_to_string(&key_file).ok().as_deref() != Some(key.as_str()) {
             let _ = std::fs::remove_dir_all(&live);
         }
         if let Err(e) = std::fs::create_dir_all(&live) {
@@ -357,13 +423,14 @@ impl Recorder {
             height: h,
             fps: s.fps,
             bitrate_kbps: rc::bitrate_kbps(w, h, s.fps, s.quality),
-            output_idx: 0,
+            output_idx: idx,
             system_audio: audio_fmt,
             mic: (!s.mic.is_empty()).then(|| s.mic.clone()),
             segment_dir: live.to_string_lossy().into_owned(),
             separate_tracks: s.separate_tracks && !s.mic.is_empty(),
             start_number,
         };
+        lock(&self.inner).log_seen = 0;
         let log_file = match std::fs::File::create(replay.join("ffmpeg.log")) {
             Ok(f) => f,
             Err(e) => return self.fail_start(e.to_string()),
@@ -384,12 +451,13 @@ impl Recorder {
             _ => None,
         };
         log::info!(
-            "Gravador: {} {}x{} {} fps, {} kbit/s, som do PC: {}, microfone: {}",
+            "Gravador: {} {}x{} {} fps, {} kbit/s, monitor {:?} (saída {idx}), som do PC: {}, microfone: {}",
             pipeline.encoder.label(),
             w,
             h,
             s.fps,
             spec.bitrate_kbps,
+            gdi,
             audio_fmt.is_some(),
             !s.mic.is_empty()
         );
@@ -783,114 +851,248 @@ impl Recorder {
     }
 }
 
-/// Resolução atual do monitor principal (pixels reais).
-fn primary_size() -> (u32, u32) {
-    goat_core::monitors::enumerate()
-        .into_iter()
-        .find(|d| d.primary)
-        .and_then(|d| goat_core::tweaks::display_mode(&d.id))
-        .map(|m| (m.width, m.height))
-        .unwrap_or((1920, 1080))
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagItem {
+    pub name: String,
+    pub ok: bool,
+    pub detail: String,
 }
 
-/// Testa os caminhos do mais leve para o mais pesado.
-fn probe(exe: &Path, w: u32, h: u32, fps: u32) -> Option<Pipeline> {
-    for p in rc::PIPELINES {
-        let mut cmd = command(exe);
-        cmd.args(rc::probe_args(p, w, h, fps));
-        let (ok, err) = run_with_timeout(cmd, Duration::from_secs(12));
-        if ok {
-            log::info!("Gravador: usando {:?}", p);
-            return Some(p);
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagReport {
+    pub items: Vec<DiagItem>,
+    /// Texto para copiar e mandar no suporte.
+    pub text: String,
+}
+
+impl Recorder {
+    /// Testa imagem, som do PC e microfone em poucos segundos.
+    pub fn diagnose(&self, s: &RecorderSettings) -> DiagReport {
+        let mut items = Vec::new();
+        let mut push = |name: &str, ok: bool, detail: String| items.push(DiagItem { name: name.into(), ok, detail });
+        let exe = match self.engine() {
+            Ok(e) => e,
+            Err(e) => {
+                push("Motor de gravação", false, e);
+                return report(items, String::new());
+            }
+        };
+        let dir = self.data_dir.join("replay");
+        let _ = std::fs::create_dir_all(&dir);
+
+        // Imagem
+        let gdi = game_monitor(&lock(&self.inner).monitor);
+        let ((sw, sh), idx) = monitor_info(&gdi);
+        let (w, h) = rc::output_size(sw, sh, s.max_height);
+        let cached = lock(&self.inner).pipeline.map(|(p, _)| p);
+        let p = cached.or_else(|| probe(&exe, &dir, idx, w, h, s.fps));
+        match p.and_then(|p| probe_picture(&exe, &dir, p, idx, w, h, s.fps).map(|r| (p, r))) {
+            Some((p, (b, true))) => push(
+                "Imagem",
+                true,
+                format!("{} · {}x{} · monitor {} (saída {idx}) · brilho {b:.0}", p.encoder.label(), w, h, gdi.clone().unwrap_or_default()),
+            ),
+            Some((p, (b, false))) => push(
+                "Imagem",
+                false,
+                format!("{} gravou a tela preta (brilho {b:.0}) no monitor {} (saída {idx}). Atualize o driver da placa.", p.encoder.label(), gdi.clone().unwrap_or_default()),
+            ),
+            None => push("Imagem", false, "Nenhum codificador de vídeo funcionou. Atualize o driver da placa.".into()),
         }
-        log::info!("Gravador: {:?} não funcionou: {}", p, rc::error_tail(&err).unwrap_or_default());
+
+        // Som do PC: grava 1,6 s enquanto toca um bipe.
+        if s.system_audio {
+            use std::sync::atomic::{AtomicBool, Ordering};
+            let stop = Arc::new(AtomicBool::new(false));
+            let flag = stop.clone();
+            let peak = Arc::new(Mutex::new(0f32));
+            let pk = peak.clone();
+            let t = std::thread::spawn(move || {
+                goat_core::loopback::run(flag, |d| {
+                    let p = goat_core::loopback::peak(d);
+                    let mut g = lock(&pk);
+                    *g = g.max(p);
+                    true
+                })
+            });
+            std::thread::sleep(Duration::from_millis(300));
+            goat_core::clips::play_beep();
+            std::thread::sleep(Duration::from_millis(1300));
+            stop.store(true, Ordering::SeqCst);
+            let r = t.join().unwrap_or_else(|_| Err("falhou".into()));
+            let p = *lock(&peak);
+            match r {
+                Ok(f) if p > 0.003 => push("Som do PC", true, format!("{} Hz · {} canais · pico {:.0}%", f.rate, f.channels, p * 100.0)),
+                Ok(f) => push(
+                    "Som do PC",
+                    false,
+                    format!("Nada captado ({} Hz, {} canais). Confira se o som do jogo sai pelo dispositivo padrão do Windows e se não está no mudo.", f.rate, f.channels),
+                ),
+                Err(e) => push("Som do PC", false, e),
+            }
+        } else {
+            push("Som do PC", true, "desligado nas opções".into());
+        }
+
+        // Microfone
+        if s.mic.is_empty() {
+            push("Microfone", true, "sem microfone".into());
+        } else {
+            let wav = dir.join("mic.wav");
+            let mut cmd = command(&exe);
+            cmd.args(["-hide_banner", "-loglevel", "error", "-y", "-f", "dshow", "-i"])
+                .arg(format!("audio={}", s.mic))
+                .args(["-t", "1.5", "-ac", "1", "-ar", "16000", "-f", "wav"])
+                .arg(&wav);
+            let (ok, err) = run_with_timeout(cmd, Duration::from_secs(10));
+            let bytes = std::fs::read(&wav).unwrap_or_default();
+            let _ = std::fs::remove_file(&wav);
+            let p = goat_core::loopback::peak(&goat_core::loopback::i16_to_f32(bytes.get(44..).unwrap_or(&[])));
+            if ok {
+                push("Microfone", true, format!("{} · pico {:.0}%", s.mic, p * 100.0));
+            } else {
+                push("Microfone", false, rc::error_tail(&err).unwrap_or_else(|| "não abriu".into()));
+            }
+        }
+        let log = std::fs::read_to_string(dir.join("ffmpeg.log")).unwrap_or_default();
+        report(items, rc::error_tail(&log).unwrap_or_default())
     }
-    None
 }
 
-/// Som do PC (o que sai nas caixas/fones), via WASAPI loopback.
+fn report(items: Vec<DiagItem>, log_tail: String) -> DiagReport {
+    let mut text = format!("Goat Filter {} — teste de gravação\n", env!("CARGO_PKG_VERSION"));
+    for i in &items {
+        text.push_str(&format!("{} {}: {}\n", if i.ok { "OK" } else { "FALHOU" }, i.name, i.detail));
+    }
+    if !log_tail.is_empty() {
+        text.push_str(&format!("Último aviso do gravador: {log_tail}\n"));
+    }
+    DiagReport { items, text }
+}
+
+/// Monitor do jogo: o escolhido (nome GDI) ou o principal.
+fn game_monitor(chosen: &Option<String>) -> Option<String> {
+    let list = goat_core::monitors::enumerate();
+    chosen
+        .clone()
+        .filter(|id| list.iter().any(|d| &d.id == id))
+        .or_else(|| list.iter().find(|d| d.primary).map(|d| d.id.clone()))
+}
+
+/// Resolução atual e saída de vídeo (DXGI) do monitor.
+fn monitor_info(gdi: &Option<String>) -> ((u32, u32), u32) {
+    let size = gdi.as_deref().and_then(goat_core::tweaks::current_size).unwrap_or((1920, 1080));
+    let idx = gdi.as_deref().and_then(goat_core::loopback::dxgi_output_index).unwrap_or(0);
+    (size, idx)
+}
+
+/// Grava 1 s com o caminho e mede o brilho de um quadro. None = não codificou.
+fn probe_picture(exe: &Path, dir: &Path, p: Pipeline, idx: u32, w: u32, h: u32, fps: u32) -> Option<(f32, bool)> {
+    let ts = dir.join("probe.ts");
+    let raw = dir.join("probe.raw");
+    let _ = std::fs::remove_file(&raw);
+    let mut cmd = command(exe);
+    cmd.args(rc::probe_args(p, idx, w, h, fps, Some(&ts.to_string_lossy())));
+    let (ok, err) = run_with_timeout(cmd, Duration::from_secs(15));
+    if !ok {
+        log::info!("Gravador: {:?} não funcionou: {}", p, rc::error_tail(&err).unwrap_or_default());
+        return None;
+    }
+    let mut cmd = command(exe);
+    cmd.args(rc::frame_check_args(&ts.to_string_lossy(), &raw.to_string_lossy()));
+    run_with_timeout(cmd, Duration::from_secs(10));
+    let gray = std::fs::read(&raw).unwrap_or_default();
+    let _ = std::fs::remove_file(&ts);
+    let _ = std::fs::remove_file(&raw);
+    Some((rc::brightness(&gray).0, rc::has_picture(&gray)))
+}
+
+/// Testa os caminhos do mais leve para o mais pesado e fica com o primeiro que
+/// mostra imagem (não só o que codifica: alguns caminhos gravam tela preta).
+fn probe(exe: &Path, dir: &Path, idx: u32, w: u32, h: u32, fps: u32) -> Option<Pipeline> {
+    let mut first_ok = None;
+    for p in rc::PIPELINES {
+        match probe_picture(exe, dir, p, idx, w, h, fps) {
+            Some((_, true)) => {
+                log::info!("Gravador: usando {:?}", p);
+                return Some(p);
+            }
+            Some((b, false)) => {
+                log::info!("Gravador: {:?} gravou imagem escura (brilho {b:.1}); tentando o próximo", p);
+                first_ok.get_or_insert(p);
+            }
+            None => {}
+        }
+    }
+    // A tela pode estar mesmo escura: usa o primeiro que codificou.
+    if let Some(p) = first_ok {
+        log::info!("Gravador: nenhuma imagem clara; usando {:?}", p);
+    }
+    first_ok
+}
+
+/// Som do PC (o que sai nas caixas/fones), via WASAPI loopback (goat_core::loopback).
 #[cfg(windows)]
 mod audio {
-    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     use goat_core::recorder::AudioFormat;
     use std::io::Write;
     use std::process::ChildStdin;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
+    use std::sync::mpsc::{self, RecvTimeoutError};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
-    fn supported(f: cpal::SampleFormat) -> bool {
-        matches!(f, cpal::SampleFormat::F32 | cpal::SampleFormat::I16)
-    }
-
     pub fn format() -> Option<AudioFormat> {
-        let dev = cpal::default_host().default_output_device()?;
-        let cfg = dev.default_output_config().ok()?;
-        supported(cfg.sample_format()).then(|| AudioFormat { rate: cfg.sample_rate().0, channels: cfg.channels() })
-    }
-
-    fn build(tx: SyncSender<Vec<f32>>, fmt: AudioFormat) -> Option<cpal::Stream> {
-        let dev = cpal::default_host().default_output_device()?;
-        let cfg = dev.default_output_config().ok()?;
-        let sf = cfg.sample_format();
-        let config: cpal::StreamConfig = cfg.into();
-        if config.sample_rate.0 != fmt.rate || config.channels != fmt.channels {
-            return None;
-        }
-        let err = |e: cpal::StreamError| log::warn!("Som do PC: {e}");
-        let stream = match sf {
-            cpal::SampleFormat::F32 => dev.build_input_stream(
-                &config,
-                move |d: &[f32], _: &cpal::InputCallbackInfo| {
-                    let _ = tx.try_send(d.to_vec());
-                },
-                err,
-                None,
-            ),
-            cpal::SampleFormat::I16 => dev.build_input_stream(
-                &config,
-                move |d: &[i16], _: &cpal::InputCallbackInfo| {
-                    let _ = tx.try_send(d.iter().map(|v| *v as f32 / 32768.0).collect());
-                },
-                err,
-                None,
-            ),
-            _ => return None,
-        };
-        match stream {
-            Ok(s) => {
-                let _ = s.play();
-                Some(s)
-            }
-            Err(e) => {
-                log::warn!("Som do PC indisponível: {e}");
-                None
-            }
-        }
+        goat_core::loopback::format().map(|f| AudioFormat { rate: f.rate, channels: f.channels })
     }
 
     pub struct Loopback {
         stop: Arc<AtomicBool>,
-        thread: Option<std::thread::JoinHandle<()>>,
+        threads: Vec<std::thread::JoinHandle<()>>,
     }
 
     impl Loopback {
         pub fn start(stdin: ChildStdin, fmt: AudioFormat) -> Self {
             let stop = Arc::new(AtomicBool::new(false));
+            let (tx, rx) = mpsc::sync_channel::<Vec<f32>>(1024);
+            let mut threads = Vec::new();
+            // Leitura do som do PC (recomeça se o dispositivo de saída mudar).
             let flag = stop.clone();
-            let thread = std::thread::Builder::new()
-                .name("goat-recorder-audio".into())
-                .spawn(move || run(stdin, fmt, flag))
-                .ok();
-            Self { stop, thread }
+            if let Ok(t) = std::thread::Builder::new().name("goat-recorder-loopback".into()).spawn(move || {
+                while !flag.load(Ordering::SeqCst) {
+                    let r = goat_core::loopback::run(flag.clone(), |d| {
+                        let _ = tx.try_send(d.to_vec());
+                        true
+                    });
+                    match r {
+                        Ok(f) if f.rate != fmt.rate || f.channels != fmt.channels => {
+                            log::warn!("Som do PC mudou de formato; reinicie a gravação.");
+                            break;
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            log::warn!("Som do PC indisponível: {e}");
+                            std::thread::sleep(Duration::from_secs(2));
+                        }
+                    }
+                }
+            }) {
+                threads.push(t);
+            }
+            let flag = stop.clone();
+            if let Ok(t) = std::thread::Builder::new().name("goat-recorder-audio".into()).spawn(move || write(stdin, fmt, flag, rx)) {
+                threads.push(t);
+            }
+            Self { stop, threads }
         }
     }
 
     impl Drop for Loopback {
         fn drop(&mut self) {
             self.stop.store(true, Ordering::SeqCst);
-            if let Some(t) = self.thread.take() {
+            for t in self.threads.drain(..) {
                 let _ = t.join();
             }
         }
@@ -898,20 +1100,18 @@ mod audio {
 
     /// Escreve o som no FFmpeg. O Windows não entrega nada quando o PC está em
     /// silêncio, então completa com zeros para o áudio não sair do tempo.
-    fn run(mut out: ChildStdin, fmt: AudioFormat, stop: Arc<AtomicBool>) {
-        let (tx, rx) = mpsc::sync_channel::<Vec<f32>>(512);
-        let stream = build(tx, fmt);
+    fn write(mut out: ChildStdin, fmt: AudioFormat, stop: Arc<AtomicBool>, rx: mpsc::Receiver<Vec<f32>>) {
         let rate = fmt.rate as u64;
         let ch = fmt.channels.max(1) as usize;
         let start = Instant::now();
         let mut written: u64 = 0;
         let mut buf: Vec<u8> = Vec::with_capacity(64 * 1024);
         while !stop.load(Ordering::SeqCst) {
-            let expected = start.elapsed().as_micros() as u64 * rate / 1_000_000;
             match rx.recv_timeout(Duration::from_millis(20)) {
                 Ok(samples) => {
+                    let expected = start.elapsed().as_micros() as u64 * rate / 1_000_000;
                     let frames = (samples.len() / ch) as u64;
-                    // Muito adiantado (voltou do silêncio)? Descarta para não atrasar a imagem.
+                    // Muito adiantado? Descarta para não atrasar em relação à imagem.
                     if written <= expected + rate / 5 {
                         for v in samples {
                             buf.extend_from_slice(&v.to_le_bytes());
@@ -934,6 +1134,5 @@ mod audio {
                 buf.clear();
             }
         }
-        drop(stream);
     }
 }

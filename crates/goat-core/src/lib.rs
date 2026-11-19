@@ -10,6 +10,7 @@ pub mod color;
 pub mod engine;
 pub mod games;
 pub mod input;
+pub mod loopback;
 pub mod update;
 pub mod monitors;
 pub mod perf;

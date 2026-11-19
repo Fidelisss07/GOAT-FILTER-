@@ -43,7 +43,7 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --enable-decoder=wrapped_avframe,pcm_u8,pcm_f32le,pcm_f64le,pcm_s16le,pcm_s32le,rawvideo,h264,aac \
   --enable-parser=h264,hevc,aac \
   --enable-demuxer=pcm_f32le,pcm_s16le,concat,mpegts,mov,wav \
-  --enable-muxer=segment,mpegts,mp4,mov,null,wav,image2 \
+  --enable-muxer=segment,mpegts,mp4,mov,null,wav,image2,rawvideo \
   --enable-bsf=dump_extradata,aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,extract_extradata \
   --enable-protocol=file,pipe,concat
 make -j"$(nproc)"

@@ -593,6 +593,18 @@ describe("Resolução esticada", () => {
   });
 });
 
+describe("Teste de gravação", () => {
+  it("mostra imagem, som do PC e microfone", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Gravação" }));
+    await userEvent.click(screen.getByRole("button", { name: "Testar gravação" }));
+    const list = await screen.findByRole("list", { name: "Resultado do teste" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(list).getByText(/Som do PC/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copiar relatório" })).toBeInTheDocument();
+  });
+});
+
 describe("Configurações", () => {
   it("troca o método do Super Vibrance e persiste", async () => {
     await renderApp();

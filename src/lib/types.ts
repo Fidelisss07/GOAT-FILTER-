@@ -183,6 +183,12 @@ export interface RecorderStatus {
   folder: string;
 }
 
+export interface DiagReport {
+  items: { name: string; ok: boolean; detail: string }[];
+  /** Texto para copiar e mandar no suporte. */
+  text: string;
+}
+
 export interface ClipInfo {
   name: string;
   path: string;

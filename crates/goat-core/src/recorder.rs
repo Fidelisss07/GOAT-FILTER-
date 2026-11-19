@@ -270,7 +270,9 @@ pub fn assemble(
     start_number: u64,
     separate_tracks: bool,
 ) -> Vec<String> {
-    let mut a = vec![s("-hide_banner"), s("-loglevel"), s("warning"), s("-y")];
+    // -xerror: se a captura da tela falhar (tela cheia, troca de resolução), o
+    // FFmpeg sai e o app reinicia; sem isso ele seguiria gravando só o áudio.
+    let mut a = vec![s("-hide_banner"), s("-loglevel"), s("warning"), s("-xerror"), s("-y")];
     a.extend(video_input);
     let mut audio_inputs = 0;
     if let Some(f) = system_audio {
@@ -345,16 +347,45 @@ pub fn capture_args(spec: &CaptureSpec) -> Vec<String> {
     )
 }
 
-/// Teste rápido (1 s, sem gravar nada) para descobrir o que a placa aceita.
-pub fn probe_args(p: Pipeline, w: u32, h: u32, fps: u32) -> Vec<String> {
+/// Teste rápido (1 s) para descobrir o que a placa aceita. Com `out`, grava
+/// um .ts para conferir se a imagem não sai preta.
+pub fn probe_args(p: Pipeline, output_idx: u32, w: u32, h: u32, fps: u32, out: Option<&str>) -> Vec<String> {
     let mut a = vec![
-        s("-hide_banner"), s("-loglevel"), s("error"),
-        s("-f"), s("lavfi"), s("-i"), video_graph(p, 0, w, h, fps),
-        s("-t"), s("1"), s("-an"),
+        s("-hide_banner"), s("-loglevel"), s("error"), s("-y"),
+        s("-f"), s("lavfi"), s("-i"), video_graph(p, output_idx, w, h, fps),
+        s("-t"), s("1.2"), s("-an"),
     ];
     a.extend(video_codec_args(p.encoder, bitrate_kbps(w, h, fps, Quality::Balanced), fps));
-    a.extend([s("-f"), s("null"), s("-")]);
+    match out {
+        Some(f) => a.extend([s("-f"), s("mpegts"), s(f)]),
+        None => a.extend([s("-f"), s("null"), s("-")]),
+    }
     a
+}
+
+/// Um quadro do vídeo reduzido a 16x9 em tons de cinza (para medir o brilho).
+pub fn frame_check_args(input: &str, output: &str) -> Vec<String> {
+    vec![
+        s("-hide_banner"), s("-loglevel"), s("error"), s("-y"),
+        s("-ss"), s("0.6"), s("-i"), s(input),
+        s("-frames:v"), s("1"), s("-vf"), s("scale=16:9,format=gray"),
+        s("-f"), s("rawvideo"), s(output),
+    ]
+}
+
+/// Brilho médio e máximo (0–255) de um quadro em cinza.
+pub fn brightness(gray: &[u8]) -> (f32, u8) {
+    if gray.is_empty() {
+        return (0.0, 0);
+    }
+    let sum: u64 = gray.iter().map(|&v| v as u64).sum();
+    (sum as f32 / gray.len() as f32, *gray.iter().max().unwrap_or(&0))
+}
+
+/// A imagem tem conteúdo (não é tela preta)?
+pub fn has_picture(gray: &[u8]) -> bool {
+    let (mean, max) = brightness(gray);
+    gray.len() >= 16 && (max > 24 || mean > 6.0)
 }
 
 /// Converte os pedaços juntados (.ts) em .mp4, sem recodificar.
@@ -626,6 +657,27 @@ mod tests {
         let j = capture_args(&sp).join(" ");
         assert!(j.contains("-map 1:a"));
         assert!(!j.contains("pipe:0"));
+    }
+
+    #[test]
+    fn teste_da_placa_e_brilho() {
+        let a = probe_args(PIPELINES[0], 2, 1920, 1080, 60, Some("p.ts")).join(" ");
+        assert!(a.contains("ddagrab=output_idx=2"));
+        assert!(a.ends_with("-f mpegts p.ts"));
+        assert!(probe_args(PIPELINES[0], 0, 1920, 1080, 60, None).join(" ").ends_with("-f null -"));
+        let f = frame_check_args("p.ts", "f.raw").join(" ");
+        assert!(f.contains("scale=16:9,format=gray"));
+        assert!(!has_picture(&[0u8; 144]));
+        assert!(!has_picture(&[3u8; 144]));
+        let mut img = [10u8; 144];
+        img[5] = 200;
+        assert!(has_picture(&img));
+        assert_eq!(brightness(&[0, 100]), (50.0, 100));
+    }
+
+    #[test]
+    fn captura_sai_se_a_tela_falhar() {
+        assert!(capture_args(&spec()).contains(&"-xerror".to_string()));
     }
 
     #[test]

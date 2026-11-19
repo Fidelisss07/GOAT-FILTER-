@@ -536,4 +536,10 @@ export const EN: Record<string, string> = {
   "Tela esticada por 10 segundos.": "Screen stretched for 10 seconds.",
   "Testar por 10 s": "Test for 10 s",
   "A tela já está esticada.": "The screen is already stretched.",
+  "Testando… (toca um bipe)": "Testing… (plays a beep)",
+  "Testar gravação": "Test recording",
+  "Resultado do teste": "Test result",
+  "Copiar relatório": "Copy report",
+  "Relatório copiado.": "Report copied.",
+  "Imagem": "Picture",
 };
