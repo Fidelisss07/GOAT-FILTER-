@@ -68,7 +68,7 @@ jobs:
             if ($bsfs -notmatch "\b$x\b") { throw "bsf $x ausente" }
           }
           $muxers = & $ff -hide_banner -muxers 2>&1 | Out-String
-          foreach ($x in "segment", "mpegts", "mp4") {
+          foreach ($x in "segment", "mpegts", "mp4", "rawvideo") {
             if ($muxers -notmatch "\b$x\b") { throw "muxer $x ausente" }
           }
           foreach ($e in "h264_nvenc", "h264_amf", "h264_mf", "aac") {
@@ -99,7 +99,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "falha ao comprimir" }
           & $ff -hide_banner -loglevel error -y -i "$tmp/clip.mp4" -map 0:v:0 -vf "crop='min(iw,ih*9/16)':ih,scale=1080:1920,format=nv12" -c:v h264_mf -b:v 4000k "$tmp/vert.mp4"
           if ($LASTEXITCODE -ne 0) { throw "falha no vertical" }
-          "Miniatura, compressão e vertical: ok"
+          # Teste de imagem do gravador: um quadro 16x9 em cinza (144 bytes).
+          & $ff -hide_banner -loglevel error -y -ss 0.6 -i "$tmp/clip.mp4" -frames:v 1 -vf "scale=16:9,format=gray" -f rawvideo "$tmp/frame.raw"
+          if ($LASTEXITCODE -ne 0 -or (Get-Item "$tmp/frame.raw").Length -ne 144) { throw "falha no teste de imagem" }
+          "Miniatura, compressão, vertical e teste de imagem: ok"
 
       - name: Instalar dependências
         run: npm ci

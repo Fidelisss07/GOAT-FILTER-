@@ -5,7 +5,7 @@ import { ClipEditor } from "../components/ClipEditor";
 import { KeyCapture } from "../components/KeyCapture";
 import { getNative } from "../lib/native";
 import { bitrateKbps, clipMegabytes, formatClock, formatSize, outputSize } from "../lib/rec";
-import { Bindings, CLIP_CHOICES, ClipInfo, isDiscordWebhook, RecQuality, RecorderSettings, RecorderStatus } from "../lib/types";
+import { Bindings, CLIP_CHOICES, ClipInfo, DiagReport, isDiscordWebhook, RecQuality, RecorderSettings, RecorderStatus } from "../lib/types";
 import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
 
@@ -289,6 +289,7 @@ export function RecordingPage() {
                 </button>
               ))}
             </div>
+            <RecordingTest />
             {st?.running && (
               <p className="note">
                 {st.encoder} {st.hardware ? `(${t("placa de vídeo")})` : ""} · {st.size} · {st.fps} fps ·{" "}
@@ -488,6 +489,59 @@ export function RecordingPage() {
         </section>
       </div>
       {editing && <ClipEditor clip={editing} onClose={() => setEditing(null)} onChanged={loadClips} />}
+    </div>
+  );
+}
+
+/** Grava alguns segundos e mostra se imagem, som do PC e microfone funcionam. */
+function RecordingTest() {
+  const t = useT();
+  const s = useStore();
+  const [busy, setBusy] = useState(false);
+  const [rep, setRep] = useState<DiagReport | null>(null);
+  return (
+    <div className="rec-test">
+      <button
+        type="button"
+        className="btn small"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          getNative()
+            .then((n) => n.testRecording())
+            .then(setRep)
+            .catch((e) => s.showToast({ kind: "error", text: String(e) }))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? t("Testando… (toca um bipe)") : t("Testar gravação")}
+      </button>
+      {rep && (
+        <>
+          <ul className="diag" aria-label={t("Resultado do teste")}>
+            {rep.items.map((i) => (
+              <li key={i.name} className={i.ok ? "ok" : "bad"}>
+                <strong>
+                  {i.ok ? "✓" : "✗"} {t(i.name)}
+                </strong>
+                <span>{i.detail}</span>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="btn link"
+            onClick={() =>
+              navigator.clipboard
+                .writeText(rep.text)
+                .then(() => s.showToast({ kind: "ok", text: t("Relatório copiado.") }))
+                .catch(() => s.showToast({ kind: "error", text: t("Não foi possível copiar.") }))
+            }
+          >
+            {t("Copiar relatório")}
+          </button>
+        </>
+      )}
     </div>
   );
 }

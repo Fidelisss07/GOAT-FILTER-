@@ -230,6 +230,14 @@ mod win {
         }
     }
 
+    /// Resolução atual do monitor (rápido: não lista os modos).
+    pub fn current_size(gdi: &str) -> Option<(u32, u32)> {
+        let name = wide(gdi);
+        let mut m = devmode();
+        unsafe { EnumDisplaySettingsW(PCWSTR(name.as_ptr()), ENUM_CURRENT_SETTINGS, &mut m).as_bool() }
+            .then_some((m.dmPelsWidth, m.dmPelsHeight))
+    }
+
     /// Todos os modos de vídeo do monitor (largura, altura, Hz).
     pub fn all_modes(gdi: &str) -> Vec<(u32, u32, u32)> {
         let name = wide(gdi);
@@ -445,12 +453,17 @@ mod win {
 }
 
 #[cfg(windows)]
-pub use win::{all_modes, reset_resolution, set_resolution, close_apps, reopen, running_paths, display_mode, game_dvr, hags, request_hags, set_game_dvr, set_refresh};
+pub use win::{current_size, all_modes, reset_resolution, set_resolution, close_apps, reopen, running_paths, display_mode, game_dvr, hags, request_hags, set_game_dvr, set_refresh};
 
 #[cfg(not(windows))]
 pub fn display_mode(_gdi: &str) -> Option<DisplayMode> {
     None
 }
+#[cfg(not(windows))]
+pub fn current_size(_gdi: &str) -> Option<(u32, u32)> {
+    None
+}
+
 #[cfg(not(windows))]
 pub fn all_modes(_gdi: &str) -> Vec<(u32, u32, u32)> {
     Vec::new()

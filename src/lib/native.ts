@@ -6,6 +6,7 @@
 import {
   Capabilities,
   ClipInfo,
+  DiagReport,
   DEFAULT_RECORDER,
   DEFAULT_SETTINGS,
   RecorderStatus,
@@ -86,6 +87,8 @@ export interface NativeApi {
   revealClip(path?: string): Promise<void>;
   deleteClip(path: string): Promise<void>;
   listMicrophones(): Promise<string[]>;
+  /** Grava alguns segundos e confere imagem, som do PC e microfone. */
+  testRecording(): Promise<DiagReport>;
   /** Miniatura do clipe (data URL) ou null. */
   clipThumbnail(path: string): Promise<string | null>;
   clipMarkers(path: string): Promise<number[]>;
@@ -181,6 +184,7 @@ async function tauriApi(): Promise<NativeApi> {
     revealClip: (path) => invoke<void>("reveal_clip", { path: path ?? null }),
     deleteClip: (path) => invoke<void>("delete_clip", { path }),
     listMicrophones: () => invoke<string[]>("list_microphones"),
+    testRecording: () => invoke<DiagReport>("test_recording"),
     clipThumbnail: (path) => invoke<string | null>("clip_thumbnail", { path }),
     clipMarkers: (path) => invoke<number[]>("clip_markers", { path }),
     renameClip: (path, name) => invoke<string>("rename_clip", { path, name }),
@@ -376,6 +380,14 @@ export function createDemoApi(): NativeApi {
       demoRec.clips = demoRec.clips.filter((c) => c.path !== path);
     },
     listMicrophones: async () => ["Microfone (Realtek(R) Audio)", "Headset (HyperX Cloud II)"],
+    testRecording: async () => ({
+      items: [
+        { name: "Imagem", ok: true, detail: "NVIDIA NVENC · 1920x1080 · monitor \\\\.\\DISPLAY1 (saída 0) · brilho 62" },
+        { name: "Som do PC", ok: true, detail: "48000 Hz · 2 canais · pico 24%" },
+        { name: "Microfone", ok: true, detail: "sem microfone" },
+      ],
+      text: "Goat Filter (demo) — teste de gravação",
+    }),
     cleanCaches: async (apply) => {
       const groups = demoCache.cleaned
         ? []

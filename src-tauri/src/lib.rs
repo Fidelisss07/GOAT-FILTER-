@@ -557,6 +557,16 @@ fn finish_export(app: &AppHandle, st: &AppState, r: Result<PathBuf, String>, cli
 }
 
 #[tauri::command]
+async fn test_recording(app: AppHandle) -> recorder::DiagReport {
+    let st = app.state::<Arc<AppState>>().inner().clone();
+    let s = lock(&st.settings).recorder.clone();
+    let rec = st.recorder.clone();
+    tauri::async_runtime::spawn_blocking(move || rec.diagnose(&s))
+        .await
+        .unwrap_or_else(|_| recorder::DiagReport { items: vec![], text: "falhou".into() })
+}
+
+#[tauri::command]
 fn list_clips(state: Shared) -> Vec<recorder::ClipInfo> {
     state.recorder.list_clips()
 }
@@ -1202,7 +1212,8 @@ fn spawn_background(app: AppHandle, state: Arc<AppState>) {
                 {
                     let rec = lock(&state.settings).recorder.clone();
                     let in_game = matches!(lock(&state.game).state, GameState::Active | GameState::Paused);
-                    state.recorder.tick(&rec, in_game);
+                    let mon = lock(&state.settings).default_monitor.clone();
+                    state.recorder.tick(&rec, in_game, mon);
                 }
 
                 // Temperatura da GPU durante a partida (a cada 2 s).
@@ -1474,6 +1485,7 @@ pub fn run() {
             start_recording,
             stop_recording,
             list_clips,
+            test_recording,
             open_clip,
             reveal_clip,
             delete_clip,
