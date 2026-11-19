@@ -100,7 +100,10 @@ function FindGames({ onClose }: { onClose(): void }) {
       .catch((e) => setError(String(e)));
   }, []);
   const have = new Set(s.settings.profiles.map((p) => exeName(p.executable)));
-  const fresh = (games ?? []).filter((g) => !have.has(exeName(g.executable)));
+  const [query, setQuery] = useState("");
+  const all = (games ?? []).filter((g) => !have.has(exeName(g.executable)));
+  const q = query.trim().toLowerCase();
+  const fresh = q ? all.filter((g) => g.name.toLowerCase().includes(q) || (g.source ?? "").toLowerCase().includes(q)) : all;
   const add = (list: FoundGame[]) => void s.addProfilesFromGames(list);
 
   return (
@@ -110,19 +113,39 @@ function FindGames({ onClose }: { onClose(): void }) {
         <button type="button" className="btn link" onClick={onClose}>{t("Fechar")}</button>
       </div>
       {error && <p className="field-error">{error}</p>}
-      {!games && !error && <p className="note">{t("Procurando na Steam, Epic e Riot…")}</p>}
-      {games && fresh.length === 0 && (
+      {!games && !error && (
+        <p className="note">{t("Procurando em todo o PC: Steam, Epic, Riot, EA, Ubisoft, GOG, Battle.net, Xbox e pastas de jogos…")}</p>
+      )}
+      {games && all.length > 0 && (
+        <p className="note">{t("{n} jogos encontrados sem perfil.", { n: all.length })}</p>
+      )}
+      {all.length > 6 && (
+        <input
+          type="search"
+          className="find-search"
+          placeholder={t("Buscar jogo…")}
+          aria-label={t("Buscar jogo")}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      )}
+      {games && all.length === 0 && (
         <p className="note">
-          {games.length === 0 ? t("Nenhum jogo conhecido encontrado.") : t("Todos os jogos encontrados já têm perfil.")}
+          {games.length === 0 ? t("Nenhum jogo encontrado.") : t("Todos os jogos encontrados já têm perfil.")}
         </p>
       )}
+      <div className="find-list">
       {fresh.map((g) => (
         <div key={g.id} className="find-row">
           <span className="ico">{g.id === VALORANT_ID ? <ValorantMark /> : <GameIcon />}</span>
-          <span className="name" title={g.executable}>{g.name}</span>
+          <span className="name" title={g.executable}>
+            {g.name}
+            {g.source && <small className="src">{g.source === "Pasta" ? t("Pasta") : g.source}</small>}
+          </span>
           <button type="button" className="btn small" onClick={() => add([g])}>{t("Adicionar")}</button>
         </div>
       ))}
+      </div>
       {fresh.length > 1 && (
         <button type="button" className="btn primary small" onClick={() => add(fresh)}>
           {t("Adicionar todos ({n})", { n: fresh.length })}

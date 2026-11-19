@@ -219,6 +219,8 @@ describe("v1.4", () => {
     const panel = await screen.findByRole("region", { name: "Jogos instalados" });
     // Valorant já tem perfil: não aparece
     expect(within(panel).queryByText("Valorant")).toBeNull();
+    expect(within(panel).getByText("Steam")).toBeInTheDocument();
+    expect(within(panel).getByText("2 jogos encontrados sem perfil.")).toBeInTheDocument();
     await userEvent.click(within(panel).getByRole("button", { name: "Adicionar todos (2)" }));
     await waitFor(() => {
       const saved = JSON.parse(localStorage.getItem("goat-filter:settings") ?? "{}");

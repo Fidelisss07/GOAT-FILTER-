@@ -412,6 +412,9 @@ h1, h2, h3 { margin: 0; }
 .find-row .ico { width: 34px; height: 34px; border-radius: 8px; background: #181718; display: grid; place-items: center; flex: none; }
 .find-row .ico svg { width: 20px; height: 20px; }
 .find-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.find-row .src { margin-left: 8px; font-size: 11px; color: var(--muted, #9a959a); padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); }
+.find-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; padding-right: 4px; }
+.find-search { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-soft); background: #141314; color: inherit; }
 .find-games > .btn.primary { align-self: flex-start; margin-top: 4px; }
 .row-ctl.select select { height: 42px; }
 

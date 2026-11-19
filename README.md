@@ -46,9 +46,9 @@ Os perfis podem ser **exportados e importados** (arquivo `.goatfilter.json`) par
 
 - **Presets** no editor de perfis: Competitivo (cores fortes, contorno vermelho realçado e sombras
   mais claras), Vibrante e Natural.
-- **Encontrar jogos instalados:** procura Valorant (Riot), Counter-Strike 2, Apex Legends, Overwatch 2,
-  Rainbow Six Siege, PUBG e Rocket League na Steam, Fortnite e Rocket League na Epic, e cria os perfis
-  com um clique.
+- **Encontrar jogos instalados:** procura todos os jogos do PC (Steam, Epic, Riot, EA, Ubisoft, GOG,
+  Battle.net, Rockstar, Xbox e pastas como `Games`/`Jogos` em todos os discos), escolhe o executável
+  certo de cada um e cria os perfis com um clique. Só lê arquivos e o registro; não abre os jogos.
 - **Bandeja:** botão direito no ícone para ligar/desligar o filtro ou aplicar qualquer perfil.
 - **Todos os monitores:** opção em Configurações › Monitor e ajustes.
 - **Avisos do Windows** quando um perfil liga, pausa (alt-tab) ou desliga.

@@ -477,9 +477,9 @@ export function createDemoApi(): NativeApi {
     }),
     openWindowsSettings: async () => {},
     findGames: async () => [
-      { id: "valorant", name: "Valorant", executable: "C:\\Riot Games\\VALORANT\\live\\VALORANT.exe" },
-      { id: "cs2", name: "Counter-Strike 2", executable: "D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe" },
-      { id: "fortnite", name: "Fortnite", executable: "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe" },
+      { id: "valorant", name: "Valorant", executable: "C:\\Riot Games\\VALORANT\\live\\VALORANT.exe", source: "Riot" },
+      { id: "cs2", name: "Counter-Strike 2", executable: "D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe", source: "Steam" },
+      { id: "fortnite", name: "Fortnite", executable: "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe", source: "Epic" },
     ],
     perfStatus: async () => ({ ...demoPerf }),
     setGameMode: async (on) => {

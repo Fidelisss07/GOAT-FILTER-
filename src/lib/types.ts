@@ -375,6 +375,8 @@ export interface FoundGame {
   id: string;
   name: string;
   executable: string;
+  /** Steam, Epic, Riot, EA, Ubisoft, GOG, Battle.net, Rockstar, Xbox ou Pasta. */
+  source?: string;
 }
 
 export interface UpdateInfo {
