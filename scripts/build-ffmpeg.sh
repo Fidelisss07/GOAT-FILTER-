@@ -27,6 +27,33 @@ make -C nv PREFIX="$PREFIX" install
 cp -r amf/amf/public/include/* "$PREFIX/include/AMF/"
 
 cd ffmpeg
+# Goat Filter: o ddagrab espera entre quadros com Sleep(), que no Windows tem
+# precisão de ~15,6 ms por padrão. A 60 fps (16,7 ms) os quadros saem em
+# intervalos irregulares e o vídeo "engasga". Pede relógio de 1 ms e tira o
+# processo (sem janela) da economia de energia do Windows 11.
+if ! grep -q goat_timer_fix fftools/ffmpeg.c; then
+  perl -0pi -e 's/int main\(int argc, char \*\*argv\)\n\{/#ifdef _WIN32
+static void goat_timer_fix(void)
+{
+    typedef UINT (WINAPI *TBP)(UINT);
+    typedef BOOL (WINAPI *SPI)(HANDLE, int, LPVOID, DWORD);
+    struct { ULONG Version, ControlMask, StateMask; } pt = { 1, 0x1 | 0x4, 0 };
+    HMODULE k = GetModuleHandleA("kernel32.dll");
+    SPI spi = k ? (SPI)(void *)GetProcAddress(k, "SetProcessInformation") : NULL;
+    HMODULE w = LoadLibraryA("winmm.dll");
+    TBP tbp = w ? (TBP)(void *)GetProcAddress(w, "timeBeginPeriod") : NULL;
+    if (spi)
+        spi(GetCurrentProcess(), 4, &pt, sizeof(pt));
+    if (tbp)
+        tbp(1);
+}
+#endif
+
+int main(int argc, char **argv)
+{/' fftools/ffmpeg.c
+  perl -0pi -e 's/\n    init_dynload\(\);/\n#ifdef _WIN32\n    goat_timer_fix();\n#endif\n    init_dynload();/' fftools/ffmpeg.c
+  [ "$(grep -c goat_timer_fix fftools/ffmpeg.c)" = 2 ] || { echo "patch do relógio falhou"; exit 1; }
+fi
 PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --prefix="$PREFIX" \
   --arch=x86_64 --target-os=mingw32 --cross-prefix=x86_64-w64-mingw32- \
@@ -49,4 +76,5 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
 make -j"$(nproc)"
 mkdir -p "$(dirname "$OUT")"
 x86_64-w64-mingw32-strip -o "$OUT" ffmpeg.exe
+grep -aq timeBeginPeriod "$OUT" || { echo "ffmpeg.exe sem o ajuste do relógio"; exit 1; }
 ls -la "$OUT"

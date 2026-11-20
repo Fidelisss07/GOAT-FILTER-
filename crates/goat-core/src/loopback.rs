@@ -78,14 +78,34 @@ mod win {
     }
 
     /// Lê o som do PC numa thread própria até `stop`. Silêncio vira zeros.
-    pub fn run(stop: Arc<AtomicBool>, mut on_data: impl FnMut(&[f32]) -> bool) -> Result<LoopFormat, String> {
+    /// Com `fill_silence`, quando o Windows não entrega nada (PC em silêncio)
+    /// completa com zeros pelo relógio, para o som não sair do tempo do vídeo.
+    pub fn run(stop: Arc<AtomicBool>, fill_silence: bool, mut on_data: impl FnMut(&[f32]) -> bool) -> Result<LoopFormat, String> {
         unsafe {
             let c = open()?;
             c.client.Start().map_err(|e| e.to_string())?;
             let ch = c.fmt.channels as usize;
+            let rate = c.fmt.rate as f64;
             let mut buf: Vec<f32> = Vec::with_capacity(48_000);
+            let t0 = std::time::Instant::now();
+            let mut last_data = t0;
+            let mut frames_out: u64 = 0;
             while !stop.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(10));
+                if fill_silence && last_data.elapsed() >= Duration::from_millis(100) {
+                    let expected = (t0.elapsed().as_secs_f64() * rate) as u64;
+                    let keep = (rate * 0.03) as u64;
+                    if expected > frames_out + keep {
+                        let n = (expected - frames_out - keep) as usize;
+                        buf.clear();
+                        buf.resize(n * ch, 0.0);
+                        frames_out += n as u64;
+                        if !on_data(&buf) {
+                            let _ = c.client.Stop();
+                            return Ok(c.fmt);
+                        }
+                    }
+                }
                 loop {
                     let n = match c.capture.GetNextPacketSize() {
                         Ok(n) => n,
@@ -111,6 +131,8 @@ mod win {
                         buf.extend(super::i16_to_f32(bytes));
                     }
                     let _ = c.capture.ReleaseBuffer(frames);
+                    frames_out += frames as u64;
+                    last_data = std::time::Instant::now();
                     if !on_data(&buf) {
                         let _ = c.client.Stop();
                         return Ok(c.fmt);
@@ -134,6 +156,7 @@ pub fn format() -> Option<LoopFormat> {
 #[cfg(not(windows))]
 pub fn run(
     _stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    _fill_silence: bool,
     _on_data: impl FnMut(&[f32]) -> bool,
 ) -> Result<LoopFormat, String> {
     Err("disponível apenas no Windows".into())
