@@ -71,7 +71,7 @@ jobs:
           "Tamanho: {0:N1} MB" -f ((Get-Item $ff).Length / 1MB)
           $filters = & $ff -hide_banner -filters 2>&1 | Out-String
           $encoders = & $ff -hide_banner -encoders 2>&1 | Out-String
-          foreach ($f in "ddagrab", "scale_d3d11", "hwdownload", "amix", "aresample", "trim", "atrim", "format", "scale", "crop", "asplit", "mpdecimate") {
+          foreach ($f in "ddagrab", "scale_d3d11", "hwdownload", "amix", "aresample", "trim", "atrim", "format", "scale", "crop", "asplit") {
             if ($filters -notmatch "\b$f\b") { throw "filtro $f ausente" }
           }
           $bsfs = & $ff -hide_banner -bsfs 2>&1 | Out-String
@@ -113,9 +113,10 @@ jobs:
           # Teste de imagem do gravador: um quadro 16x9 em cinza (144 bytes).
           & $ff -hide_banner -loglevel error -y -ss 0.6 -i "$tmp/clip.mp4" -frames:v 1 -vf "scale=16:9,format=gray" -f rawvideo "$tmp/frame.raw"
           if ($LASTEXITCODE -ne 0 -or (Get-Item "$tmp/frame.raw").Length -ne 144) { throw "falha no teste de imagem" }
-          # Teste de fluidez: conta os quadros diferentes e lê o progresso.
-          & $ff -hide_banner -loglevel error -nostats -y -i "$tmp/clip.mp4" -an -vf mpdecimate -progress "$tmp/prog.txt" -f null -
-          if ($LASTEXITCODE -ne 0 -or -not (Select-String -Path "$tmp/prog.txt" -Pattern "progress=end" -Quiet)) { throw "falha no teste de fluidez" }
+          # Teste de fluidez: todos os quadros em 64x36 cinza (2304 bytes cada).
+          & $ff -hide_banner -loglevel error -y -i "$tmp/clip.mp4" -an -vf "scale=64:36:flags=area,format=gray" -f rawvideo "$tmp/all.raw"
+          $n = (Get-Item "$tmp/all.raw").Length
+          if ($LASTEXITCODE -ne 0 -or $n -eq 0 -or ($n % 2304) -ne 0) { throw "falha no teste de fluidez" }
           "Miniatura, compressão, vertical e teste de imagem: ok"
 
       - name: Instalar dependências

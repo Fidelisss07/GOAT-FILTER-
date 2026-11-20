@@ -578,36 +578,37 @@ pub fn boost_priority(_child: &std::process::Child) -> Option<&'static str> {
     None
 }
 
-/// Conta os quadros diferentes de um clipe (quadros repetidos = travadas).
-/// O progresso vai para `progress` (arquivo) para ler o total no fim.
-pub fn smoothness_args(input: &str, progress: &str) -> Vec<String> {
+/// Tamanho dos quadros usados para medir a fluidez (cinza, 64x36).
+pub const SMOOTH_W: usize = 64;
+pub const SMOOTH_H: usize = 36;
+
+/// Extrai todos os quadros do clipe em miniatura cinza (para contar repetidos).
+pub fn smoothness_args(input: &str, out_raw: &str) -> Vec<String> {
     [
-        "-hide_banner", "-loglevel", "error", "-nostats", "-y", "-i", input, "-an",
-        "-vf", "mpdecimate", "-progress", progress, "-f", "null", "-",
+        "-hide_banner", "-loglevel", "error", "-y", "-i", input, "-an",
+        "-vf", "scale=64:36:flags=area,format=gray", "-f", "rawvideo", out_raw,
     ]
     .iter()
     .map(|x| x.to_string())
     .collect()
 }
 
-/// Do arquivo de progresso: (quadros que sobraram, segundos até o último).
-pub fn parse_progress(text: &str) -> Option<(u64, f64)> {
-    let mut frames = None;
-    let mut us = None;
-    for l in text.lines() {
-        if let Some(v) = l.strip_prefix("frame=") {
-            frames = v.trim().parse::<u64>().ok().or(frames);
-        } else if let Some(v) = l.strip_prefix("out_time_us=") {
-            us = v.trim().parse::<i64>().ok().filter(|x| *x > 0).or(us);
+/// (quadros diferentes do anterior, total). Quadro repetido = travada.
+pub fn count_unique(raw: &[u8]) -> (usize, usize) {
+    let n = SMOOTH_W * SMOOTH_H;
+    let frames: Vec<&[u8]> = raw.chunks_exact(n).collect();
+    if frames.is_empty() {
+        return (0, 0);
+    }
+    let mut unique = 1;
+    for w in frames.windows(2) {
+        let diff: u64 = w[0].iter().zip(w[1]).map(|(a, b)| (*a as i32 - *b as i32).unsigned_abs() as u64).sum();
+        // Média de diferença acima de 0,2 (de 255) = imagem mudou.
+        if diff * 10 > (n as u64) * 2 {
+            unique += 1;
         }
     }
-    Some((frames?, us? as f64 / 1_000_000.0))
-}
-
-/// Fração de quadros únicos (0..1) em relação ao esperado para o FPS gravado.
-pub fn unique_ratio(frames: u64, secs: f64, fps: u32) -> f32 {
-    let expected = (secs * fps as f64).max(1.0);
-    (frames as f64 / expected).clamp(0.0, 1.0) as f32
+    (unique, frames.len())
 }
 
 #[cfg(test)]
@@ -754,15 +755,17 @@ mod tests {
 
     #[test]
     fn mede_fluidez() {
-        let p = "frame=100\nout_time_us=1000000\nprogress=continue\nframe=1650\nout_time_us=29966667\nprogress=end\n";
-        let (f, secs) = parse_progress(p).unwrap();
-        assert_eq!(f, 1650);
-        assert!((secs - 29.966667).abs() < 1e-3);
-        assert!((unique_ratio(f, secs, 60) - 0.9177).abs() < 0.01);
-        assert_eq!(unique_ratio(5000, 10.0, 60), 1.0);
-        assert!(parse_progress("lixo").is_none());
-        let a = smoothness_args("c.mp4", "p.txt").join(" ");
-        assert!(a.contains("-i c.mp4 -an -vf mpdecimate -progress p.txt -f null -"));
+        let n = SMOOTH_W * SMOOTH_H;
+        let a = vec![10u8; n];
+        let mut b = vec![10u8; n];
+        b[..200].iter_mut().for_each(|x| *x = 200);
+        let mut noise = a.clone();
+        noise[0] = 13; // ruído de compressão: conta como repetido
+        let raw = [a.clone(), a.clone(), noise, b.clone(), b.clone(), a.clone()].concat();
+        assert_eq!(count_unique(&raw), (3, 6));
+        assert_eq!(count_unique(&[]), (0, 0));
+        let s = smoothness_args("c.mp4", "q.raw").join(" ");
+        assert!(s.contains("-i c.mp4 -an -vf scale=64:36:flags=area,format=gray -f rawvideo q.raw"));
     }
 
     #[test]

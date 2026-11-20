@@ -971,34 +971,32 @@ impl Recorder {
         match latest_clip(&self.folder()) {
             None => push("Fluidez", true, "grave um clipe jogando e teste de novo para medir".into()),
             Some(clip) => {
-                let prog = dir.join("fluidez.txt");
-                let _ = std::fs::remove_file(&prog);
+                let raw = dir.join("fluidez.raw");
+                let _ = std::fs::remove_file(&raw);
                 let mut cmd = command(&exe);
-                cmd.args(rc::smoothness_args(&clip.to_string_lossy(), &prog.to_string_lossy()));
+                cmd.args(rc::smoothness_args(&clip.to_string_lossy(), &raw.to_string_lossy()));
                 let (ok, err) = run_with_timeout(cmd, Duration::from_secs(90));
-                let parsed = std::fs::read_to_string(&prog).ok().and_then(|t| rc::parse_progress(&t));
-                let _ = std::fs::remove_file(&prog);
+                let bytes = std::fs::read(&raw).unwrap_or_default();
+                let _ = std::fs::remove_file(&raw);
+                let (u, total) = rc::count_unique(&bytes);
                 let name = clip.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                match parsed {
-                    Some((f, secs)) if ok && secs > 1.0 => {
-                        let r = rc::unique_ratio(f, secs, s.fps);
-                        let pct = (r * 100.0).round();
-                        if r >= 0.9 {
-                            push("Fluidez", true, format!("{pct:.0}% dos quadros diferentes em \"{name}\": liso"));
-                        } else {
-                            push(
-                                "Fluidez",
-                                false,
-                                format!(
-                                    "Só {pct:.0}% dos quadros diferentes em \"{name}\" (o resto repetido = travadas). \
-                                     Limite o FPS do jogo um pouco acima da taxa do monitor (ex.: 144 Hz → 160) para a placa não ficar em 100%, \
-                                     ou grave em {} fps. Se o clipe foi no menu ou parado, grave jogando e teste de novo.",
-                                    if s.fps > 30 { 30 } else { s.fps }
-                                ),
-                            )
-                        }
+                if ok && total > 30 {
+                    let pct = (u as f32 / total as f32 * 100.0).round();
+                    if pct >= 90.0 {
+                        push("Fluidez", true, format!("{pct:.0}% dos quadros diferentes em \"{name}\": liso"));
+                    } else {
+                        push(
+                            "Fluidez",
+                            false,
+                            format!(
+                                "Só {pct:.0}% dos quadros diferentes em \"{name}\" (o resto repetido = travadas). \
+                                 Limite o FPS do jogo um pouco acima da taxa do monitor (ex.: 144 Hz → 160) para a placa não ficar em 100%, \
+                                 ou grave em 30 fps. Se o clipe foi no menu ou parado, grave jogando e teste de novo."
+                            ),
+                        )
                     }
-                    _ => push("Fluidez", false, rc::error_tail(&err).unwrap_or_else(|| format!("não consegui analisar \"{name}\"")))
+                } else {
+                    push("Fluidez", false, rc::error_tail(&err).unwrap_or_else(|| format!("não consegui analisar \"{name}\"")))
                 }
             }
         }
