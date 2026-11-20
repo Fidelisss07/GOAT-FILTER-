@@ -445,19 +445,22 @@ impl Recorder {
             Err(e) => return self.fail_start(format!("Não foi possível iniciar a gravação: {e}")),
         };
         rc::tie_to_app(&child);
+        let prio = rc::boost_priority(&child);
         #[cfg(windows)]
         let audio = match (audio_fmt, child.stdin.take()) {
             (Some(f), Some(stdin)) => Some(audio::Loopback::start(stdin, f)),
             _ => None,
         };
         log::info!(
-            "Gravador: {} {}x{} {} fps, {} kbit/s, monitor {:?} (saída {idx}), som do PC: {}, microfone: {}",
+            "Gravador: {} ({:?}) {}x{} {} fps, {} kbit/s, monitor {:?} (saída {idx}), prioridade de GPU: {}, som do PC: {}, microfone: {}",
             pipeline.encoder.label(),
+            pipeline.path,
             w,
             h,
             s.fps,
             spec.bitrate_kbps,
             gdi,
+            prio.unwrap_or("normal"),
             audio_fmt.is_some(),
             !s.mic.is_empty()
         );
@@ -892,7 +895,15 @@ impl Recorder {
             Some((p, (b, true))) => push(
                 "Imagem",
                 true,
-                format!("{} · {}x{} · monitor {} (saída {idx}) · brilho {b:.0}", p.encoder.label(), w, h, gdi.clone().unwrap_or_default()),
+                format!(
+                    "{} · {} · {}x{} {} fps · monitor {} (saída {idx}) · brilho {b:.0}",
+                    p.encoder.label(),
+                    if p.path == rc::FramePath::Gpu { "captura pela GPU" } else { "captura pelo processador (mais pesada)" },
+                    w,
+                    h,
+                    s.fps,
+                    gdi.clone().unwrap_or_default()
+                ),
             ),
             Some((p, (b, false))) => push(
                 "Imagem",
@@ -956,6 +967,39 @@ impl Recorder {
                 push("Microfone", false, rc::error_tail(&err).unwrap_or_else(|| "não abriu".into()));
             }
         }
+        // Fluidez: quadros repetidos no clipe mais recente.
+        match latest_clip(&self.folder()) {
+            None => push("Fluidez", true, "grave um clipe jogando e teste de novo para medir".into()),
+            Some(clip) => {
+                let raw = dir.join("fluidez.raw");
+                let _ = std::fs::remove_file(&raw);
+                let mut cmd = command(&exe);
+                cmd.args(rc::smoothness_args(&clip.to_string_lossy(), &raw.to_string_lossy()));
+                let (ok, err) = run_with_timeout(cmd, Duration::from_secs(90));
+                let bytes = std::fs::read(&raw).unwrap_or_default();
+                let _ = std::fs::remove_file(&raw);
+                let (u, total) = rc::count_unique(&bytes);
+                let name = clip.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                if ok && total > 30 {
+                    let pct = (u as f32 / total as f32 * 100.0).round();
+                    if pct >= 90.0 {
+                        push("Fluidez", true, format!("{pct:.0}% dos quadros diferentes em \"{name}\": liso"));
+                    } else {
+                        push(
+                            "Fluidez",
+                            false,
+                            format!(
+                                "Só {pct:.0}% dos quadros diferentes em \"{name}\" (o resto repetido = travadas). \
+                                 Limite o FPS do jogo um pouco acima da taxa do monitor (ex.: 144 Hz → 160) para a placa não ficar em 100%, \
+                                 ou grave em 30 fps. Se o clipe foi no menu ou parado, grave jogando e teste de novo."
+                            ),
+                        )
+                    }
+                } else {
+                    push("Fluidez", false, rc::error_tail(&err).unwrap_or_else(|| format!("não consegui analisar \"{name}\"")))
+                }
+            }
+        }
         let log = std::fs::read_to_string(dir.join("ffmpeg.log")).unwrap_or_default();
         report(items, rc::error_tail(&log).unwrap_or_default())
     }
@@ -970,6 +1014,30 @@ fn report(items: Vec<DiagItem>, log_tail: String) -> DiagReport {
         text.push_str(&format!("Último aviso do gravador: {log_tail}\n"));
     }
     DiagReport { items, text }
+}
+
+/// Clipe .mp4 mais recente da pasta (e das subpastas diretas).
+fn latest_clip(folder: &Path) -> Option<PathBuf> {
+    let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
+    let look = |dir: &Path, best: &mut Option<(std::time::SystemTime, PathBuf)>| {
+        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.extension().map(|x| x.eq_ignore_ascii_case("mp4")).unwrap_or(false) {
+                if let Ok(m) = e.metadata().and_then(|m| m.modified()) {
+                    if best.as_ref().map(|(t, _)| m > *t).unwrap_or(true) {
+                        *best = Some((m, p));
+                    }
+                }
+            }
+        }
+    };
+    look(folder, &mut best);
+    for e in std::fs::read_dir(folder).into_iter().flatten().flatten() {
+        if e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            look(&e.path(), &mut best);
+        }
+    }
+    best.map(|(_, p)| p)
 }
 
 /// Monitor do jogo: o escolhido (nome GDI) ou o principal.

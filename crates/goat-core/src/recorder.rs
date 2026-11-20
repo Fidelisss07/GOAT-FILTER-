@@ -547,6 +547,70 @@ pub fn tie_to_app(child: &std::process::Child) {
 #[cfg(not(windows))]
 pub fn tie_to_app(_child: &std::process::Child) {}
 
+/// Dá prioridade à captura: com a placa em 100% pelo jogo, o Windows atrasa
+/// a cópia da tela e o clipe sai com quadros repetidos (travado). Sobe a
+/// prioridade de processador do FFmpeg um nível e a de GPU para "alta"
+/// (ou "acima do normal" se o Windows não deixar). Quase não custa FPS.
+#[cfg(windows)]
+pub fn boost_priority(child: &std::process::Child) -> Option<&'static str> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::Threading::{SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS};
+    let h = HANDLE(child.as_raw_handle());
+    unsafe {
+        let _ = SetPriorityClass(h, ABOVE_NORMAL_PRIORITY_CLASS);
+        let lib = libloading::Library::new("gdi32.dll").ok()?;
+        type SetGpuPrio = unsafe extern "system" fn(*mut std::ffi::c_void, i32) -> i32;
+        let f: libloading::Symbol<SetGpuPrio> = lib.get(b"D3DKMTSetProcessSchedulingPriorityClass\0").ok()?;
+        // 4 = HIGH, 3 = ABOVE_NORMAL (NTSTATUS 0 = ok).
+        if f(h.0, 4) == 0 {
+            return Some("alta");
+        }
+        if f(h.0, 3) == 0 {
+            return Some("acima do normal");
+        }
+        None
+    }
+}
+
+#[cfg(not(windows))]
+pub fn boost_priority(_child: &std::process::Child) -> Option<&'static str> {
+    None
+}
+
+/// Tamanho dos quadros usados para medir a fluidez (cinza, 64x36).
+pub const SMOOTH_W: usize = 64;
+pub const SMOOTH_H: usize = 36;
+
+/// Extrai todos os quadros do clipe em miniatura cinza (para contar repetidos).
+pub fn smoothness_args(input: &str, out_raw: &str) -> Vec<String> {
+    [
+        "-hide_banner", "-loglevel", "error", "-y", "-i", input, "-an",
+        "-vf", "scale=64:36:flags=area,format=gray", "-f", "rawvideo", out_raw,
+    ]
+    .iter()
+    .map(|x| x.to_string())
+    .collect()
+}
+
+/// (quadros diferentes do anterior, total). Quadro repetido = travada.
+pub fn count_unique(raw: &[u8]) -> (usize, usize) {
+    let n = SMOOTH_W * SMOOTH_H;
+    let frames: Vec<&[u8]> = raw.chunks_exact(n).collect();
+    if frames.is_empty() {
+        return (0, 0);
+    }
+    let mut unique = 1;
+    for w in frames.windows(2) {
+        let diff: u64 = w[0].iter().zip(w[1]).map(|(a, b)| (*a as i32 - *b as i32).unsigned_abs() as u64).sum();
+        // Média de diferença acima de 0,2 (de 255) = imagem mudou.
+        if diff * 10 > (n as u64) * 2 {
+            unique += 1;
+        }
+    }
+    (unique, frames.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -687,6 +751,21 @@ mod tests {
         assert!(a.contains("-c copy"));
         assert!(a.ends_with("+faststart out.mp4"));
         assert!(!remux_args("in.ts", "out.mp4", None).join(" ").contains("sseof"));
+    }
+
+    #[test]
+    fn mede_fluidez() {
+        let n = SMOOTH_W * SMOOTH_H;
+        let a = vec![10u8; n];
+        let mut b = vec![10u8; n];
+        b[..200].iter_mut().for_each(|x| *x = 200);
+        let mut noise = a.clone();
+        noise[0] = 13; // ruído de compressão: conta como repetido
+        let raw = [a.clone(), a.clone(), noise, b.clone(), b.clone(), a.clone()].concat();
+        assert_eq!(count_unique(&raw), (3, 6));
+        assert_eq!(count_unique(&[]), (0, 0));
+        let s = smoothness_args("c.mp4", "q.raw").join(" ");
+        assert!(s.contains("-i c.mp4 -an -vf scale=64:36:flags=area,format=gray -f rawvideo q.raw"));
     }
 
     #[test]
