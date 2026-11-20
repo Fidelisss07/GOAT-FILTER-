@@ -546,4 +546,6 @@ export const EN: Record<string, string> = {
   "Copiar relatório": "Copy report",
   "Relatório copiado.": "Report copied.",
   "Imagem": "Picture",
+  "Fluidez": "Smoothness",
+  "Clipe travando? Limite o FPS do jogo um pouco acima da taxa do monitor (ex.: 144 Hz → 160). Com a placa de vídeo em 100%, o Windows atrasa a captura da tela.": "Choppy clips? Cap the game's FPS a bit above your monitor's refresh rate (e.g. 144 Hz → 160). With the GPU at 100%, Windows delays screen capture.",
 };

@@ -547,6 +547,69 @@ pub fn tie_to_app(child: &std::process::Child) {
 #[cfg(not(windows))]
 pub fn tie_to_app(_child: &std::process::Child) {}
 
+/// Dá prioridade à captura: com a placa em 100% pelo jogo, o Windows atrasa
+/// a cópia da tela e o clipe sai com quadros repetidos (travado). Sobe a
+/// prioridade de processador do FFmpeg um nível e a de GPU para "alta"
+/// (ou "acima do normal" se o Windows não deixar). Quase não custa FPS.
+#[cfg(windows)]
+pub fn boost_priority(child: &std::process::Child) -> Option<&'static str> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::Threading::{SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS};
+    let h = HANDLE(child.as_raw_handle());
+    unsafe {
+        let _ = SetPriorityClass(h, ABOVE_NORMAL_PRIORITY_CLASS);
+        let lib = libloading::Library::new("gdi32.dll").ok()?;
+        type SetGpuPrio = unsafe extern "system" fn(*mut std::ffi::c_void, i32) -> i32;
+        let f: libloading::Symbol<SetGpuPrio> = lib.get(b"D3DKMTSetProcessSchedulingPriorityClass\0").ok()?;
+        // 4 = HIGH, 3 = ABOVE_NORMAL (NTSTATUS 0 = ok).
+        if f(h.0, 4) == 0 {
+            return Some("alta");
+        }
+        if f(h.0, 3) == 0 {
+            return Some("acima do normal");
+        }
+        None
+    }
+}
+
+#[cfg(not(windows))]
+pub fn boost_priority(_child: &std::process::Child) -> Option<&'static str> {
+    None
+}
+
+/// Conta os quadros diferentes de um clipe (quadros repetidos = travadas).
+/// O progresso vai para `progress` (arquivo) para ler o total no fim.
+pub fn smoothness_args(input: &str, progress: &str) -> Vec<String> {
+    [
+        "-hide_banner", "-loglevel", "error", "-nostats", "-y", "-i", input, "-an",
+        "-vf", "mpdecimate", "-progress", progress, "-f", "null", "-",
+    ]
+    .iter()
+    .map(|x| x.to_string())
+    .collect()
+}
+
+/// Do arquivo de progresso: (quadros que sobraram, segundos até o último).
+pub fn parse_progress(text: &str) -> Option<(u64, f64)> {
+    let mut frames = None;
+    let mut us = None;
+    for l in text.lines() {
+        if let Some(v) = l.strip_prefix("frame=") {
+            frames = v.trim().parse::<u64>().ok().or(frames);
+        } else if let Some(v) = l.strip_prefix("out_time_us=") {
+            us = v.trim().parse::<i64>().ok().filter(|x| *x > 0).or(us);
+        }
+    }
+    Some((frames?, us? as f64 / 1_000_000.0))
+}
+
+/// Fração de quadros únicos (0..1) em relação ao esperado para o FPS gravado.
+pub fn unique_ratio(frames: u64, secs: f64, fps: u32) -> f32 {
+    let expected = (secs * fps as f64).max(1.0);
+    (frames as f64 / expected).clamp(0.0, 1.0) as f32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -687,6 +750,19 @@ mod tests {
         assert!(a.contains("-c copy"));
         assert!(a.ends_with("+faststart out.mp4"));
         assert!(!remux_args("in.ts", "out.mp4", None).join(" ").contains("sseof"));
+    }
+
+    #[test]
+    fn mede_fluidez() {
+        let p = "frame=100\nout_time_us=1000000\nprogress=continue\nframe=1650\nout_time_us=29966667\nprogress=end\n";
+        let (f, secs) = parse_progress(p).unwrap();
+        assert_eq!(f, 1650);
+        assert!((secs - 29.966667).abs() < 1e-3);
+        assert!((unique_ratio(f, secs, 60) - 0.9177).abs() < 0.01);
+        assert_eq!(unique_ratio(5000, 10.0, 60), 1.0);
+        assert!(parse_progress("lixo").is_none());
+        let a = smoothness_args("c.mp4", "p.txt").join(" ");
+        assert!(a.contains("-i c.mp4 -an -vf mpdecimate -progress p.txt -f null -"));
     }
 
     #[test]

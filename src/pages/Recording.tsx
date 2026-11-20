@@ -342,6 +342,9 @@ export function RecordingPage() {
             <Seg label={t("Resolução")} value={rec.maxHeight} options={HEIGHTS.map((x) => ({ id: x.h, label: x.label }))} onChange={(v) => set({ maxHeight: v })} />
             <Seg label="FPS" value={rec.fps} options={[{ id: 30, label: "30" }, { id: 60, label: "60" }]} onChange={(v) => set({ fps: v })} />
             <Seg label={t("Qualidade")} value={rec.quality} options={QUALITIES.map((q) => ({ id: q.id, label: t(q.label) }))} onChange={(v) => set({ quality: v })} />
+            <p className="note">
+              {t("Clipe travando? Limite o FPS do jogo um pouco acima da taxa do monitor (ex.: 144 Hz → 160). Com a placa de vídeo em 100%, o Windows atrasa a captura da tela.")}
+            </p>
             <ToggleRow label={t("Som do PC")} checked={rec.systemAudio} onChange={(v) => set({ systemAudio: v })} />
             <div className="row">
               <label htmlFor={micId}>{t("Microfone")}</label>
