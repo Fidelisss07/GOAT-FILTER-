@@ -86,7 +86,7 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --enable-muxer=segment,mpegts,mp4,mov,null,wav,image2,rawvideo \
   --enable-bsf=dump_extradata,aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,extract_extradata \
   --enable-protocol=file,pipe,concat
-if ! grep -q "CONFIG_GFXCAPTURE_FILTER 1" config.h; then
+if ! grep -qs "CONFIG_GFXCAPTURE_FILTER 1" config.h config_components.h; then
   echo "gfxcapture não entrou. Dependências no config.h:"
   grep -E "HAVE_(CXX17|THREADS|W32THREADS|IGRAPHICSCAPTUREITEMINTEROP|__X_ABI_CWINDOWS_CGRAPHICS_CCAPTURE_CIGRAPHICSCAPTURESESSION3)|CONFIG_D3D11VA" config.h || true
   echo "--- trecho do config.log ---"
