@@ -380,12 +380,12 @@ impl Recorder {
             Err(e) => return self.fail_start(e),
         };
         let gdi = game_monitor(&lock(&self.inner).monitor);
-        let ((sw, sh), idx) = monitor_info(&gdi);
+        let ((sw, sh), (idx, hmon)) = monitor_info(&gdi);
         let (w, h) = rc::output_size(sw, sh, s.max_height);
         let replay_dir = self.data_dir.join("replay");
         let _ = std::fs::create_dir_all(&replay_dir);
         let cached = lock(&self.inner).pipeline.filter(|(_, k)| *k == (w, h, s.fps)).map(|(p, _)| p);
-        let pipeline = match cached.or_else(|| probe(&exe, &replay_dir, idx, w, h, s.fps)) {
+        let pipeline = match cached.or_else(|| probe(&exe, &replay_dir, (idx, hmon), w, h, s.fps)) {
             Some(p) => p,
             None => {
                 return self.fail_start(
@@ -424,6 +424,7 @@ impl Recorder {
             fps: s.fps,
             bitrate_kbps: rc::bitrate_kbps(w, h, s.fps, s.quality),
             output_idx: idx,
+            hmonitor: hmon,
             system_audio: audio_fmt,
             mic: (!s.mic.is_empty()).then(|| s.mic.clone()),
             segment_dir: live.to_string_lossy().into_owned(),
@@ -887,16 +888,17 @@ impl Recorder {
 
         // Imagem
         let gdi = game_monitor(&lock(&self.inner).monitor);
-        let ((sw, sh), idx) = monitor_info(&gdi);
+        let ((sw, sh), (idx, hmon)) = monitor_info(&gdi);
         let (w, h) = rc::output_size(sw, sh, s.max_height);
         let cached = lock(&self.inner).pipeline.map(|(p, _)| p);
-        let p = cached.or_else(|| probe(&exe, &dir, idx, w, h, s.fps));
-        match p.and_then(|p| probe_picture(&exe, &dir, p, idx, w, h, s.fps).map(|r| (p, r))) {
+        let p = cached.or_else(|| probe(&exe, &dir, (idx, hmon), w, h, s.fps));
+        match p.and_then(|p| probe_picture(&exe, &dir, p, (idx, hmon), w, h, s.fps).map(|r| (p, r))) {
             Some((p, (b, true))) => push(
                 "Imagem",
                 true,
                 format!(
-                    "{} · {} · {}x{} {} fps · monitor {} (saída {idx}) · brilho {b:.0}",
+                    "{} · {} · {} · {}x{} {} fps · monitor {} (saída {idx}) · brilho {b:.0}",
+                    p.source.label(),
                     p.encoder.label(),
                     if p.path == rc::FramePath::Gpu { "captura pela GPU" } else { "captura pelo processador (mais pesada)" },
                     w,
@@ -984,6 +986,7 @@ impl Recorder {
                 fps: s.fps,
                 bitrate_kbps: rc::bitrate_kbps(w, h, s.fps, s.quality),
                 output_idx: idx,
+            hmonitor: hmon,
                 system_audio: fmt,
                 mic: None,
                 segment_dir: tdir.to_string_lossy().into_owned(),
@@ -1158,20 +1161,21 @@ fn game_monitor(chosen: &Option<String>) -> Option<String> {
         .or_else(|| list.iter().find(|d| d.primary).map(|d| d.id.clone()))
 }
 
-/// Resolução atual e saída de vídeo (DXGI) do monitor.
-fn monitor_info(gdi: &Option<String>) -> ((u32, u32), u32) {
+/// Resolução atual, saída de vídeo (DXGI) e HMONITOR do monitor.
+fn monitor_info(gdi: &Option<String>) -> ((u32, u32), (u32, u64)) {
     let size = gdi.as_deref().and_then(goat_core::tweaks::current_size).unwrap_or((1920, 1080));
     let idx = gdi.as_deref().and_then(goat_core::loopback::dxgi_output_index).unwrap_or(0);
-    (size, idx)
+    let hmon = gdi.as_deref().and_then(goat_core::loopback::hmonitor_for).unwrap_or(0);
+    (size, (idx, hmon))
 }
 
 /// Grava 1 s com o caminho e mede o brilho de um quadro. None = não codificou.
-fn probe_picture(exe: &Path, dir: &Path, p: Pipeline, idx: u32, w: u32, h: u32, fps: u32) -> Option<(f32, bool)> {
+fn probe_picture(exe: &Path, dir: &Path, p: Pipeline, scr: (u32, u64), w: u32, h: u32, fps: u32) -> Option<(f32, bool)> {
     let ts = dir.join("probe.ts");
     let raw = dir.join("probe.raw");
     let _ = std::fs::remove_file(&raw);
     let mut cmd = command(exe);
-    cmd.args(rc::probe_args(p, idx, w, h, fps, Some(&ts.to_string_lossy())));
+    cmd.args(rc::probe_args(p, scr.0, scr.1, w, h, fps, Some(&ts.to_string_lossy())));
     let (ok, err) = run_with_timeout(cmd, Duration::from_secs(15));
     if !ok {
         log::info!("Gravador: {:?} não funcionou: {}", p, rc::error_tail(&err).unwrap_or_default());
@@ -1188,10 +1192,13 @@ fn probe_picture(exe: &Path, dir: &Path, p: Pipeline, idx: u32, w: u32, h: u32, 
 
 /// Testa os caminhos do mais leve para o mais pesado e fica com o primeiro que
 /// mostra imagem (não só o que codifica: alguns caminhos gravam tela preta).
-fn probe(exe: &Path, dir: &Path, idx: u32, w: u32, h: u32, fps: u32) -> Option<Pipeline> {
+fn probe(exe: &Path, dir: &Path, scr: (u32, u64), w: u32, h: u32, fps: u32) -> Option<Pipeline> {
     let mut first_ok = None;
-    for p in rc::PIPELINES {
-        match probe_picture(exe, dir, p, idx, w, h, fps) {
+    // No Windows 10 o WGC desenha uma borda amarela na tela que não dá para tirar:
+    // lá fica o Desktop Duplication.
+    let wgc = goat_core::monitors::windows_build() >= 22000;
+    for p in rc::PIPELINES.into_iter().filter(|p| wgc || p.source != rc::Source::Wgc) {
+        match probe_picture(exe, dir, p, scr, w, h, fps) {
             Some((_, true)) => {
                 log::info!("Gravador: usando {:?}", p);
                 return Some(p);

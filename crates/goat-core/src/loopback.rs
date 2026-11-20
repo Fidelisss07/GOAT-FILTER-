@@ -189,6 +189,33 @@ pub fn dxgi_output_index(_gdi: &str) -> Option<u32> {
     None
 }
 
+/// HMONITOR do monitor (nome GDI, ex.: \\.\DISPLAY1), para o Windows Graphics Capture.
+#[cfg(windows)]
+pub fn hmonitor_for(gdi: &str) -> Option<u64> {
+    use windows::Win32::Foundation::{BOOL, LPARAM, RECT};
+    use windows::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW};
+    unsafe extern "system" fn each(m: HMONITOR, _: HDC, _: *mut RECT, data: LPARAM) -> BOOL {
+        let list = &mut *(data.0 as *mut Vec<(u64, String)>);
+        let mut info = MONITORINFOEXW::default();
+        info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if GetMonitorInfoW(m, &mut info as *mut MONITORINFOEXW as *mut _).as_bool() {
+            let len = info.szDevice.iter().position(|&c| c == 0).unwrap_or(info.szDevice.len());
+            list.push((m.0 as u64, String::from_utf16_lossy(&info.szDevice[..len])));
+        }
+        BOOL(1)
+    }
+    let mut list: Vec<(u64, String)> = Vec::new();
+    unsafe {
+        let _ = EnumDisplayMonitors(HDC::default(), None, Some(each), LPARAM(&mut list as *mut _ as isize));
+    }
+    list.into_iter().find(|(_, n)| n.eq_ignore_ascii_case(gdi)).map(|(h, _)| h)
+}
+
+#[cfg(not(windows))]
+pub fn hmonitor_for(_gdi: &str) -> Option<u64> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
