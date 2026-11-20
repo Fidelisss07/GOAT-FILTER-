@@ -578,6 +578,84 @@ pub fn boost_priority(_child: &std::process::Child) -> Option<&'static str> {
     None
 }
 
+/// Do .ts gravado: horários (PTS, 90 kHz) de cada quadro de vídeo e se há som.
+pub fn ts_scan(bytes: &[u8]) -> (Vec<i64>, bool) {
+    let mut pmt: Option<u16> = None;
+    let mut video: Option<u16> = None;
+    let mut audio = false;
+    let mut pts = Vec::new();
+    for p in bytes.chunks_exact(188) {
+        if p[0] != 0x47 {
+            continue;
+        }
+        let start = p[1] & 0x40 != 0;
+        let pid = (((p[1] & 0x1f) as u16) << 8) | p[2] as u16;
+        let afc = (p[3] >> 4) & 3;
+        let mut off = 4usize;
+        if afc == 2 || afc == 3 {
+            off += 1 + p[4] as usize;
+        }
+        if afc == 2 || off >= 188 {
+            continue;
+        }
+        let pl = &p[off..];
+        if pid == 0 && start && pmt.is_none() {
+            // PAT: pula o pointer_field e o cabeçalho (8 bytes).
+            let s = 1 + pl[0] as usize;
+            if pl.len() >= s + 12 {
+                pmt = Some((((pl[s + 10] & 0x1f) as u16) << 8) | pl[s + 11] as u16);
+            }
+        } else if Some(pid) == pmt && start && video.is_none() {
+            let s = 1 + pl[0] as usize;
+            if pl.len() < s + 12 {
+                continue;
+            }
+            let sec_len = ((((pl[s + 1] & 0x0f) as usize) << 8) | pl[s + 2] as usize).min(pl.len() - s - 3);
+            let info = ((((pl[s + 10] & 0x0f) as usize) << 8) | pl[s + 11] as usize) + s + 12;
+            let end = s + 3 + sec_len.saturating_sub(4);
+            let mut i = info;
+            while i + 5 <= end {
+                let ty = pl[i];
+                let epid = (((pl[i + 1] & 0x1f) as u16) << 8) | pl[i + 2] as u16;
+                let es = ((((pl[i + 3] & 0x0f) as usize) << 8) | pl[i + 4] as usize) + 5;
+                match ty {
+                    0x1b | 0x24 => video = Some(epid),
+                    0x0f | 0x11 => audio = true,
+                    _ => {}
+                }
+                i += es;
+            }
+        } else if Some(pid) == video && start && pl.len() >= 14 && pl[0] == 0 && pl[1] == 0 && pl[2] == 1 && pl[7] & 0x80 != 0 {
+            let b = &pl[9..14];
+            let v = (((b[0] >> 1) & 0x07) as i64) << 30
+                | (b[1] as i64) << 22
+                | ((b[2] >> 1) as i64) << 15
+                | (b[3] as i64) << 7
+                | (b[4] >> 1) as i64;
+            pts.push(v);
+        }
+    }
+    (pts, audio)
+}
+
+/// Ritmo dos quadros: (fps médio, % de intervalos fora do ritmo por mais de 25%).
+pub fn frame_pacing(pts: &[i64], fps: u32) -> Option<(f32, f32)> {
+    if pts.len() < 10 {
+        return None;
+    }
+    let mut v = pts.to_vec();
+    v.sort_unstable();
+    let ideal = 90_000.0 / fps as f64;
+    let d: Vec<f64> = v.windows(2).map(|w| (w[1] - w[0]) as f64).filter(|x| *x > 0.0).collect();
+    if d.is_empty() {
+        return None;
+    }
+    let span = (v[v.len() - 1] - v[0]) as f64 / 90_000.0;
+    let avg_fps = if span > 0.0 { (v.len() - 1) as f64 / span } else { 0.0 };
+    let off = d.iter().filter(|x| (*x - ideal).abs() > ideal * 0.25).count();
+    Some((avg_fps as f32, off as f32 * 100.0 / d.len() as f32))
+}
+
 /// Tamanho dos quadros usados para medir a fluidez (cinza, 64x36).
 pub const SMOOTH_W: usize = 64;
 pub const SMOOTH_H: usize = 36;
@@ -751,6 +829,42 @@ mod tests {
         assert!(a.contains("-c copy"));
         assert!(a.ends_with("+faststart out.mp4"));
         assert!(!remux_args("in.ts", "out.mp4", None).join(" ").contains("sseof"));
+    }
+
+    #[test]
+    fn ritmo_dos_quadros() {
+        let even: Vec<i64> = (0..120).map(|i| i * 1500).collect();
+        let (f, off) = frame_pacing(&even, 60).unwrap();
+        assert!((f - 60.0).abs() < 0.1 && off == 0.0);
+        // Ritmo irregular: alterna 15,6 ms e 31,2 ms.
+        let mut t = 0i64;
+        let jit: Vec<i64> = (0..120).map(|i| { t += if i % 2 == 0 { 1404 } else { 2808 }; t }).collect();
+        let (_, off) = frame_pacing(&jit, 60).unwrap();
+        assert!(off > 40.0);
+        assert!(frame_pacing(&[1, 2], 60).is_none());
+    }
+
+    #[test]
+    fn le_horarios_do_ts() {
+        // PAT → PMT (pid 0x1000) → vídeo H.264 (0x100) e AAC (0x101); 2 quadros.
+        fn pkt(pid: u16, start: bool, payload: &[u8]) -> Vec<u8> {
+            let mut p = vec![0x47, ((start as u8) << 6) | (pid >> 8) as u8, pid as u8, 0x10];
+            p.extend_from_slice(payload);
+            p.resize(188, 0xff);
+            p
+        }
+        let pat = [0u8, 0x00, 0xb0, 0x0d, 0, 1, 0xc1, 0, 0, 0, 1, 0xf0, 0x00, 0, 0, 0, 0];
+        let pmt = [0u8, 0x02, 0xb0, 0x17, 0, 1, 0xc1, 0, 0, 0xe1, 0x00, 0xf0, 0x00,
+            0x1b, 0xe1, 0x00, 0xf0, 0x00, 0x0f, 0xe1, 0x01, 0xf0, 0x00, 0, 0, 0, 0];
+        fn pes(pts: i64) -> Vec<u8> {
+            vec![0, 0, 1, 0xe0, 0, 0, 0x80, 0x80, 5,
+                0x21 | (((pts >> 30) & 7) << 1) as u8, (pts >> 22) as u8, 0x01 | (((pts >> 15) & 0x7f) << 1) as u8,
+                (pts >> 7) as u8, 0x01 | ((pts & 0x7f) << 1) as u8]
+        }
+        let ts = [pkt(0, true, &pat), pkt(0x1000, true, &pmt), pkt(0x100, true, &pes(126_000)), pkt(0x100, true, &pes(127_500))].concat();
+        let (pts, audio) = ts_scan(&ts);
+        assert_eq!(pts, vec![126_000, 127_500]);
+        assert!(audio);
     }
 
     #[test]

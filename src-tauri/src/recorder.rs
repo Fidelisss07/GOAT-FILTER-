@@ -921,7 +921,7 @@ impl Recorder {
             let peak = Arc::new(Mutex::new(0f32));
             let pk = peak.clone();
             let t = std::thread::spawn(move || {
-                goat_core::loopback::run(flag, |d| {
+                goat_core::loopback::run(flag, false, |d| {
                     let p = goat_core::loopback::peak(d);
                     let mut g = lock(&pk);
                     *g = g.max(p);
@@ -967,6 +967,115 @@ impl Recorder {
                 push("Microfone", false, rc::error_tail(&err).unwrap_or_else(|| "não abriu".into()));
             }
         }
+        // Gravação completa: grava 5 s como o replay (vídeo + som do PC, com
+        // bipes) e confere o arquivo: ritmo dos quadros e se o som entrou.
+        if let Some(p) = lock(&self.inner).pipeline.map(|(p, _)| p).or(p) {
+            let tdir = dir.join("teste");
+            let _ = std::fs::remove_dir_all(&tdir);
+            let _ = std::fs::create_dir_all(&tdir);
+            #[cfg(windows)]
+            let fmt = if s.system_audio { audio::format() } else { None };
+            #[cfg(not(windows))]
+            let fmt: Option<rc::AudioFormat> = None;
+            let spec = rc::CaptureSpec {
+                pipeline: p,
+                width: w,
+                height: h,
+                fps: s.fps,
+                bitrate_kbps: rc::bitrate_kbps(w, h, s.fps, s.quality),
+                output_idx: idx,
+                system_audio: fmt,
+                mic: None,
+                segment_dir: tdir.to_string_lossy().into_owned(),
+                separate_tracks: false,
+                start_number: 0,
+            };
+            let mut cmd = command(&exe);
+            cmd.args(rc::capture_args(&spec))
+                .stdin(if fmt.is_some() { Stdio::piped() } else { Stdio::null() })
+                .stdout(Stdio::null())
+                .stderr(std::fs::File::create(tdir.join("ffmpeg.log")).map(Stdio::from).unwrap_or(Stdio::null()));
+            match cmd.spawn() {
+                Err(e) => push("Gravação completa", false, e.to_string()),
+                Ok(mut child) => {
+                    rc::tie_to_app(&child);
+                    let prio = rc::boost_priority(&child);
+                    #[cfg(windows)]
+                    let feed = match (fmt, child.stdin.take()) {
+                        (Some(f), Some(stdin)) => Some(audio::Loopback::start(stdin, f)),
+                        _ => None,
+                    };
+                    for k in 0..3 {
+                        std::thread::sleep(Duration::from_millis(if k == 0 { 1800 } else { 1300 }));
+                        goat_core::clips::play_beep();
+                    }
+                    std::thread::sleep(Duration::from_millis(900));
+                    #[cfg(windows)]
+                    drop(feed);
+                    std::thread::sleep(Duration::from_millis(300));
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let mut names: Vec<_> = std::fs::read_dir(&tdir)
+                        .into_iter()
+                        .flatten()
+                        .flatten()
+                        .map(|e| e.path())
+                        .filter(|p| p.extension().map(|x| x == "ts").unwrap_or(false))
+                        .collect();
+                    names.sort();
+                    let mut bytes = Vec::new();
+                    for n in &names {
+                        bytes.extend(std::fs::read(n).unwrap_or_default());
+                    }
+                    let joined = tdir.join("tudo.ts");
+                    let _ = std::fs::write(&joined, &bytes);
+                    let (pts, has_audio) = rc::ts_scan(&bytes);
+                    let pacing = rc::frame_pacing(&pts, s.fps);
+                    let log = std::fs::read_to_string(tdir.join("ffmpeg.log")).unwrap_or_default();
+                    let video = match pacing {
+                        Some((f, off)) => {
+                            let ok = off <= 10.0 && f >= s.fps as f32 * 0.9;
+                            push(
+                                "Ritmo do vídeo",
+                                ok,
+                                format!(
+                                    "{f:.1} fps de {} · {off:.0}% dos quadros fora do ritmo · prioridade de GPU {}{}",
+                                    s.fps,
+                                    prio.unwrap_or("normal"),
+                                    if ok { "" } else { " · o vídeo vai parecer travado" }
+                                ),
+                            );
+                            true
+                        }
+                        None => {
+                            push("Ritmo do vídeo", false, rc::error_tail(&log).unwrap_or_else(|| "a gravação de teste não gerou vídeo".into()));
+                            false
+                        }
+                    };
+                    if fmt.is_some() && video {
+                        let wav = tdir.join("som.wav");
+                        let mut c = command(&exe);
+                        c.args(["-hide_banner", "-loglevel", "error", "-y", "-i"])
+                            .arg(&joined)
+                            .args(["-vn", "-ac", "1", "-ar", "16000", "-f", "wav"])
+                            .arg(&wav);
+                        let _ = run_with_timeout(c, Duration::from_secs(20));
+                        let wb = std::fs::read(&wav).unwrap_or_default();
+                        let pk = goat_core::loopback::peak(&goat_core::loopback::i16_to_f32(wb.get(44..).unwrap_or(&[])));
+                        let secs = wb.len().saturating_sub(44) as f32 / 32_000.0;
+                        if has_audio && pk > 0.003 {
+                            push("Som do PC no clipe", true, format!("{secs:.1} s de som no arquivo · pico {:.0}%", pk * 100.0));
+                        } else if has_audio {
+                            push("Som do PC no clipe", false, format!("a faixa de som existe ({secs:.1} s) mas veio muda: o bipe não entrou na gravação"));
+                        } else {
+                            push("Som do PC no clipe", false, "o arquivo saiu sem faixa de som".into());
+                        }
+                    }
+                    let _ = std::fs::remove_dir_all(&tdir);
+                }
+            }
+        }
+
         // Fluidez: quadros repetidos no clipe mais recente.
         match latest_clip(&self.folder()) {
             None => push("Fluidez", true, "grave um clipe jogando e teste de novo para medir".into()),
@@ -1124,14 +1233,15 @@ mod audio {
     impl Loopback {
         pub fn start(stdin: ChildStdin, fmt: AudioFormat) -> Self {
             let stop = Arc::new(AtomicBool::new(false));
-            let (tx, rx) = mpsc::sync_channel::<Vec<f32>>(1024);
+            // ~20 s de folga: se o FFmpeg demorar para ler, o som espera aqui.
+            let (tx, rx) = mpsc::sync_channel::<(Instant, Vec<f32>)>(2048);
             let mut threads = Vec::new();
             // Leitura do som do PC (recomeça se o dispositivo de saída mudar).
             let flag = stop.clone();
             if let Ok(t) = std::thread::Builder::new().name("goat-recorder-loopback".into()).spawn(move || {
                 while !flag.load(Ordering::SeqCst) {
-                    let r = goat_core::loopback::run(flag.clone(), |d| {
-                        let _ = tx.try_send(d.to_vec());
+                    let r = goat_core::loopback::run(flag.clone(), true, |d| {
+                        let _ = tx.try_send((Instant::now(), d.to_vec()));
                         true
                     });
                     match r {
@@ -1166,40 +1276,36 @@ mod audio {
         }
     }
 
-    /// Escreve o som no FFmpeg. O Windows não entrega nada quando o PC está em
-    /// silêncio, então completa com zeros para o áudio não sair do tempo.
-    fn write(mut out: ChildStdin, fmt: AudioFormat, stop: Arc<AtomicBool>, rx: mpsc::Receiver<Vec<f32>>) {
-        let rate = fmt.rate as u64;
-        let ch = fmt.channels.max(1) as usize;
-        let start = Instant::now();
-        let mut written: u64 = 0;
+    /// Escreve o som no FFmpeg na ordem em que chega. O silêncio já vem
+    /// completado pela leitura (pelo relógio), então aqui não se mexe no tempo:
+    /// antes, quando o FFmpeg demorava para ler, este lado inventava silêncio e
+    /// jogava fora o som de verdade.
+    fn write(mut out: ChildStdin, fmt: AudioFormat, stop: Arc<AtomicBool>, rx: mpsc::Receiver<(Instant, Vec<f32>)>) {
+        // Espera o FFmpeg começar a ler (a escrita trava até lá) e descarta o
+        // som de antes disso, senão o áudio sai adiantado em relação à imagem.
+        // 32 KB (~85 ms de silêncio) passa do buffer do pipe (4 KB), então a
+        // escrita só termina quando o FFmpeg lê de verdade.
+        let frame = fmt.channels.max(1) as usize * 4;
+        let lead = vec![0u8; 32 * 1024 / frame * frame];
+        if out.write_all(&lead).is_err() {
+            return;
+        }
+        let ready = Instant::now();
         let mut buf: Vec<u8> = Vec::with_capacity(64 * 1024);
         while !stop.load(Ordering::SeqCst) {
-            match rx.recv_timeout(Duration::from_millis(20)) {
-                Ok(samples) => {
-                    let expected = start.elapsed().as_micros() as u64 * rate / 1_000_000;
-                    let frames = (samples.len() / ch) as u64;
-                    // Muito adiantado? Descarta para não atrasar em relação à imagem.
-                    if written <= expected + rate / 5 {
-                        for v in samples {
-                            buf.extend_from_slice(&v.to_le_bytes());
-                        }
-                        written += frames;
+            match rx.recv_timeout(Duration::from_millis(50)) {
+                Ok((at, _)) if at < ready => {}
+                Ok((_, samples)) => {
+                    buf.clear();
+                    for v in samples {
+                        buf.extend_from_slice(&v.to_le_bytes());
+                    }
+                    if out.write_all(&buf).is_err() {
+                        break;
                     }
                 }
-                Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => {}
-            }
-            let expected = start.elapsed().as_micros() as u64 * rate / 1_000_000;
-            if expected > written + rate / 10 {
-                let missing = expected - written - rate / 50;
-                buf.resize(buf.len() + missing as usize * ch * 4, 0);
-                written += missing;
-            }
-            if !buf.is_empty() {
-                if out.write_all(&buf).is_err() {
-                    break;
-                }
-                buf.clear();
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => break,
             }
         }
     }

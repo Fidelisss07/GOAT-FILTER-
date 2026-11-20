@@ -547,5 +547,8 @@ export const EN: Record<string, string> = {
   "Relatório copiado.": "Report copied.",
   "Imagem": "Picture",
   "Fluidez": "Smoothness",
+  "Ritmo do vídeo": "Video pacing",
+  "Som do PC no clipe": "PC sound in clip",
+  "Gravação completa": "Full recording",
   "Clipe travando? Limite o FPS do jogo um pouco acima da taxa do monitor (ex.: 144 Hz → 160). Com a placa de vídeo em 100%, o Windows atrasa a captura da tela.": "Choppy clips? Cap the game's FPS a bit above your monitor's refresh rate (e.g. 144 Hz → 160). With the GPU at 100%, Windows delays screen capture.",
 };
