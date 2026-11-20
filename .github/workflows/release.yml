@@ -29,7 +29,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64-win32 binutils-mingw-w64-x86-64 mingw-w64-x86-64-dev nasm pkg-config make
+          sudo apt-get install -y --no-install-recommends nasm pkg-config make xz-utils
           bash scripts/build-ffmpeg.sh "$RUNNER_TEMP/ffbuild" ffmpeg-out/ffmpeg.exe
 
       - uses: actions/upload-artifact@v4
@@ -71,7 +71,7 @@ jobs:
           "Tamanho: {0:N1} MB" -f ((Get-Item $ff).Length / 1MB)
           $filters = & $ff -hide_banner -filters 2>&1 | Out-String
           $encoders = & $ff -hide_banner -encoders 2>&1 | Out-String
-          foreach ($f in "ddagrab", "scale_d3d11", "hwdownload", "amix", "aresample", "trim", "atrim", "format", "scale", "crop", "asplit") {
+          foreach ($f in "gfxcapture", "ddagrab", "scale_d3d11", "hwdownload", "amix", "aresample", "trim", "atrim", "format", "scale", "crop", "asplit") {
             if ($filters -notmatch "\b$f\b") { throw "filtro $f ausente" }
           }
           $bsfs = & $ff -hide_banner -bsfs 2>&1 | Out-String

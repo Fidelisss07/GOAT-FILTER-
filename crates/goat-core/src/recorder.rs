@@ -152,22 +152,54 @@ pub enum FramePath {
     Cpu,
 }
 
+/// De onde vem a imagem da tela.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum Source {
+    /// Windows Graphics Capture (como o OBS): recebe cada quadro que o Windows
+    /// desenha, inclusive de jogo em tela cheia e com resolução esticada.
+    Wgc,
+    /// Desktop Duplication (reserva): em tela cheia o Windows às vezes só
+    /// entrega uma imagem nova a cada vários segundos (vídeo "em fotos").
+    #[default]
+    Dda,
+}
+
+impl Source {
+    pub fn label(self) -> &'static str {
+        match self {
+            Source::Wgc => "Windows Graphics Capture",
+            Source::Dda => "Desktop Duplication",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pipeline {
     pub encoder: VideoEncoder,
     pub path: FramePath,
+    #[serde(default)]
+    pub source: Source,
 }
 
-/// Ordem de tentativa: primeiro o mais leve.
-pub const PIPELINES: [Pipeline; 7] = [
-    Pipeline { encoder: VideoEncoder::Nvenc, path: FramePath::Gpu },
-    Pipeline { encoder: VideoEncoder::Amf, path: FramePath::Gpu },
-    Pipeline { encoder: VideoEncoder::MfHw, path: FramePath::Gpu },
-    Pipeline { encoder: VideoEncoder::Nvenc, path: FramePath::Cpu },
-    Pipeline { encoder: VideoEncoder::Amf, path: FramePath::Cpu },
-    Pipeline { encoder: VideoEncoder::MfHw, path: FramePath::Cpu },
-    Pipeline { encoder: VideoEncoder::MfSw, path: FramePath::Cpu },
+const fn pl(source: Source, encoder: VideoEncoder, path: FramePath) -> Pipeline {
+    Pipeline { encoder, path, source }
+}
+
+/// Ordem de tentativa: primeiro a captura do Windows Graphics Capture, depois o mais leve.
+pub const PIPELINES: [Pipeline; 11] = [
+    pl(Source::Wgc, VideoEncoder::Nvenc, FramePath::Gpu),
+    pl(Source::Wgc, VideoEncoder::Amf, FramePath::Gpu),
+    pl(Source::Wgc, VideoEncoder::MfHw, FramePath::Gpu),
+    pl(Source::Wgc, VideoEncoder::MfSw, FramePath::Cpu),
+    pl(Source::Dda, VideoEncoder::Nvenc, FramePath::Gpu),
+    pl(Source::Dda, VideoEncoder::Amf, FramePath::Gpu),
+    pl(Source::Dda, VideoEncoder::MfHw, FramePath::Gpu),
+    pl(Source::Dda, VideoEncoder::Nvenc, FramePath::Cpu),
+    pl(Source::Dda, VideoEncoder::Amf, FramePath::Cpu),
+    pl(Source::Dda, VideoEncoder::MfHw, FramePath::Cpu),
+    pl(Source::Dda, VideoEncoder::MfSw, FramePath::Cpu),
 ];
 
 /// Tamanho do vídeo: a tela, limitada à altura escolhida, sempre em números pares.
@@ -209,6 +241,8 @@ pub struct CaptureSpec {
     pub bitrate_kbps: u32,
     /// Saída do DXGI (0 = monitor principal na maioria dos PCs).
     pub output_idx: u32,
+    /// HMONITOR do monitor (para o Windows Graphics Capture); 0 = o primeiro.
+    pub hmonitor: u64,
     pub system_audio: Option<AudioFormat>,
     pub mic: Option<String>,
     /// Pasta dos pedaços (`seg-000001.ts`).
@@ -224,8 +258,16 @@ fn s(v: impl ToString) -> String {
 }
 
 /// Grafo do filtro de vídeo (entrada lavfi).
-pub fn video_graph(p: Pipeline, output_idx: u32, w: u32, h: u32, fps: u32) -> String {
-    let grab = format!("ddagrab=output_idx={output_idx}:framerate={fps}:dup_frames=1:draw_mouse=1");
+pub fn video_graph(p: Pipeline, output_idx: u32, hmonitor: u64, w: u32, h: u32, fps: u32) -> String {
+    let grab = match p.source {
+        Source::Dda => format!("ddagrab=output_idx={output_idx}:framerate={fps}:dup_frames=1:draw_mouse=1"),
+        // O WGC só entrega quadro quando a tela muda, com o horário certo de
+        // cada um; o fps= completa o ritmo constante para o codificador.
+        Source::Wgc => {
+            let target = if hmonitor != 0 { format!("hmonitor={hmonitor}") } else { "monitor_idx=0".into() };
+            format!("gfxcapture={target}:max_framerate={fps}:capture_cursor=1:display_border=0,fps={fps}")
+        }
+    };
     match p.path {
         FramePath::Gpu => format!("{grab},scale_d3d11=width={w}:height={h}:format=nv12"),
         FramePath::Cpu => format!("{grab},hwdownload,format=bgra,scale={w}:{h}:flags=fast_bilinear,format=nv12"),
@@ -335,7 +377,7 @@ pub fn assemble(
 
 /// Argumentos do FFmpeg para a captura contínua.
 pub fn capture_args(spec: &CaptureSpec) -> Vec<String> {
-    let graph = video_graph(spec.pipeline, spec.output_idx, spec.width, spec.height, spec.fps);
+    let graph = video_graph(spec.pipeline, spec.output_idx, spec.hmonitor, spec.width, spec.height, spec.fps);
     assemble(
         vec![s("-f"), s("lavfi"), s("-i"), graph],
         video_codec_args(spec.pipeline.encoder, spec.bitrate_kbps, spec.fps),
@@ -349,10 +391,10 @@ pub fn capture_args(spec: &CaptureSpec) -> Vec<String> {
 
 /// Teste rápido (1 s) para descobrir o que a placa aceita. Com `out`, grava
 /// um .ts para conferir se a imagem não sai preta.
-pub fn probe_args(p: Pipeline, output_idx: u32, w: u32, h: u32, fps: u32, out: Option<&str>) -> Vec<String> {
+pub fn probe_args(p: Pipeline, output_idx: u32, hmonitor: u64, w: u32, h: u32, fps: u32, out: Option<&str>) -> Vec<String> {
     let mut a = vec![
         s("-hide_banner"), s("-loglevel"), s("error"), s("-y"),
-        s("-f"), s("lavfi"), s("-i"), video_graph(p, output_idx, w, h, fps),
+        s("-f"), s("lavfi"), s("-i"), video_graph(p, output_idx, hmonitor, w, h, fps),
         s("-t"), s("1.2"), s("-an"),
     ];
     a.extend(video_codec_args(p.encoder, bitrate_kbps(w, h, fps, Quality::Balanced), fps));
@@ -713,10 +755,13 @@ mod tests {
 
     #[test]
     fn grafo_gpu_e_cpu() {
-        let g = video_graph(PIPELINES[0], 0, 2560, 1440, 60);
+        let g = video_graph(PIPELINES[4], 0, 0, 2560, 1440, 60);
         assert!(g.starts_with("ddagrab=output_idx=0:framerate=60"));
+        let w = video_graph(PIPELINES[0], 0, 65537, 1440, 1080, 60);
+        assert!(w.starts_with("gfxcapture=hmonitor=65537:max_framerate=60:capture_cursor=1:display_border=0,fps=60,scale_d3d11=width=1440:height=1080"), "{w}");
+        assert!(video_graph(PIPELINES[0], 0, 0, 1920, 1080, 60).starts_with("gfxcapture=monitor_idx=0"));
         assert!(g.ends_with("scale_d3d11=width=2560:height=1440:format=nv12"));
-        let c = video_graph(Pipeline { encoder: VideoEncoder::MfSw, path: FramePath::Cpu }, 1, 1280, 720, 30);
+        let c = video_graph(Pipeline { encoder: VideoEncoder::MfSw, path: FramePath::Cpu, source: Source::Dda }, 1, 0, 1280, 720, 30);
         assert!(c.contains("hwdownload,format=bgra,scale=1280:720"));
     }
 
@@ -739,6 +784,7 @@ mod tests {
             fps: 60,
             bitrate_kbps: 16_000,
             output_idx: 0,
+            hmonitor: 0,
             system_audio: Some(AudioFormat { rate: 48_000, channels: 2 }),
             mic: None,
             segment_dir: r"C:\tmp\replay\".into(),
@@ -803,10 +849,10 @@ mod tests {
 
     #[test]
     fn teste_da_placa_e_brilho() {
-        let a = probe_args(PIPELINES[0], 2, 1920, 1080, 60, Some("p.ts")).join(" ");
+        let a = probe_args(PIPELINES[4], 2, 0, 1920, 1080, 60, Some("p.ts")).join(" ");
         assert!(a.contains("ddagrab=output_idx=2"));
         assert!(a.ends_with("-f mpegts p.ts"));
-        assert!(probe_args(PIPELINES[0], 0, 1920, 1080, 60, None).join(" ").ends_with("-f null -"));
+        assert!(probe_args(PIPELINES[0], 0, 0, 1920, 1080, 60, None).join(" ").ends_with("-f null -"));
         let f = frame_check_args("p.ts", "f.raw").join(" ");
         assert!(f.contains("scale=16:9,format=gray"));
         assert!(!has_picture(&[0u8; 144]));
