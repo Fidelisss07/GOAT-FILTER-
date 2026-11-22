@@ -319,14 +319,14 @@ pub fn assemble(
     let mut audio_inputs = 0;
     if let Some(f) = system_audio {
         a.extend([
-            s("-thread_queue_size"), s("4096"), s("-f"), s("f32le"), s("-ar"), s(f.rate),
+            s("-thread_queue_size"), s("512"), s("-f"), s("f32le"), s("-ar"), s(f.rate),
             s("-ac"), s(f.channels), s("-i"), s("pipe:0"),
         ]);
         audio_inputs += 1;
     }
     if let Some(m) = mic {
         a.extend([
-            s("-thread_queue_size"), s("4096"), s("-f"), s("dshow"), s("-audio_buffer_size"), s("50"),
+            s("-thread_queue_size"), s("512"), s("-f"), s("dshow"), s("-audio_buffer_size"), s("50"),
             s("-i"), format!("audio={m}"),
         ]);
         audio_inputs += 1;
@@ -364,7 +364,9 @@ pub fn assemble(
         a.extend([s("-c:a"), s("aac"), s("-b:a"), s("160k"), s("-ar"), s("48000"), s("-ac"), s("2")]);
     }
     a.extend([
-        s("-max_muxing_queue_size"), s("1024"),
+        s("-max_muxing_queue_size"), s("512"),
+        // Nunca segura mais de 2 s esperando uma faixa atrasada (o padrão é 10 s).
+        s("-max_interleave_delta"), s("2000000"),
         s("-f"), s("segment"),
         s("-segment_time"), s(SEGMENT_SECS),
         s("-segment_format"), s("mpegts"),
@@ -614,6 +616,28 @@ pub fn boost_priority(child: &std::process::Child) -> Option<&'static str> {
         None
     }
 }
+
+/// Memória privada (MB) de um processo filho, para vigiar o gravador.
+#[cfg(windows)]
+pub fn process_memory_mb(child: &std::process::Child) -> Option<u64> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX};
+    let mut c = PROCESS_MEMORY_COUNTERS_EX::default();
+    c.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
+    unsafe {
+        GetProcessMemoryInfo(HANDLE(child.as_raw_handle()), &mut c as *mut _ as *mut PROCESS_MEMORY_COUNTERS, c.cb).ok()?;
+    }
+    Some((c.PrivateUsage.max(c.WorkingSetSize) / (1024 * 1024)) as u64)
+}
+
+#[cfg(not(windows))]
+pub fn process_memory_mb(_child: &std::process::Child) -> Option<u64> {
+    None
+}
+
+/// Acima disto o gravador está acumulando algo (o normal é 100 a 300 MB).
+pub const MEMORY_LIMIT_MB: u64 = 700;
 
 #[cfg(not(windows))]
 pub fn boost_priority(_child: &std::process::Child) -> Option<&'static str> {

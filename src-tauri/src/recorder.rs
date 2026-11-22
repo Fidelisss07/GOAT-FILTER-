@@ -138,6 +138,10 @@ struct Inner {
     fail_key: Option<String>,
     error: Option<String>,
     last_janitor: Option<Instant>,
+    /// Memória do gravador na última checagem (MB) e quantas vezes passou do limite.
+    memory_mb: Option<u64>,
+    memory_strikes: u32,
+    memory_restarts: u32,
     settings: RecorderSettings,
     folder: PathBuf,
 }
@@ -327,6 +331,26 @@ impl Recorder {
                         log::warn!("Gravador: a captura da tela caiu; recomeçando");
                         self.restart_locked(&mut g);
                     }
+                }
+            }
+            // Memória: o gravador guarda o replay no disco; se a memória dele
+            // passar do limite, algo está acumulando (uma faixa de som parada,
+            // por exemplo). Anota o motivo e recomeça sem apagar o replay.
+            let mem = g.run.as_ref().and_then(|r| rc::process_memory_mb(&r.child));
+            g.memory_mb = mem;
+            if let Some(mb) = mem {
+                if mb > rc::MEMORY_LIMIT_MB {
+                    g.memory_strikes += 1;
+                    if g.memory_strikes >= 2 {
+                        let path = self.data_dir.join("replay").join("ffmpeg.log");
+                        let tail = rc::error_tail(&std::fs::read_to_string(&path).unwrap_or_default()).unwrap_or_default();
+                        log::warn!("Gravador: usando {mb} MB de memória (limite {}); recomeçando. Último aviso: {tail}", rc::MEMORY_LIMIT_MB);
+                        g.memory_restarts += 1;
+                        g.memory_strikes = 0;
+                        self.restart_locked(&mut g);
+                    }
+                } else {
+                    g.memory_strikes = 0;
                 }
             }
             let protect = g.recording.map(|(i, _)| i).or(g.pinned_from);
@@ -1013,6 +1037,7 @@ impl Recorder {
                         goat_core::clips::play_beep();
                     }
                     std::thread::sleep(Duration::from_millis(900));
+                    let test_mem = rc::process_memory_mb(&child);
                     #[cfg(windows)]
                     drop(feed);
                     std::thread::sleep(Duration::from_millis(300));
@@ -1074,9 +1099,28 @@ impl Recorder {
                             push("Som do PC no clipe", false, "o arquivo saiu sem faixa de som".into());
                         }
                     }
+                    if let Some(mb) = test_mem {
+                        push("Memória da gravação", mb <= rc::MEMORY_LIMIT_MB, format!("{mb} MB depois de 5 s gravando"));
+                    }
                     let _ = std::fs::remove_dir_all(&tdir);
                 }
             }
+        }
+        // Gravador do replay que já estava rodando.
+        let (live_mem, restarts) = {
+            let g = lock(&self.inner);
+            (g.memory_mb, g.memory_restarts)
+        };
+        if let Some(mb) = live_mem {
+            push(
+                "Memória do replay",
+                mb <= rc::MEMORY_LIMIT_MB && restarts == 0,
+                if restarts > 0 {
+                    format!("{mb} MB agora; passou de {} MB e foi reiniciado {restarts} vez(es) nesta sessão", rc::MEMORY_LIMIT_MB)
+                } else {
+                    format!("{mb} MB")
+                },
+            );
         }
 
         // Fluidez: quadros repetidos no clipe mais recente.
