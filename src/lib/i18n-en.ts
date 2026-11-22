@@ -547,6 +547,8 @@ export const EN: Record<string, string> = {
   "Relatório copiado.": "Report copied.",
   "Imagem": "Picture",
   "Fluidez": "Smoothness",
+  "Memória da gravação": "Recording memory",
+  "Memória do replay": "Replay memory",
   "Ritmo do vídeo": "Video pacing",
   "Som do PC no clipe": "PC sound in clip",
   "Gravação completa": "Full recording",
