@@ -62,6 +62,16 @@ export const TargetIcon = (p: P) => (
     <circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4" /><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" />
   </svg>
 );
+export const CrosshairIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.65} {...p}>
+    <circle cx="12" cy="12" r="7" /><path d="M12 2v5M12 17v5M2 12h5M17 12h5" /><circle cx="12" cy="12" r="1" fill="currentColor" />
+  </svg>
+);
+export const MouseIcon = (p: P) => (
+  <svg {...base} strokeWidth={1.65} {...p}>
+    <rect x="6" y="3" width="12" height="18" rx="6" /><path d="M12 3v6" />
+  </svg>
+);
 export const RecordIcon = (p: P) => (
   <svg {...base} strokeWidth={1.65} {...p}>
     <rect x="2.5" y="6" width="14" height="12" rx="2.5" /><path d="m16.5 10.5 5-3v9l-5-3" /><circle cx="9.5" cy="12" r="2.2" fill="currentColor" stroke="none" />

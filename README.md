@@ -49,6 +49,11 @@ Os perfis podem ser **exportados e importados** (arquivo `.goatfilter.json`) par
 - **Encontrar jogos instalados:** procura todos os jogos do PC (Steam, Epic, Riot, EA, Ubisoft, GOG,
   Battle.net, Rockstar, Xbox e pastas como `Games`/`Jogos` em todos os discos), escolhe o executável
   certo de cada um e cria os perfis com um clique. Só lê arquivos e o registro; não abre os jogos.
+- **Sensibilidade:** aba própria com a sua sensibilidade (eDPI, cm por volta e onde você fica em
+  relação aos profissionais), o teste **Descobrir minha sensibilidade** (5 rodadas com duas
+  sensibilidades às cegas, no mesmo cálculo e campo de visão do Valorant e com o mouse lido sem
+  aceleração; mede tempo, erros e se você passa do alvo ou para antes, e estreita a faixa até a sua),
+  troca de DPI sem mudar a mira, conversor entre jogos, medidor de DPI real, taxa de polling e histórico.
 - **Bandeja:** botão direito no ícone para ligar/desligar o filtro ou aplicar qualquer perfil.
 - **Todos os monitores:** opção em Configurações › Monitor e ajustes.
 - **Avisos do Windows** quando um perfil liga, pausa (alt-tab) ou desliga.

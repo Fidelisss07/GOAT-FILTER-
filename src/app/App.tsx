@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import mascot from "../assets/cabrito-lateral.webp";
 import { ThemeSwatches } from "../components/Controls";
 import { UpdateBanner } from "../components/UpdatePanel";
-import { BoltIcon, GearIcon, HomeIcon, LayersIcon, RecordIcon, TargetIcon, WinClose, WinMax, WinMin } from "../components/Icons";
+import { BoltIcon, GearIcon, HomeIcon, LayersIcon, MouseIcon, RecordIcon, TargetIcon, WinClose, WinMax, WinMin } from "../components/Icons";
 import { getNative, NativeApi } from "../lib/native";
 import { ThemeId } from "../lib/types";
 import { Overview } from "../pages/Overview";
@@ -10,6 +10,7 @@ import { PerformancePage } from "../pages/Performance";
 import { Profiles } from "../pages/Profiles";
 import { RecordingPage } from "../pages/Recording";
 import { Welcome } from "../components/Welcome";
+import { SensitivityPage } from "../pages/Sensitivity";
 import { SettingsPage } from "../pages/Settings";
 import { TrainingPage } from "../pages/Training";
 import { useT } from "../lib/useT";
@@ -24,6 +25,7 @@ const PAGES: { id: Page; title: string; Icon: typeof HomeIcon }[] = [
   { id: "performance", title: "Desempenho", Icon: BoltIcon },
   { id: "recording", title: "Gravação", Icon: RecordIcon },
   { id: "training", title: "Treino", Icon: TargetIcon },
+  { id: "sensitivity", title: "Sensibilidade", Icon: MouseIcon },
   { id: "settings", title: "Configurações", Icon: GearIcon },
 ];
 const HEADINGS: Record<Page, string> = {
@@ -32,6 +34,7 @@ const HEADINGS: Record<Page, string> = {
   performance: "Desempenho",
   recording: "Gravação",
   training: "Treino",
+  sensitivity: "Sensibilidade",
   settings: "Configurações",
 };
 
@@ -121,6 +124,7 @@ export function App() {
           {s.loaded && s.page === "performance" && <PerformancePage />}
           {s.loaded && s.page === "recording" && <RecordingPage />}
           {s.loaded && s.page === "training" && <TrainingPage />}
+          {s.loaded && s.page === "sensitivity" && <SensitivityPage />}
           {s.loaded && s.page === "settings" && <SettingsPage />}
         </div>
       </main>

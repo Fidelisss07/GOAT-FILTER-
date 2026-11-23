@@ -17,7 +17,7 @@ import {
   VALORANT_ID,
 } from "../lib/types";
 
-export type Page = "overview" | "profiles" | "performance" | "recording" | "training" | "settings";
+export type Page = "overview" | "profiles" | "performance" | "recording" | "training" | "sensitivity" | "settings";
 
 export interface Toast {
   kind: "ok" | "error" | "info";

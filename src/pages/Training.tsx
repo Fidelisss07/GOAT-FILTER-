@@ -3,7 +3,6 @@ import { AimTrainer } from "../components/AimTrainer";
 import { CrosshairLibrary } from "../components/CrosshairLibrary";
 import { TargetIcon } from "../components/Icons";
 import { DoubleClickTest, PollingTest, ReactionTest } from "../components/QuickTests";
-import { SensConverter } from "../components/SensConverter";
 import { DpiCalc, Progress, VisibilityTest } from "../components/TrainingExtras";
 import { getNative } from "../lib/native";
 import { VALORANT_ID } from "../lib/types";
@@ -86,6 +85,7 @@ function WarmUp() {
 
 export function TrainingPage() {
   const t = useT();
+  const s = useStore();
   const [tab, setTab] = useState<Tab>("warmup");
   return (
     <section className="panel training" aria-label={t("Treino")}>
@@ -122,7 +122,12 @@ export function TrainingPage() {
             </div>
           </div>
         )}
-        {tab === "sens" && <SensConverter />}
+        {tab === "sens" && (
+          <div className="sens-moved">
+            <p className="meta">{t("A sensibilidade ganhou uma aba só dela, com o teste que descobre a sua ideal.")}</p>
+            <button type="button" className="btn primary" onClick={() => s.setPage("sensitivity")}>{t("Abrir Sensibilidade")}</button>
+          </div>
+        )}
         {tab === "crosshair" && <CrosshairLibrary />}
       </div>
       <p className="note">{t("Tudo aqui roda dentro do Goat Filter, fora do jogo. Nada é enviado ao Valorant.")}</p>
