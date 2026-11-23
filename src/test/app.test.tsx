@@ -336,7 +336,7 @@ describe("Treino v1.6", () => {
     await userEvent.click(screen.getByRole("button", { name: "Sensibilidade" }));
     const mine = screen.getByRole("region", { name: "Minha sensibilidade" });
     const dpi = within(mine).getByLabelText("DPI");
-    const sens = within(mine).getByLabelText("Sensibilidade no Valorant");
+    const sens = within(mine).getByLabelText("Sensibilidade no jogo");
     await userEvent.clear(dpi);
     await userEvent.type(dpi, "1600");
     await userEvent.clear(sens);
@@ -348,7 +348,12 @@ describe("Treino v1.6", () => {
     const swap = screen.getByRole("region", { name: "Trocar de DPI sem mudar a mira" });
     await userEvent.clear(within(swap).getByLabelText("DPI novo"));
     await userEvent.type(within(swap).getByLabelText("DPI novo"), "800");
-    expect(within(swap).getByText("0.4")).toBeInTheDocument();
+    expect(within(swap).getByText("0.400")).toBeInTheDocument();
+    // Outro jogo: o número do campo vira o equivalente (mesma rotação).
+    // Depois de salvar o painel é refeito: busca de novo.
+    const mine2 = screen.getByRole("region", { name: "Minha sensibilidade" });
+    await userEvent.selectOptions(within(mine2).getByRole("combobox", { name: "Jogo" }), "cs2");
+    expect(within(mine2).getByLabelText("Sensibilidade no jogo")).toHaveValue("0.636");
     const finder = screen.getByRole("region", { name: "Descobrir minha sensibilidade" });
     await userEvent.click(within(finder).getByRole("button", { name: "Começar" }));
     expect(within(finder).getByText("Rodada 1 de 5")).toBeInTheDocument();

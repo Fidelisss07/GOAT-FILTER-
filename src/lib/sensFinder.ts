@@ -231,12 +231,16 @@ export class Approach {
 
 export interface SensEntry {
   at: number;
+  /** No jogo da entrada (game). */
   sens: number;
   dpi: number;
   source: "finder" | "manual";
+  game?: string;
 }
 
 export interface SensProfile {
+  /** Jogo em que a pessoa joga; a sensibilidade fica nas unidades dele. */
+  game: string;
   dpi: number;
   sens: number;
   scoped: number;
@@ -244,7 +248,7 @@ export interface SensProfile {
 }
 
 const KEY = "goat-filter:sens";
-export const DEFAULT_PROFILE: SensProfile = { dpi: 800, sens: 0.35, scoped: 1, history: [] };
+export const DEFAULT_PROFILE: SensProfile = { game: "valorant", dpi: 800, sens: 0.35, scoped: 1, history: [] };
 
 export function loadProfile(): SensProfile {
   try {
@@ -252,6 +256,7 @@ export function loadProfile(): SensProfile {
     if (!raw) return { ...DEFAULT_PROFILE, history: [] };
     const p = JSON.parse(raw) as Partial<SensProfile>;
     return {
+      game: typeof p.game === "string" ? p.game : "valorant",
       dpi: Number(p.dpi) > 0 ? Number(p.dpi) : DEFAULT_PROFILE.dpi,
       sens: Number(p.sens) > 0 ? Number(p.sens) : DEFAULT_PROFILE.sens,
       scoped: Number(p.scoped) > 0 ? Number(p.scoped) : 1,
