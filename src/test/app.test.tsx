@@ -326,7 +326,33 @@ describe("Treino v1.6", () => {
     expect(screen.queryByText("Minha")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: "Sensibilidade" }));
+    await userEvent.click(screen.getByRole("button", { name: "Abrir Sensibilidade" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Sensibilidade" })).toBeInTheDocument();
     expect(screen.getByText("0.471")).toBeInTheDocument();
+  });
+
+  it("aba Sensibilidade: salva a minha, mostra eDPI e abre o teste", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: "Sensibilidade" }));
+    const mine = screen.getByRole("region", { name: "Minha sensibilidade" });
+    const dpi = within(mine).getByLabelText("DPI");
+    const sens = within(mine).getByLabelText("Sensibilidade no Valorant");
+    await userEvent.clear(dpi);
+    await userEvent.type(dpi, "1600");
+    await userEvent.clear(sens);
+    await userEvent.type(sens, "0.2");
+    expect(within(mine).getByText("320")).toBeInTheDocument();
+    expect(within(mine).getByText("Média (como a maioria dos pros)")).toBeInTheDocument();
+    await userEvent.click(within(mine).getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem("goat-filter:sens")!).sens).toBe(0.2));
+    const swap = screen.getByRole("region", { name: "Trocar de DPI sem mudar a mira" });
+    await userEvent.clear(within(swap).getByLabelText("DPI novo"));
+    await userEvent.type(within(swap).getByLabelText("DPI novo"), "800");
+    expect(within(swap).getByText("0.4")).toBeInTheDocument();
+    const finder = screen.getByRole("region", { name: "Descobrir minha sensibilidade" });
+    await userEvent.click(within(finder).getByRole("button", { name: "Começar" }));
+    expect(within(finder).getByText("Rodada 1 de 5")).toBeInTheDocument();
+    expect(within(finder).getByRole("button", { name: "Começar teste A" })).toBeInTheDocument();
   });
 
   it("teste de reação avisa clique cedo demais", async () => {

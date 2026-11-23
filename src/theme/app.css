@@ -732,3 +732,35 @@ h1, h2, h3 { margin: 0; }
 .diag li { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border-left: 4px solid #3ecf74; font-size: 13px; }
 .diag li.bad { border-left-color: var(--danger); }
 .diag li span { color: var(--text-2); word-break: break-word; }
+
+/* ---------------------------------------------------------------------------
+   Sensibilidade
+   --------------------------------------------------------------------------- */
+.sens-page { display: flex; flex-direction: column; gap: 18px; }
+.sens-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; }
+.sens-inputs { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.conv-result .band { font-size: 18px; }
+.edpi-scale { margin-top: 14px; }
+.edpi-track { position: relative; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); }
+.edpi-pro { position: absolute; top: 0; bottom: 0; border-radius: 6px; background: rgba(var(--accent-rgb), 0.35); }
+.edpi-avg { position: absolute; top: -3px; bottom: -3px; width: 2px; background: rgba(255, 255, 255, 0.5); }
+.edpi-you { position: absolute; top: -6px; width: 24px; height: 24px; margin-left: -12px; border-radius: 50%; background: var(--accent); border: 3px solid #111; }
+.edpi-legend { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted, #9a959a); }
+.finder { display: flex; flex-direction: column; gap: 10px; }
+.finder-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #110f16; border: 1px solid var(--border-soft); }
+.finder-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+.finder-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px 12%; text-align: center; background: rgba(10, 9, 14, 0.82); }
+.finder-overlay strong { font-size: 26px; }
+.finder-overlay p { max-width: 640px; color: #d8d4dc; line-height: 1.45; }
+.finder-big { font-size: 56px !important; color: var(--accent); letter-spacing: -0.02em; }
+.finder-step { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted, #9a959a); }
+.finder-choices { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.finder-hud { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); font-size: 13px; pointer-events: none; }
+.finder-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.finder-bar i { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
+.finder-result { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.sens-history { list-style: none; display: flex; flex-direction: column; gap: 8px; padding: 0; }
+.sens-history li { display: grid; grid-template-columns: 110px 80px 1fr auto; gap: 12px; align-items: center; padding: 10px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); }
+.sens-history em { font-style: normal; font-size: 12px; color: var(--muted, #9a959a); }
+.sens-tips { display: flex; flex-direction: column; gap: 8px; padding-left: 18px; line-height: 1.45; }
+.sens-moved { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
