@@ -1,10 +1,10 @@
 import { useId, useState } from "react";
-import { CrosshairIcon } from "../components/Icons";
+import { ChevronDown, CrosshairIcon } from "../components/Icons";
 import { PollingTest } from "../components/QuickTests";
 import { SensConverter } from "../components/SensConverter";
 import { FinderResult, SensFinder } from "../components/SensFinder";
 import { DpiCalc } from "../components/TrainingExtras";
-import { cmPer360, convertSens, eDpi, round, SENS_GAMES } from "../lib/sens";
+import { cmPer360, convertSens, eDpi, formatSens, gameOf, round, SENS_GAMES, sensForGame } from "../lib/sens";
 import { band, loadProfile, PRO_EDPI, saveProfile, SensProfile } from "../lib/sensFinder";
 import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
@@ -45,26 +45,36 @@ function EdpiScale({ edpi }: { edpi: number }) {
 
 function MySens({ profile, setProfile }: { profile: SensProfile; setProfile(p: SensProfile): void }) {
   const t = useT();
+  const gameId = useId();
   const dpiId = useId();
   const sensId = useId();
   const scopedId = useId();
+  const [game, setGame] = useState(profile.game);
   const [dpi, setDpi] = useState(String(profile.dpi));
   const [sens, setSens] = useState(String(profile.sens));
   const [scoped, setScoped] = useState(String(profile.scoped));
   const d = num(dpi), s = num(sens), sc = num(scoped);
   const ok = d > 0 && s > 0;
   const e = ok ? eDpi(s, d) : 0;
-  const changed = d !== profile.dpi || s !== profile.sens || sc !== profile.scoped;
+  // A faixa dos pros é a do Valorant: compara pelo equivalente lá.
+  const eVal = ok ? eDpi(convertSens(s, game, "valorant"), d) : 0;
+  const changed = game !== profile.game || d !== profile.dpi || s !== profile.sens || sc !== profile.scoped;
+  const changeGame = (g: string) => {
+    // Mesma mira no outro jogo: converte o número que estava no campo.
+    if (s > 0) setSens(formatSens(round(convertSens(s, game, g), gameOf(g).digits), g));
+    setGame(g);
+  };
   const save = () => {
     if (!ok) return;
-    const p = {
+    const moved = profile.sens !== s || profile.dpi !== d || profile.game !== game;
+    setProfile({
       ...profile,
+      game,
       dpi: d,
       sens: s,
       scoped: sc > 0 ? sc : 1,
-      history: profile.sens !== s || profile.dpi !== d ? [{ at: Date.now(), sens: s, dpi: d, source: "manual" as const }, ...profile.history] : profile.history,
-    };
-    setProfile(p);
+      history: moved ? [{ at: Date.now(), sens: s, dpi: d, source: "manual" as const, game }, ...profile.history] : profile.history,
+    });
   };
   return (
     <section className="panel" aria-label={t("Minha sensibilidade")}>
@@ -74,33 +84,47 @@ function MySens({ profile, setProfile }: { profile: SensProfile; setProfile(p: S
       </div>
       <div className="conv-grid sens-inputs">
         <div className="conv-field">
+          <label htmlFor={gameId}>{t("Jogo")}</label>
+          <div className="select">
+            <select id={gameId} value={game} onChange={(x) => changeGame(x.target.value)}>
+              {SENS_GAMES.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+            <ChevronDown />
+          </div>
+        </div>
+        <div className="conv-field">
           <label htmlFor={dpiId}>DPI</label>
           <input id={dpiId} className="input" inputMode="numeric" value={dpi} onChange={(x) => setDpi(x.target.value.replace(/\D/g, ""))} />
         </div>
         <div className="conv-field">
-          <label htmlFor={sensId}>{t("Sensibilidade no Valorant")}</label>
+          <label htmlFor={sensId}>{t("Sensibilidade no jogo")}</label>
           <input id={sensId} className="input" inputMode="decimal" value={sens} onChange={(x) => setSens(x.target.value)} />
         </div>
-        <div className="conv-field">
-          <label htmlFor={scopedId}>{t("Multiplicador da luneta")}</label>
-          <input id={scopedId} className="input" inputMode="decimal" value={scoped} onChange={(x) => setScoped(x.target.value)} />
-        </div>
+        {game === "valorant" && (
+          <div className="conv-field">
+            <label htmlFor={scopedId}>{t("Multiplicador da luneta")}</label>
+            <input id={scopedId} className="input" inputMode="decimal" value={scoped} onChange={(x) => setScoped(x.target.value)} />
+          </div>
+        )}
       </div>
       <div className="conv-result" aria-live="polite">
         <div>
           <span>eDPI</span>
-          <strong>{ok ? round(e, 0) : "—"}</strong>
+          <strong>{ok ? round(e, game === "overwatch" ? 0 : 1) : "—"}</strong>
         </div>
         <div>
           <span>{t("cm por volta (360°)")}</span>
-          <strong>{ok ? round(cmPer360(s, d, "valorant"), 1) : "—"}</strong>
+          <strong>{ok ? round(cmPer360(s, d, game), 1) : "—"}</strong>
         </div>
         <div>
           <span>{t("Faixa")}</span>
-          <strong className="band">{ok ? t(BAND_LABEL[band(e)]) : "—"}</strong>
+          <strong className="band">{ok ? t(BAND_LABEL[band(eVal)]) : "—"}</strong>
         </div>
       </div>
-      <EdpiScale edpi={e} />
+      <EdpiScale edpi={eVal} />
+      {game !== "valorant" && <p className="note">{t("A faixa compara com os profissionais de Valorant pela mesma rotação (cm por volta).")}</p>}
       <div className="save-row">
         <button type="button" className="btn primary" disabled={!ok || !changed} onClick={save}>{t("Salvar")}</button>
       </div>
@@ -113,12 +137,23 @@ function FinderPanel({ profile, setProfile }: { profile: SensProfile; setProfile
   const s = useStore();
   const [last, setLast] = useState<FinderResult | null>(null);
   const [key, setKey] = useState(0);
+  const game = gameOf(profile.game);
+  // O teste roda no cálculo do Valorant; entrada e saída no jogo da pessoa.
+  const startVal = convertSens(profile.sens, game.id, "valorant");
+  const exact = last ? sensForGame(last.sens, game.id) : 0;
+  const text = last ? formatSens(exact, game.id) : "";
   const apply = () => {
     if (!last) return;
-    setProfile({ ...profile, sens: last.sens, history: [{ at: Date.now(), sens: last.sens, dpi: profile.dpi, source: "finder" }, ...profile.history] });
-    s.showToast({ kind: "ok", text: t("Pronto. Coloque {v} na sensibilidade do Valorant.", { v: last.sens.toFixed(3) }) });
+    setProfile({ ...profile, sens: exact, history: [{ at: Date.now(), sens: exact, dpi: profile.dpi, source: "finder", game: game.id }, ...profile.history] });
+    s.showToast({ kind: "ok", text: t("Pronto. Coloque {v} na sensibilidade do {game}.", { v: text, game: game.name }) });
   };
-  const diff = last ? Math.round(((last.sens - profile.sens) / profile.sens) * 100) : 0;
+  const copy = () => {
+    void navigator.clipboard?.writeText(text).then(
+      () => s.showToast({ kind: "ok", text: t("Copiado: {v}", { v: text }) }),
+      () => undefined,
+    );
+  };
+  const diff = last ? Math.round(((exact - profile.sens) / profile.sens) * 100) : 0;
   return (
     <section className="panel finder-panel" aria-label={t("Descobrir minha sensibilidade")}>
       <div className="section-head">
@@ -126,14 +161,23 @@ function FinderPanel({ profile, setProfile }: { profile: SensProfile; setProfile
         <h2>{t("Descobrir minha sensibilidade")}</h2>
       </div>
       <p className="meta">
-        {t("Comece pela sensibilidade que você usa hoje ({v} com {dpi} DPI). O teste usa o mesmo cálculo e o mesmo campo de visão do Valorant, e lê o mouse sem a aceleração do Windows.", {
-          v: profile.sens,
+        {t("Começa pela sensibilidade que você usa hoje no {game} ({v} com {dpi} DPI). O teste lê o mouse sem a aceleração do Windows e o resultado sai no número exato do seu jogo.", {
+          game: game.name,
+          v: formatSens(profile.sens, game.id),
           dpi: profile.dpi,
         })}
       </p>
-      <SensFinder key={key} start={profile.sens} dpi={profile.dpi} onDone={setLast} />
+      <SensFinder key={`${key}-${game.id}-${profile.sens}`} start={startVal} dpi={profile.dpi} game={game.id} onDone={setLast} />
       {last && (
         <div className="finder-result">
+          <div className="exact-sens">
+            <div>
+              <span>{t("Coloque no {game}", { game: game.name })}</span>
+              <strong>{text}</strong>
+              <em>{t(game.where)}</em>
+            </div>
+            <button type="button" className="btn" onClick={copy}>{t("Copiar número")}</button>
+          </div>
           <p>
             {diff === 0
               ? t("Igual à que você já usa. Pode confiar nela.")
@@ -142,10 +186,10 @@ function FinderPanel({ profile, setProfile }: { profile: SensProfile; setProfile
                 : t("{n}% mais alta que a sua atual.", { n: diff })}
           </p>
           <div className="conv-result">
-            {SENS_GAMES.filter((g) => g.id !== "valorant").map((g) => (
+            {SENS_GAMES.filter((g) => g.id !== game.id).map((g) => (
               <div key={g.id}>
                 <span>{g.name}</span>
-                <strong>{round(convertSens(last.sens, "valorant", g.id), 3)}</strong>
+                <strong>{formatSens(sensForGame(last.sens, g.id), g.id)}</strong>
               </div>
             ))}
           </div>
@@ -184,7 +228,7 @@ function DpiSwap({ profile }: { profile: SensProfile }) {
       <div className="conv-result">
         <div>
           <span>{t("Sensibilidade com o DPI novo")}</span>
-          <strong>{n > 0 ? round(out, 3) : "—"}</strong>
+          <strong>{n > 0 ? formatSens(round(out, gameOf(profile.game).digits), profile.game) : "—"}</strong>
         </div>
         <div>
           <span>eDPI</span>
@@ -209,8 +253,8 @@ function History({ profile }: { profile: SensProfile }) {
         {profile.history.slice(0, 8).map((h) => (
           <li key={h.at}>
             <span>{new Date(h.at).toLocaleDateString()}</span>
-            <strong>{h.sens.toFixed(3)}</strong>
-            <span>{h.dpi} DPI · eDPI {round(h.sens * h.dpi, 0)}</span>
+            <strong>{formatSens(h.sens, h.game ?? "valorant")}</strong>
+            <span>{gameOf(h.game ?? "valorant").name} · {h.dpi} DPI</span>
             <em>{h.source === "finder" ? t("teste") : t("manual")}</em>
           </li>
         ))}
@@ -236,7 +280,7 @@ export function SensitivityPage() {
   };
   return (
     <div className="sens-page">
-      <MySens key={`${profile.dpi}-${profile.sens}-${profile.scoped}`} profile={profile} setProfile={setProfile} />
+      <MySens key={`${profile.game}-${profile.dpi}-${profile.sens}-${profile.scoped}`} profile={profile} setProfile={setProfile} />
       <FinderPanel profile={profile} setProfile={setProfile} />
       <div className="sens-grid">
         <DpiSwap profile={profile} />

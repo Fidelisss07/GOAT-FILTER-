@@ -6,16 +6,29 @@ export interface SensGame {
   id: string;
   name: string;
   yaw: number;
+  /** Casas decimais que o campo de sensibilidade do jogo aceita. */
+  digits: number;
+  /** Onde fica a sensibilidade no jogo. */
+  where: string;
 }
 
 export const SENS_GAMES: SensGame[] = [
-  { id: "valorant", name: "Valorant", yaw: 0.07 },
-  { id: "cs2", name: "Counter-Strike 2", yaw: 0.022 },
-  { id: "apex", name: "Apex Legends", yaw: 0.022 },
-  { id: "overwatch", name: "Overwatch 2", yaw: 0.0066 },
+  { id: "valorant", name: "Valorant", yaw: 0.07, digits: 3, where: "Configurações › Geral › Mouse › Sensibilidade: mira" },
+  { id: "cs2", name: "Counter-Strike 2", yaw: 0.022, digits: 3, where: "Configurações › Teclado/mouse › Sensibilidade do mouse" },
+  { id: "apex", name: "Apex Legends", yaw: 0.022, digits: 2, where: "Configurações › Mouse/controle › Sensibilidade do mouse" },
+  { id: "overwatch", name: "Overwatch 2", yaw: 0.0066, digits: 2, where: "Opções › Controles › Geral › Sensibilidade" },
 ];
 
-const game = (id: string) => SENS_GAMES.find((g) => g.id === id) ?? SENS_GAMES[0];
+export const gameOf = (id: string) => SENS_GAMES.find((g) => g.id === id) ?? SENS_GAMES[0];
+const game = gameOf;
+
+/** Sensibilidade do Valorant convertida para o jogo, com as casas que o jogo aceita. */
+export function sensForGame(valorantSens: number, gameId: string): number {
+  return round(convertSens(valorantSens, "valorant", gameId), gameOf(gameId).digits);
+}
+
+/** Texto do número exato, com as casas do jogo (ex.: 0.350 no Valorant). */
+export const formatSens = (sens: number, gameId: string) => sens.toFixed(gameOf(gameId).digits);
 
 /** Mesma rotação em outro jogo (mesmo DPI). */
 export function convertSens(sens: number, from: string, to: string): number {

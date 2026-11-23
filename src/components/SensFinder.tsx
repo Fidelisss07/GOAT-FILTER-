@@ -19,7 +19,7 @@ import {
   TestScore,
   VALORANT_HFOV,
 } from "../lib/sensFinder";
-import { cmPer360, eDpi, round } from "../lib/sens";
+import { cmPer360, eDpi, formatSens, gameOf, round, sensForGame } from "../lib/sens";
 import { useT } from "../lib/useT";
 
 const TIMEOUT_MS = 3000;
@@ -131,7 +131,11 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, sim: Sim, acc
  * Descobre a sensibilidade: 5 rodadas, cada uma com duas sensibilidades às
  * cegas (A e B) e os mesmos 10 alvos. Mede, compara e estreita a faixa.
  */
-export function SensFinder({ start, dpi, onDone }: { start: number; dpi: number; onDone(r: FinderResult): void }) {
+/**
+ * `start` e o resultado ficam em unidades do Valorant (o teste usa o cálculo
+ * dele); a tela mostra o número convertido para `game`.
+ */
+export function SensFinder({ start, dpi, game, onDone }: { start: number; dpi: number; game: string; onDone(r: FinderResult): void }) {
   const t = useT();
   const canvas = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<Phase>("intro");
@@ -419,11 +423,15 @@ export function SensFinder({ start, dpi, onDone }: { start: number; dpi: number;
         {phase === "done" && result && (
           <div className="finder-overlay">
             <span className="finder-step">{t("Resultado")}</span>
-            <strong className="finder-big">{result.sens.toFixed(3)}</strong>
+            <strong className="finder-big">{formatSens(sensForGame(result.sens, game), game)}</strong>
             <p>
-              {t("Sensibilidade no Valorant com {dpi} DPI · eDPI {e} · {cm} cm por volta de 360°", {
+              {t("Coloque exatamente este número na sensibilidade do {game}.", { game: gameOf(game).name })}
+            </p>
+            <p className="note">
+              {t("{where} · {dpi} DPI · eDPI {e} · {cm} cm por volta de 360°", {
+                where: t(gameOf(game).where),
                 dpi,
-                e: round(eDpi(result.sens, dpi), 0),
+                e: round(eDpi(sensForGame(result.sens, game), dpi), 0),
                 cm: round(cmPer360(result.sens, dpi, "valorant"), 1),
               })}
             </p>

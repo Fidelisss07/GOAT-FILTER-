@@ -10,6 +10,7 @@ import {
   scoreTest,
   TargetResult,
 } from "../lib/sensFinder";
+import { formatSens, sensForGame } from "../lib/sens";
 
 const hit = (ms: number, extra: Partial<TargetResult> = {}): TargetResult => ({
   ms, angle: 30, size: 1.4, overshoot: false, corrections: 0, misses: 0, ...extra,
@@ -72,6 +73,13 @@ describe("descobrir a sensibilidade", () => {
     b.update(20, 0, 2, 120);
     expect(b.corrections).toBe(1);
     expect(b.overshoot).toBe(false);
+  });
+
+  it("resultado no número exato de cada jogo", () => {
+    expect(formatSens(sensForGame(0.3456, "valorant"), "valorant")).toBe("0.346");
+    expect(formatSens(sensForGame(0.35, "cs2"), "cs2")).toBe("1.114");
+    expect(formatSens(sensForGame(0.35, "overwatch"), "overwatch")).toBe("3.71");
+    expect(formatSens(sensForGame(0.35, "apex"), "apex")).toBe("1.11");
   });
 
   it("geometria e faixas", () => {
