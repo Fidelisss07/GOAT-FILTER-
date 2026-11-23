@@ -243,12 +243,15 @@ export interface SensProfile {
   game: string;
   dpi: number;
   sens: number;
+  /** Valorant: "Multiplicador de sensibilidade da mira de precisão" (Operator, Marshal, Outlaw). */
   scoped: number;
+  /** Valorant: "Multiplicador de sensibilidade de mira" (botão direito nos rifles, SMGs, Guardian...). */
+  ads: number;
   history: SensEntry[];
 }
 
 const KEY = "goat-filter:sens";
-export const DEFAULT_PROFILE: SensProfile = { game: "valorant", dpi: 800, sens: 0.35, scoped: 1, history: [] };
+export const DEFAULT_PROFILE: SensProfile = { game: "valorant", dpi: 800, sens: 0.35, scoped: 1, ads: 1, history: [] };
 
 export function loadProfile(): SensProfile {
   try {
@@ -260,6 +263,7 @@ export function loadProfile(): SensProfile {
       dpi: Number(p.dpi) > 0 ? Number(p.dpi) : DEFAULT_PROFILE.dpi,
       sens: Number(p.sens) > 0 ? Number(p.sens) : DEFAULT_PROFILE.sens,
       scoped: Number(p.scoped) > 0 ? Number(p.scoped) : 1,
+      ads: Number(p.ads) > 0 ? Number(p.ads) : 1,
       history: Array.isArray(p.history) ? p.history.slice(0, 50) : [],
     };
   } catch {

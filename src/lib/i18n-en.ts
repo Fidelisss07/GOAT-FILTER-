@@ -628,4 +628,12 @@ export const EN: Record<string, string> = {
   "Configurações › Teclado/mouse › Sensibilidade do mouse": "Settings › Keyboard/mouse › Mouse sensitivity",
   "Configurações › Mouse/controle › Sensibilidade do mouse": "Settings › Mouse/controller › Mouse sensitivity",
   "Opções › Controles › Geral › Sensibilidade": "Options › Controls › General › Sensitivity",
+  "Ao mirar (botão direito)": "Aiming down sights (right click)",
+  "Como fica no Valorant": "How it looks in Valorant",
+  "Multiplicador de sensibilidade da mira de precisão": "Scoped Sensitivity Multiplier",
+  "Multiplicador de sensibilidade de mira": "ADS Sensitivity Multiplier",
+  "Na luneta (Operator, Marshal)": "Scoped (Operator, Marshal)",
+  "Os nomes são os mesmos do Valorant (Configurações › Geral › Mouse). Os dois multiplicadores multiplicam a Sensibilidade: Mira: o de mira vale ao mirar com o botão direito (rifles, SMGs, Guardian) e o de precisão nas lunetas (Operator, Marshal, Outlaw).": "Same names as in Valorant (Settings › General › Mouse). Both multipliers multiply Sensitivity: Aim: ADS applies when aiming with right click (rifles, SMGs, Guardian) and Scoped applies to sniper scopes (Operator, Marshal, Outlaw).",
+  "Sensibilidade: Mira": "Sensitivity: Aim",
+  "o seu, continua igual": "yours, stays the same",
 };

@@ -10,7 +10,7 @@ import {
   scoreTest,
   TargetResult,
 } from "../lib/sensFinder";
-import { formatSens, sensForGame } from "../lib/sens";
+import { formatMult, formatSens, sensForGame } from "../lib/sens";
 
 const hit = (ms: number, extra: Partial<TargetResult> = {}): TargetResult => ({
   ms, angle: 30, size: 1.4, overshoot: false, corrections: 0, misses: 0, ...extra,
@@ -80,6 +80,10 @@ describe("descobrir a sensibilidade", () => {
     expect(formatSens(sensForGame(0.35, "cs2"), "cs2")).toBe("1.114");
     expect(formatSens(sensForGame(0.35, "overwatch"), "overwatch")).toBe("3.71");
     expect(formatSens(sensForGame(0.35, "apex"), "apex")).toBe("1.11");
+    // Valorant em português mostra com vírgula.
+    expect(formatSens(0.2, "valorant", true)).toBe("0,2");
+    expect(formatMult(0.726, true)).toBe("0,726");
+    expect(formatMult(1, true)).toBe("1");
   });
 
   it("geometria e faixas", () => {
