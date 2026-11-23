@@ -4,7 +4,8 @@ import { PollingTest } from "../components/QuickTests";
 import { SensConverter } from "../components/SensConverter";
 import { FinderResult, SensFinder } from "../components/SensFinder";
 import { DpiCalc } from "../components/TrainingExtras";
-import { cmPer360, convertSens, eDpi, formatSens, gameOf, round, SENS_GAMES, sensForGame } from "../lib/sens";
+import { resolveLang } from "../lib/i18n";
+import { cmPer360, convertSens, eDpi, formatMult, formatSens, gameOf, round, SENS_GAMES, sensForGame } from "../lib/sens";
 import { band, loadProfile, PRO_EDPI, saveProfile, SensProfile } from "../lib/sensFinder";
 import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
@@ -49,16 +50,18 @@ function MySens({ profile, setProfile }: { profile: SensProfile; setProfile(p: S
   const dpiId = useId();
   const sensId = useId();
   const scopedId = useId();
+  const adsId = useId();
   const [game, setGame] = useState(profile.game);
+  const [ads, setAds] = useState(String(profile.ads).replace(".", ","));
   const [dpi, setDpi] = useState(String(profile.dpi));
   const [sens, setSens] = useState(String(profile.sens));
   const [scoped, setScoped] = useState(String(profile.scoped));
-  const d = num(dpi), s = num(sens), sc = num(scoped);
+  const d = num(dpi), s = num(sens), sc = num(scoped), ad = num(ads);
   const ok = d > 0 && s > 0;
   const e = ok ? eDpi(s, d) : 0;
   // A faixa dos pros é a do Valorant: compara pelo equivalente lá.
   const eVal = ok ? eDpi(convertSens(s, game, "valorant"), d) : 0;
-  const changed = game !== profile.game || d !== profile.dpi || s !== profile.sens || sc !== profile.scoped;
+  const changed = game !== profile.game || d !== profile.dpi || s !== profile.sens || sc !== profile.scoped || ad !== profile.ads;
   const changeGame = (g: string) => {
     // Mesma mira no outro jogo: converte o número que estava no campo.
     if (s > 0) setSens(formatSens(round(convertSens(s, game, g), gameOf(g).digits), g));
@@ -73,6 +76,7 @@ function MySens({ profile, setProfile }: { profile: SensProfile; setProfile(p: S
       dpi: d,
       sens: s,
       scoped: sc > 0 ? sc : 1,
+      ads: ad > 0 ? ad : 1,
       history: moved ? [{ at: Date.now(), sens: s, dpi: d, source: "manual" as const, game }, ...profile.history] : profile.history,
     });
   };
@@ -99,16 +103,27 @@ function MySens({ profile, setProfile }: { profile: SensProfile; setProfile(p: S
           <input id={dpiId} className="input" inputMode="numeric" value={dpi} onChange={(x) => setDpi(x.target.value.replace(/\D/g, ""))} />
         </div>
         <div className="conv-field">
-          <label htmlFor={sensId}>{t("Sensibilidade no jogo")}</label>
+          <label htmlFor={sensId}>{game === "valorant" ? t("Sensibilidade: Mira") : t("Sensibilidade no jogo")}</label>
           <input id={sensId} className="input" inputMode="decimal" value={sens} onChange={(x) => setSens(x.target.value)} />
         </div>
         {game === "valorant" && (
-          <div className="conv-field">
-            <label htmlFor={scopedId}>{t("Multiplicador da luneta")}</label>
-            <input id={scopedId} className="input" inputMode="decimal" value={scoped} onChange={(x) => setScoped(x.target.value)} />
-          </div>
+          <>
+            <div className="conv-field">
+              <label htmlFor={adsId}>{t("Multiplicador de sensibilidade de mira")}</label>
+              <input id={adsId} className="input" inputMode="decimal" value={ads} onChange={(x) => setAds(x.target.value)} />
+            </div>
+            <div className="conv-field">
+              <label htmlFor={scopedId}>{t("Multiplicador de sensibilidade da mira de precisão")}</label>
+              <input id={scopedId} className="input" inputMode="decimal" value={scoped} onChange={(x) => setScoped(x.target.value)} />
+            </div>
+          </>
         )}
       </div>
+      {game === "valorant" && (
+        <p className="note">
+          {t("Os nomes são os mesmos do Valorant (Configurações › Geral › Mouse). Os dois multiplicadores multiplicam a Sensibilidade: Mira: o de mira vale ao mirar com o botão direito (rifles, SMGs, Guardian) e o de precisão nas lunetas (Operator, Marshal, Outlaw).")}
+        </p>
+      )}
       <div className="conv-result" aria-live="polite">
         <div>
           <span>eDPI</span>
@@ -124,6 +139,18 @@ function MySens({ profile, setProfile }: { profile: SensProfile; setProfile(p: S
         </div>
       </div>
       <EdpiScale edpi={eVal} />
+      {game === "valorant" && ok && (
+        <div className="conv-result">
+          <div>
+            <span>{t("Ao mirar (botão direito)")}</span>
+            <strong>{round(cmPer360(s * (ad > 0 ? ad : 1), d, game), 1)} cm</strong>
+          </div>
+          <div>
+            <span>{t("Na luneta (Operator, Marshal)")}</span>
+            <strong>{round(cmPer360(s * (sc > 0 ? sc : 1), d, game), 1)} cm</strong>
+          </div>
+        </div>
+      )}
       {game !== "valorant" && <p className="note">{t("A faixa compara com os profissionais de Valorant pela mesma rotação (cm por volta).")}</p>}
       <div className="save-row">
         <button type="button" className="btn primary" disabled={!ok || !changed} onClick={save}>{t("Salvar")}</button>
@@ -140,19 +167,27 @@ function FinderPanel({ profile, setProfile }: { profile: SensProfile; setProfile
   const game = gameOf(profile.game);
   // O teste roda no cálculo do Valorant; entrada e saída no jogo da pessoa.
   const startVal = convertSens(profile.sens, game.id, "valorant");
+  const comma = resolveLang(s.settings.language) === "pt";
   const exact = last ? sensForGame(last.sens, game.id) : 0;
-  const text = last ? formatSens(exact, game.id) : "";
+  const text = last ? formatSens(exact, game.id, comma) : "";
   const apply = () => {
     if (!last) return;
     setProfile({ ...profile, sens: exact, history: [{ at: Date.now(), sens: exact, dpi: profile.dpi, source: "finder", game: game.id }, ...profile.history] });
     s.showToast({ kind: "ok", text: t("Pronto. Coloque {v} na sensibilidade do {game}.", { v: text, game: game.name }) });
   };
-  const copy = () => {
-    void navigator.clipboard?.writeText(text).then(
-      () => s.showToast({ kind: "ok", text: t("Copiado: {v}", { v: text }) }),
+  const copy = (v = text) => {
+    void navigator.clipboard?.writeText(v).then(
+      () => s.showToast({ kind: "ok", text: t("Copiado: {v}", { v }) }),
       () => undefined,
     );
   };
+  // Valorant: os três campos como aparecem no jogo. Os multiplicadores não
+  // mudam com a sensibilidade nova (eles multiplicam a Sensibilidade: Mira).
+  const fields = [
+    { label: "Sensibilidade: Mira", value: text, hint: "" },
+    { label: "Multiplicador de sensibilidade de mira", value: formatMult(profile.ads, comma), hint: "o seu, continua igual" },
+    { label: "Multiplicador de sensibilidade da mira de precisão", value: formatMult(profile.scoped, comma), hint: "o seu, continua igual" },
+  ];
   const diff = last ? Math.round(((exact - profile.sens) / profile.sens) * 100) : 0;
   return (
     <section className="panel finder-panel" aria-label={t("Descobrir minha sensibilidade")}>
@@ -167,7 +202,7 @@ function FinderPanel({ profile, setProfile }: { profile: SensProfile; setProfile
           dpi: profile.dpi,
         })}
       </p>
-      <SensFinder key={`${key}-${game.id}-${profile.sens}`} start={startVal} dpi={profile.dpi} game={game.id} onDone={setLast} />
+      <SensFinder key={`${key}-${game.id}-${profile.sens}`} start={startVal} dpi={profile.dpi} game={game.id} comma={comma} onDone={setLast} />
       {last && (
         <div className="finder-result">
           <div className="exact-sens">
@@ -176,8 +211,20 @@ function FinderPanel({ profile, setProfile }: { profile: SensProfile; setProfile
               <strong>{text}</strong>
               <em>{t(game.where)}</em>
             </div>
-            <button type="button" className="btn" onClick={copy}>{t("Copiar número")}</button>
+            <button type="button" className="btn" onClick={() => copy()}>{t("Copiar número")}</button>
           </div>
+          {game.id === "valorant" && (
+            <div className="game-fields" aria-label={t("Como fica no Valorant")}>
+              {fields.map((f) => (
+                <div key={f.label} className="game-field">
+                  <span>{t(f.label)}</span>
+                  <strong>{f.value}</strong>
+                  <em>{f.hint ? t(f.hint) : ""}</em>
+                  <button type="button" className="btn small" onClick={() => copy(f.value)}>{t("Copiar")}</button>
+                </div>
+              ))}
+            </div>
+          )}
           <p>
             {diff === 0
               ? t("Igual à que você já usa. Pode confiar nela.")
@@ -280,7 +327,7 @@ export function SensitivityPage() {
   };
   return (
     <div className="sens-page">
-      <MySens key={`${profile.game}-${profile.dpi}-${profile.sens}-${profile.scoped}`} profile={profile} setProfile={setProfile} />
+      <MySens key={`${profile.game}-${profile.dpi}-${profile.sens}-${profile.scoped}-${profile.ads}`} profile={profile} setProfile={setProfile} />
       <FinderPanel profile={profile} setProfile={setProfile} />
       <div className="sens-grid">
         <DpiSwap profile={profile} />

@@ -135,7 +135,7 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, sim: Sim, acc
  * `start` e o resultado ficam em unidades do Valorant (o teste usa o cálculo
  * dele); a tela mostra o número convertido para `game`.
  */
-export function SensFinder({ start, dpi, game, onDone }: { start: number; dpi: number; game: string; onDone(r: FinderResult): void }) {
+export function SensFinder({ start, dpi, game, comma = false, onDone }: { start: number; dpi: number; game: string; comma?: boolean; onDone(r: FinderResult): void }) {
   const t = useT();
   const canvas = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<Phase>("intro");
@@ -423,7 +423,7 @@ export function SensFinder({ start, dpi, game, onDone }: { start: number; dpi: n
         {phase === "done" && result && (
           <div className="finder-overlay">
             <span className="finder-step">{t("Resultado")}</span>
-            <strong className="finder-big">{formatSens(sensForGame(result.sens, game), game)}</strong>
+            <strong className="finder-big">{formatSens(sensForGame(result.sens, game), game, comma)}</strong>
             <p>
               {t("Coloque exatamente este número na sensibilidade do {game}.", { game: gameOf(game).name })}
             </p>

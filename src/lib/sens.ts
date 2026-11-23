@@ -27,8 +27,21 @@ export function sensForGame(valorantSens: number, gameId: string): number {
   return round(convertSens(valorantSens, "valorant", gameId), gameOf(gameId).digits);
 }
 
-/** Texto do número exato, com as casas do jogo (ex.: 0.350 no Valorant). */
-export const formatSens = (sens: number, gameId: string) => sens.toFixed(gameOf(gameId).digits);
+/**
+ * Texto do número exato, com as casas do jogo. Com `comma` (jogo em português)
+ * usa vírgula, como o Valorant mostra: 0,726.
+ */
+export const formatSens = (sens: number, gameId: string, comma = false) => {
+  // Sem zeros sobrando no fim, como o jogo mostra (0,2 e não 0,200).
+  const s = String(Number(sens.toFixed(gameOf(gameId).digits)));
+  return comma ? s.replace(".", ",") : s;
+};
+
+/** Multiplicador com até 3 casas, sem zeros sobrando (1, 0,726). */
+export const formatMult = (m: number, comma = false) => {
+  const s = String(Math.round(m * 1000) / 1000);
+  return comma ? s.replace(".", ",") : s;
+};
 
 /** Mesma rotação em outro jogo (mesmo DPI). */
 export function convertSens(sens: number, from: string, to: string): number {

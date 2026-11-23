@@ -336,7 +336,9 @@ describe("Treino v1.6", () => {
     await userEvent.click(screen.getByRole("button", { name: "Sensibilidade" }));
     const mine = screen.getByRole("region", { name: "Minha sensibilidade" });
     const dpi = within(mine).getByLabelText("DPI");
-    const sens = within(mine).getByLabelText("Sensibilidade no jogo");
+    const sens = within(mine).getByLabelText("Sensibilidade: Mira");
+    expect(within(mine).getByLabelText("Multiplicador de sensibilidade de mira")).toHaveValue("1");
+    expect(within(mine).getByLabelText("Multiplicador de sensibilidade da mira de precisão")).toHaveValue("1");
     await userEvent.clear(dpi);
     await userEvent.type(dpi, "1600");
     await userEvent.clear(sens);
@@ -348,7 +350,7 @@ describe("Treino v1.6", () => {
     const swap = screen.getByRole("region", { name: "Trocar de DPI sem mudar a mira" });
     await userEvent.clear(within(swap).getByLabelText("DPI novo"));
     await userEvent.type(within(swap).getByLabelText("DPI novo"), "800");
-    expect(within(swap).getByText("0.400")).toBeInTheDocument();
+    expect(within(swap).getByText("0.4")).toBeInTheDocument();
     // Outro jogo: o número do campo vira o equivalente (mesma rotação).
     // Depois de salvar o painel é refeito: busca de novo.
     const mine2 = screen.getByRole("region", { name: "Minha sensibilidade" });
