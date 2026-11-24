@@ -4,6 +4,6 @@ members = ["crates/goat-core", "src-tauri"]
 default-members = ["crates/goat-core"]
 
 [workspace.package]
-version = "1.16.3"
+version = "1.17.0"
 edition = "2021"
-license = "MIT"
+license = "LicenseRef-Proprietary"
