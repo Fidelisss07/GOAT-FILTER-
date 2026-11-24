@@ -7,16 +7,17 @@ que bateu 100% com o roteiro.
 """
 import subprocess
 
-SRC = "assets/voz/narracao-marianne.mp3"   # voz feminina "Marianne" (propaganda, natural)
-TEMPO = 1.05                                # 5% mais rápida, sem mudar o tom
-# (início, fim na voz) -> segundo do vídeo em que a frase entra
+SRC = "assets/voz/narracao-marianne-v4.mp3"  # voz "Marianne", modelo eleven_v4 (mais natural)
+TEMPO = 1.0
+# (início, fim na voz) -> segundo do vídeo em que a frase entra.
+# Tempos da transcrição independente (o áudio enviado como arquivo, sem o roteiro).
 SEG = [
-    (0.00, 2.10, 0.35),    # Seu Valorant tá sem cor?
-    (2.25, 7.28, 3.30),    # Com o Goat Filter, o Digital Vibrance vai até duzentos por cento.
-    (7.40, 11.35, 8.25),   # Seus clipes saem lisinhos, sem perder FPS.
-    (11.42, 15.72, 12.05), # E em três minutos, você descobre a sua sensibilidade ideal.
-    (15.90, 18.84, 16.25), # Tudo num app leve, que não mexe no jogo.
-    (18.93, 23.72, 20.30), # Baixe grátis em goatfilter.xyz.
+    (0.10, 1.80, 0.35),    # Seu Valorant tá sem cor?
+    (1.90, 6.20, 3.30),    # Com o Goat Filter, o Digital Vibrance vai até duzentos por cento.
+    (6.28, 9.70, 8.30),    # Seus clipes saem lisinhos, sem perder FPS.
+    (9.78, 13.82, 12.00),  # E em três minutos, você descobre a sua sensibilidade ideal.
+    (13.88, 16.62, 16.30), # Tudo num app leve, que não mexe no jogo.
+    (16.70, 20.03, 20.80), # Baixe grátis em goatfilter.xyz.
 ]
 fc = []
 for i, (a, b, d) in enumerate(SEG):
