@@ -1,5 +1,7 @@
 # Goat Filter
 
+Site: **https://www.goatfilter.xyz** · Suporte: **suporte-contato@goatfilter.xyz**
+
 Utilitário para Windows que aumenta a intensidade das cores (**Digital Vibrance**) e
 vai **além dos 100% do driver** com a camada **Super Vibrance**. Também ativa sozinho um
 perfil quando o **Valorant** abre e devolve as cores quando o jogo fecha.

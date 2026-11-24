@@ -636,4 +636,5 @@ export const EN: Record<string, string> = {
   "Os nomes são os mesmos do Valorant (Configurações › Geral › Mouse). Os dois multiplicadores multiplicam a Sensibilidade: Mira: o de mira vale ao mirar com o botão direito (rifles, SMGs, Guardian) e o de precisão nas lunetas (Operator, Marshal, Outlaw).": "Same names as in Valorant (Settings › General › Mouse). Both multipliers multiply Sensitivity: Aim: ADS applies when aiming with right click (rifles, SMGs, Guardian) and Scoped applies to sniper scopes (Operator, Marshal, Outlaw).",
   "Sensibilidade: Mira": "Sensitivity: Aim",
   "o seu, continua igual": "yours, stays the same",
+  "Suporte: {email}": "Support: {email}",
 };

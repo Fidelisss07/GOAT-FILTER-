@@ -46,16 +46,18 @@ function EdpiScale({ edpi }: { edpi: number }) {
 
 function MySens({ profile, setProfile }: { profile: SensProfile; setProfile(p: SensProfile): void }) {
   const t = useT();
+  const comma = resolveLang(useStore().settings.language) === "pt";
   const gameId = useId();
   const dpiId = useId();
   const sensId = useId();
   const scopedId = useId();
   const adsId = useId();
   const [game, setGame] = useState(profile.game);
-  const [ads, setAds] = useState(String(profile.ads).replace(".", ","));
+  const [ads, setAds] = useState(formatMult(profile.ads, comma));
   const [dpi, setDpi] = useState(String(profile.dpi));
-  const [sens, setSens] = useState(String(profile.sens));
-  const [scoped, setScoped] = useState(String(profile.scoped));
+  // Como o jogo mostra: vírgula em português (0,2).
+  const [sens, setSens] = useState(formatSens(profile.sens, profile.game, comma));
+  const [scoped, setScoped] = useState(formatMult(profile.scoped, comma));
   const d = num(dpi), s = num(sens), sc = num(scoped), ad = num(ads);
   const ok = d > 0 && s > 0;
   const e = ok ? eDpi(s, d) : 0;
@@ -64,7 +66,7 @@ function MySens({ profile, setProfile }: { profile: SensProfile; setProfile(p: S
   const changed = game !== profile.game || d !== profile.dpi || s !== profile.sens || sc !== profile.scoped || ad !== profile.ads;
   const changeGame = (g: string) => {
     // Mesma mira no outro jogo: converte o número que estava no campo.
-    if (s > 0) setSens(formatSens(round(convertSens(s, game, g), gameOf(g).digits), g));
+    if (s > 0) setSens(formatSens(round(convertSens(s, game, g), gameOf(g).digits), g, comma && g === "valorant"));
     setGame(g);
   };
   const save = () => {
