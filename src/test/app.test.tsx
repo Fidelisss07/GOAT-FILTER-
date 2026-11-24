@@ -52,12 +52,20 @@ describe("Visão geral", () => {
     expect(screen.getByRole("slider", { name: "Digital Vibrance" })).toHaveAttribute("aria-valuenow", "50");
   });
 
-  it("divisor antes/depois começa no meio e anda pelo teclado", async () => {
+  it("segurar o botão mostra a cena sem o ajuste", async () => {
     await renderApp();
-    const div = screen.getByRole("slider", { name: /Divisor/ });
-    expect(div).toHaveAttribute("aria-valuenow", "50");
-    fireEvent.keyDown(div, { key: "ArrowLeft" });
-    expect(div).toHaveAttribute("aria-valuenow", "48");
+    const hold = screen.getByRole("button", { name: "Segure para ver sem o ajuste" });
+    fireEvent.pointerDown(hold);
+    expect(document.documentElement.dataset.compare).toBe("true");
+    fireEvent.pointerUp(hold);
+    expect(document.documentElement.dataset.compare).toBeUndefined();
+  });
+
+  it("seletor circular anda com a roda do mouse", async () => {
+    await renderApp();
+    const dial = screen.getByRole("slider", { name: "Digital Vibrance" });
+    fireEvent.wheel(dial, { deltaY: -100 });
+    expect(dial).toHaveAttribute("aria-valuenow", "76");
   });
 });
 
