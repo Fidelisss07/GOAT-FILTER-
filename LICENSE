@@ -1,21 +1,19 @@
-MIT License
+Goat Filter — Licença de uso
+Copyright (c) 2026 Fidelisss07. Todos os direitos reservados.
 
-Copyright (c) 2026 Fidelisss07
+O código-fonte deste repositório é proprietário. É proibido copiar, modificar,
+redistribuir, sublicenciar ou vender o código, no todo ou em parte, sem
+autorização por escrito do autor.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+O aplicativo Goat Filter (o instalador publicado em https://www.goatfilter.xyz)
+pode ser baixado e usado gratuitamente, nas condições descritas no site.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Versões publicadas antes desta mudança continuam sob a licença MIT em que
+foram distribuídas; esta licença vale para o código a partir da versão 1.17.0.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Componentes de terceiros mantêm as próprias licenças. O gravador usa o FFmpeg
+(LGPL 2.1), compilado a partir do código-fonte oficial pelo script
+scripts/build-ffmpeg.sh; o script e as alterações feitas no FFmpeg ficam
+disponíveis em https://www.goatfilter.xyz/licencas/, como pede a LGPL.
+
+Contato: suporte-contato@goatfilter.xyz

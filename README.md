@@ -272,10 +272,11 @@ docs/PLANEJAMENTO.md planejamento completo
 
 ## Licença
 
-[MIT](LICENSE).
+Código proprietário, todos os direitos reservados (ver [LICENSE](LICENSE)). O app é gratuito para usar.
+Versões até a 1.16.3 foram publicadas sob MIT.
 
 ## Componentes de terceiros
 
 O gravador usa o [FFmpeg](https://ffmpeg.org) (LGPL 2.1), compilado só com as partes necessárias
 pelo script [`scripts/build-ffmpeg.sh`](scripts/build-ffmpeg.sh) a partir do código-fonte oficial
-(tag `n8.0.1`). Ele roda como um programa separado, extraído para a pasta de dados do app.
+(tag `n8.1.3`, com um ajuste no relógio do Windows). O script fica público em https://www.goatfilter.xyz/licencas/. Ele roda como um programa separado, extraído para a pasta de dados do app.

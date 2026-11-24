@@ -143,6 +143,36 @@ pub fn from_manifest_json(current: &str, repo: &str, json: &serde_json::Value) -
     })
 }
 
+/// Endereço do site, de onde o app baixa as versões novas.
+pub const SITE: &str = "https://www.goatfilter.xyz";
+
+/// Monta o resultado a partir do `/download/latest.json` do site.
+/// Formato: `{"version": "1.17.0", "file": "GoatFilter-instalador.exe", "sha256": "..."}`.
+/// O instalador fica em `{site}/download/{file}`; sem SHA-256 válido não há instalador.
+pub fn from_site_manifest(current: &str, site: &str, json: &serde_json::Value) -> Option<UpdateInfo> {
+    let version = json.get("version")?.as_str()?.trim().trim_start_matches(['v', 'V']).to_string();
+    parse(&version)?;
+    let file = json
+        .get("file")
+        .and_then(|t| t.as_str())
+        .filter(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)) && !n.starts_with('.'));
+    let sha = json
+        .get("sha256")
+        .and_then(|t| t.as_str())
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit()));
+    let installer = file.zip(sha);
+    Some(UpdateInfo {
+        current: current.into(),
+        available: is_newer(&version, current),
+        latest: Some(format!("v{version}")),
+        url: Some(format!("{site}/#novidades")),
+        notes: None,
+        installer_url: installer.as_ref().map(|(n, _)| format!("{site}/download/{n}")),
+        installer_sha256: installer.map(|(_, s)| s),
+    })
+}
+
 /// Tira o markdown das notas da versão e deixa só a lista do que mudou
 /// (uma linha por item). Ex.: "* v1.4: presets by @fulano in https://..." → "v1.4: presets".
 pub fn clean_notes(body: &str) -> Option<String> {
@@ -189,6 +219,22 @@ pub fn from_release_json(current: &str, json: &serde_json::Value) -> UpdateInfo 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn site_manifest() {
+        let j = serde_json::json!({"version": "1.17.0", "file": "GoatFilter-instalador.exe", "sha256": "AB".repeat(32), "size": 1});
+        let u = from_site_manifest("1.16.3", SITE, &j).unwrap();
+        assert!(u.available);
+        assert_eq!(u.latest.as_deref(), Some("v1.17.0"));
+        assert_eq!(u.installer_url.as_deref(), Some("https://www.goatfilter.xyz/download/GoatFilter-instalador.exe"));
+        assert_eq!(u.installer_sha256.as_deref(), Some("ab".repeat(32).as_str()));
+        assert!(!from_site_manifest("1.17.0", SITE, &j).unwrap().available);
+        let bad = serde_json::json!({"version": "2.0.0", "file": "../x.exe", "sha256": "AB".repeat(32)});
+        assert!(from_site_manifest("1.0.0", SITE, &bad).unwrap().installer_url.is_none());
+        let nosha = serde_json::json!({"version": "2.0.0", "file": "a.exe"});
+        assert!(from_site_manifest("1.0.0", SITE, &nosha).unwrap().installer_url.is_none());
+        assert!(from_site_manifest("1.0.0", SITE, &serde_json::json!({"version": "x"})).is_none());
+    }
 
     #[test]
     fn compares_versions() {

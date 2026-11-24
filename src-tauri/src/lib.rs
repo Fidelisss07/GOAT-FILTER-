@@ -32,12 +32,28 @@ fn http_agent() -> Result<ureq::Agent, String> {
 }
 
 /// Consulta a versão mais nova.
-/// 1º: `latest.json` anexado à versão, pelo link de download normal do GitHub
-///     (sem o limite de 60 consultas por hora da API).
-/// 2º: API do GitHub (versões antigas não têm o `latest.json`).
+/// 1º: `/download/latest.json` do site (o instalador também vem do site).
+/// 2º: `latest.json` anexado à versão no GitHub (enquanto o repositório for público).
+/// 3º: API do GitHub.
 fn fetch_update() -> Result<goat_core::update::UpdateInfo, String> {
+    use goat_core::update::SITE;
     let current = env!("CARGO_PKG_VERSION");
     let agent = http_agent()?;
+
+    let site = format!("{SITE}/download/latest.json");
+    match agent.get(&site).set("User-Agent", "goat-filter-update-check").timeout(Duration::from_secs(8)).call() {
+        Ok(r) => {
+            if let Ok(json) = r.into_json::<serde_json::Value>() {
+                if let Some(u) = goat_core::update::from_site_manifest(current, SITE, &json) {
+                    if u.installer_url.is_some() {
+                        return Ok(u);
+                    }
+                }
+            }
+            log::info!("latest.json do site inválido; tentando o GitHub");
+        }
+        Err(e) => log::info!("site indisponível ({e}); tentando o GitHub"),
+    }
 
     let manifest = format!("https://github.com/{REPO}/releases/latest/download/latest.json");
     match agent.get(&manifest).set("User-Agent", "goat-filter-update-check").timeout(Duration::from_secs(8)).call() {
@@ -77,7 +93,7 @@ fn fetch_update() -> Result<goat_core::update::UpdateInfo, String> {
         Err(ureq::Error::Status(403 | 429, _)) => {
             Err("o GitHub limitou as consultas por agora; tente de novo em até 1 hora".into())
         }
-        Err(e) => Err(format!("sem conexão com o GitHub ({e})")),
+        Err(e) => Err(format!("sem conexão com o servidor de atualizações ({e})")),
     }
 }
 
@@ -211,11 +227,11 @@ async fn check_update() -> Result<goat_core::update::UpdateInfo, String> {
     tauri::async_runtime::spawn_blocking(fetch_update).await.map_err(|e| e.to_string())?
 }
 
-/// Abre a página da versão nova no navegador (só links do GitHub do projeto).
+/// Abre a página da versão nova no navegador (só links conhecidos do projeto).
 #[tauri::command]
 fn open_release(app: AppHandle, url: Option<String>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let fallback = format!("https://github.com/{REPO}/releases/latest");
+    let fallback = format!("{}/#novidades", goat_core::update::SITE);
     // Só abre endereços conhecidos: o GitHub do projeto, o site e o e-mail de suporte.
     let allowed = |u: &str| {
         u.starts_with(&format!("https://github.com/{REPO}/"))
