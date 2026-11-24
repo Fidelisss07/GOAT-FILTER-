@@ -1,14 +1,19 @@
-import { BeforeAfter } from "../components/BeforeAfter";
+import { useEffect, useState } from "react";
+import { useXray } from "../components/CarePanels";
 import { MonitorSelect, ToggleRow } from "../components/Controls";
-import { GamepadIcon, MonitorIcon, SlidersIcon } from "../components/Icons";
-import { VibranceSlider, vibranceMax } from "../components/VibranceSlider";
+import { EyeIcon, GamepadIcon } from "../components/Icons";
+import { vibranceMax } from "../components/VibranceSlider";
+import { VibranceDial } from "../components/VibranceDial";
 import { DRIVER_MAX } from "../lib/types";
-import { previewSaturation } from "../lib/vibrance";
 import { useT } from "../lib/useT";
 import { selectedMonitor, useStore, valorantProfile } from "../state/store";
 
 const DRIVER_NAME = { nvidia: "NVIDIA", amd: "AMD", none: "" } as const;
 
+/**
+ * Visão geral ("tela viva"): o fundo do app é a cena do jogo e o seletor circular
+ * no centro controla o vibrance. Perfil do Valorant e Raio-X ficam em ilhas nos cantos.
+ */
 export function Overview() {
   const s = useStore();
   const t = useT();
@@ -25,15 +30,20 @@ export function Overview() {
   const pending = applied === null || applied !== value;
 
   return (
-    <div className="ov-grid">
-      <BeforeAfter saturation={previewSaturation(value)} />
+    <div className="ov">
+      <div className="ov-center">
+        <VibranceDial
+          value={value}
+          max={max}
+          onChange={s.setEdited}
+          label={t("Digital Vibrance")}
+          caption={t("Digital Vibrance")}
+          superFrom={max > DRIVER_MAX ? DRIVER_MAX : undefined}
+          badge={value > DRIVER_MAX ? t("super") : value === 50 ? t("normal") : undefined}
+          disabled={!canApply}
+        />
 
-      <section className="panel ov-panel" aria-label={t("Ajustes do monitor")}>
-        <div className="section">
-          <div className="section-head">
-            <MonitorIcon />
-            <h2>{t("Monitor")}</h2>
-          </div>
+        <div className="ov-bar glass">
           <MonitorSelect
             label={t("Monitor")}
             showLabel={false}
@@ -41,7 +51,27 @@ export function Overview() {
             value={s.selectedMonitorId}
             onChange={s.selectMonitor}
           />
-          <p className="meta">
+          <button className="btn primary" disabled={!canApply || s.busy} onClick={s.apply}>
+            {t("Aplicar")}
+          </button>
+          <button className="btn" disabled={!monitor || s.busy} onClick={s.restore}>
+            {t(monitor && monitor.driverDefault == null ? "Restaurar anterior" : "Restaurar padrão")}
+          </button>
+          <HoldCompare />
+        </div>
+
+        <div className="ov-status">
+          {monitor && (
+            <span className={`pill ${pending ? "" : "accent"}`}>
+              <span className="dot" />
+              {pending
+                ? applied === null
+                  ? t("Não aplicado")
+                  : t("Aplicado: {v}% · alteração pendente", { v: applied })
+                : t("Aplicado: {v}%", { v: applied })}
+            </span>
+          )}
+          <span className="pill">
             {!monitor
               ? t("Nenhum monitor detectado")
               : hasDriver
@@ -49,98 +79,88 @@ export function Overview() {
                 : hasSuper
                   ? t("Driver sem vibrance — usando a camada Super")
                   : t("Sem ajuste disponível neste monitor")}
-          </p>
-        </div>
-
-        <div className="section">
-          <div className="section-head">
-            <SlidersIcon />
-            <h2>{t("Vibrância")}</h2>
-            <span className="big-value" aria-live="polite">{value}%</span>
-          </div>
-          <VibranceSlider value={value} onChange={s.setEdited} capabilities={caps} disabled={!canApply} />
-          <div className="actions">
-            <button className="btn primary" disabled={!canApply || s.busy} onClick={s.apply}>
-              {t("Aplicar")}
-            </button>
-            <button className="btn" disabled={!monitor || s.busy} onClick={s.restore}>
-              {t(monitor && monitor.driverDefault == null ? "Restaurar anterior" : "Restaurar padrão")}
-            </button>
-          </div>
-          <div className="status">
-            {monitor && (
-              <span className={`pill ${pending ? "" : "accent"}`}>
-                <span className="dot" />
-                {pending
-                  ? applied === null
-                    ? t("Não aplicado")
-                    : t("Aplicado: {v}% · alteração pendente", { v: applied })
-                  : t("Aplicado: {v}%", { v: applied })}
-              </span>
-            )}
-            {value > DRIVER_MAX && hasSuper && (
-              <span className="pill accent">
-                {t(caps.superMethod === "mhc2" ? "Super Vibrance · perfil MHC2" : "Super Vibrance · todos os monitores")}
-              </span>
-            )}
-            {!hasSuper && caps.superReason && <span className="pill warn">{t(caps.superReason)}</span>}
-          </div>
-        </div>
-
-        <div className="section valorant-section" aria-label={t("Perfil do Valorant")}>
-          <div className="section-head">
-            <GamepadIcon />
-            <h2>{t("Perfil do Valorant")}</h2>
-          </div>
-          {valorant ? (
-            <>
-              <div className="rows">
-                <ToggleRow
-                  label={t("Aplicar ao abrir")}
-                  checked={valorant.applyOnOpen}
-                  onChange={(v) => s.setValorantFlag("applyOnOpen", v)}
-                />
-                <ToggleRow
-                  label={t("Restaurar ao fechar")}
-                  checked={valorant.restoreOnClose}
-                  onChange={(v) => s.setValorantFlag("restoreOnClose", v)}
-                />
-              </div>
-              <GameBadge />
-              {caps.superMethod === "magnifier" && valorant.vibrance > DRIVER_MAX && (
-                <p className="note">{t("Acima de 100%: deixe o Valorant em “Janela em tela cheia”.")}</p>
-              )}
-            </>
-          ) : (
-            <p className="note">{t("Perfil não encontrado. Crie um na aba Perfis.")}</p>
+          </span>
+          {value > DRIVER_MAX && hasSuper && (
+            <span className="pill accent">
+              {t(caps.superMethod === "mhc2" ? "Super Vibrance · perfil MHC2" : "Super Vibrance · todos os monitores")}
+            </span>
           )}
+          {!hasSuper && caps.superReason && <span className="pill warn">{t(caps.superReason)}</span>}
         </div>
+      </div>
+
+      <section className="glass island ov-valorant" aria-label={t("Perfil do Valorant")}>
+        <div className="island-head">
+          <span className="badge-ico"><GamepadIcon /></span>
+          <h2>{t("Perfil do Valorant")}</h2>
+        </div>
+        {valorant ? (
+          <>
+            <div className="rows">
+              <ToggleRow label={t("Aplicar ao abrir")} checked={valorant.applyOnOpen} onChange={(v) => s.setValorantFlag("applyOnOpen", v)} />
+              <ToggleRow label={t("Restaurar ao fechar")} checked={valorant.restoreOnClose} onChange={(v) => s.setValorantFlag("restoreOnClose", v)} />
+            </div>
+            {caps.superMethod === "magnifier" && valorant.vibrance > DRIVER_MAX && (
+              <p className="note">{t("Acima de 100%: deixe o Valorant em “Janela em tela cheia”.")}</p>
+            )}
+          </>
+        ) : (
+          <p className="note">{t("Perfil não encontrado. Crie um na aba Perfis.")}</p>
+        )}
       </section>
+
+      <XrayIsland />
     </div>
   );
 }
 
-function GameBadge() {
-  const game = useStore((s) => s.game);
-  const valorant = useStore(valorantProfile);
+/** Segurar o botão mostra a cena sem cor (o "antes"). */
+function HoldCompare() {
   const t = useT();
-  let text: string;
-  let kind = "";
-  if (game.state === "unavailable") {
-    text = t("Detecção indisponível");
-    kind = "warn";
-  } else if (game.state === "paused") {
-    text = t("Valorant em segundo plano");
-  } else if (game.state === "active") {
-    text = game.profileId === valorant?.id ? t("Valorant aberto · {v}% aplicado", { v: valorant?.vibrance ?? 0 }) : t("Perfil ativo");
-    kind = "accent";
-  } else {
-    text = t("Aguardando o jogo abrir · {v}%", { v: valorant?.vibrance ?? 0 });
-  }
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (on) root.dataset.compare = "true";
+    else delete root.dataset.compare;
+    return () => { delete root.dataset.compare; };
+  }, [on]);
   return (
-    <div className={`game-status ${kind}`} title={game.message ?? undefined}>
-      <span className="dot" />
-      {text}
-    </div>
+    <button
+      type="button"
+      className="btn icon hold"
+      aria-pressed={on}
+      title={t("Segure para ver sem o ajuste")}
+      aria-label={t("Segure para ver sem o ajuste")}
+      onPointerDown={() => setOn(true)}
+      onPointerUp={() => setOn(false)}
+      onPointerLeave={() => setOn(false)}
+      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") setOn(true); }}
+      onKeyUp={() => setOn(false)}
+      onBlur={() => setOn(false)}
+    >
+      <EyeIcon />
+    </button>
+  );
+}
+
+function XrayIsland() {
+  const t = useT();
+  const setPage = useStore((s) => s.setPage);
+  const { items, score } = useXray();
+  const missing = items.filter((i) => i.ok === false).length;
+  const pct = score ?? 0;
+  const C = 2 * Math.PI * 26;
+  return (
+    <button type="button" className="glass island ov-xray" onClick={() => setPage("performance")} aria-label={t("Raio-X do PC: nota {n} de 100", { n: score ?? 0 })}>
+      <svg className="ring" viewBox="0 0 64 64" aria-hidden>
+        <circle cx="32" cy="32" r="26" className="ring-track" />
+        <circle cx="32" cy="32" r="26" className="ring-fill" strokeDasharray={`${(C * pct) / 100} ${C}`} />
+      </svg>
+      <strong className="ring-num" aria-hidden>{score ?? "—"}</strong>
+      <span className="ov-xray-text" aria-hidden>
+        <b>{t("Raio-X")}</b>
+        <small>{score == null ? t("Abra no Windows") : missing === 0 ? t("Pronto para jogar") : t("{n} ajuste(s) a fazer", { n: missing })}</small>
+      </span>
+    </button>
   );
 }

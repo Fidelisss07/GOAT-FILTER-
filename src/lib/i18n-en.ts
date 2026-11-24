@@ -637,4 +637,12 @@ export const EN: Record<string, string> = {
   "Sensibilidade: Mira": "Sensitivity: Aim",
   "o seu, continua igual": "yours, stays the same",
   "Suporte: {email}": "Support: {email}",
+  "Segure para ver sem o ajuste": "Hold to see without the adjustment",
+  "Raio-X do PC: nota {n} de 100": "PC X-ray: score {n} out of 100",
+  "Raio-X": "X-ray",
+  "Abra no Windows": "Open on Windows",
+  "Pronto para jogar": "Ready to play",
+  "{n} ajuste(s) a fazer": "{n} tweak(s) to do",
+  "Replay · {s} s": "Replay · {s} s",
+  "Replay desligado": "Replay off",
 };

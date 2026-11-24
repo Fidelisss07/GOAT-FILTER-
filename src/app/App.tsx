@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
-import mascot from "../assets/cabrito-lateral.webp";
 import { ThemeSwatches } from "../components/Controls";
 import { UpdateBanner } from "../components/UpdatePanel";
+import { Scene } from "../components/Scene";
+import { StatusPills } from "../components/StatusPills";
+import { vibranceMax } from "../components/VibranceSlider";
+import { previewSaturation } from "../lib/vibrance";
 import { BoltIcon, GearIcon, HomeIcon, LayersIcon, MouseIcon, RecordIcon, TargetIcon, WinClose, WinMax, WinMin } from "../components/Icons";
 import { getNative, NativeApi } from "../lib/native";
 import { ThemeId } from "../lib/types";
@@ -14,7 +17,7 @@ import { SensitivityPage } from "../pages/Sensitivity";
 import { SettingsPage } from "../pages/Settings";
 import { TrainingPage } from "../pages/Training";
 import { useT } from "../lib/useT";
-import { Page, useStore } from "../state/store";
+import { Page, selectedMonitor, useStore } from "../state/store";
 
 const logos = import.meta.glob<string>("../assets/logo/*.svg", { eager: true, query: "?url", import: "default" });
 const logo = (t: ThemeId, kind: "simbolo" | "wordmark") => logos[`../assets/logo/${t}-${kind}.svg`];
@@ -67,67 +70,73 @@ export function App() {
     document.documentElement.dataset.oled = oled ? "true" : "false";
   }, [oled]);
 
+  // Fundo vivo: a cor da cena segue o vibrance escolhido (ou o aplicado, nas outras páginas).
+  const monitor = selectedMonitor(s);
+  const max = vibranceMax(s.capabilities);
+  const shown = Math.min(monitor ? s.edited[monitor.id] ?? monitor.current ?? 50 : 50, max);
+  const overview = s.page === "overview";
+
   return (
-    <div className="app" data-theme={theme}>
-      <aside className="sidebar">
-        <div className="brand" aria-label="Goat Filter" data-tauri-drag-region>
-          <img className="symbol" src={logo(theme, "simbolo")} alt="" />
-          <img className="wordmark" src={logo(theme, "wordmark")} alt="goat filter" />
-        </div>
+    <div className={`app page-${s.page}`} data-theme={theme}>
+      <Scene saturation={previewSaturation(shown)} reveal={shown / 200} dim={!overview} />
+      <div className="dragbar" data-tauri-drag-region />
 
-        <nav className="nav" aria-label={t("Navegação principal")}>
-          {PAGES.map(({ id, title, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              aria-current={s.page === id ? "page" : undefined}
-              onClick={() => s.setPage(id)}
-            >
-              <Icon />
-              {t(title)}
-            </button>
-          ))}
-        </nav>
-
-        {/* Decorativo: não recebe cliques nem é lido por leitores de tela. */}
-        <div className="mascot" aria-hidden>
-          <img src={mascot} alt="" draggable={false} />
-        </div>
-
-        <div className="theme-block">
-          <h2 id="tema-label">{t("Tema")}</h2>
+      <header className="topbar" data-tauri-drag-region>
+        <div className="glass island brand" aria-label="Goat Filter" data-tauri-drag-region>
+          <img className="symbol" src={logo(theme, "simbolo")} alt="" data-tauri-drag-region />
+          <img className="wordmark" src={logo(theme, "wordmark")} alt="goat filter" data-tauri-drag-region />
+          <span className="brand-sep" aria-hidden />
           <ThemeSwatches value={theme} onChange={s.setTheme} />
         </div>
-      </aside>
-
-      <main className="main">
-        <header className="titlebar" data-tauri-drag-region>
-          {s.capabilities.demo && s.loaded && (
-            <span className="demo-banner" data-tauri-drag-region>
-              {t("Modo demonstração — nenhuma cor do sistema é alterada")}
-            </span>
-          )}
-          <div className="winctl">
+        <div className="topbar-right">
+          <StatusPills />
+          <div className="glass island winctl">
             <button type="button" aria-label={t("Minimizar")} onClick={() => native?.window.minimize()}><WinMin /></button>
             <button type="button" aria-label={t("Maximizar")} onClick={() => native?.window.toggleMaximize()}><WinMax /></button>
             <button type="button" className="close" aria-label={t("Fechar")} onClick={() => native?.window.close()}><WinClose /></button>
           </div>
-        </header>
-
-        <UpdateBanner />
-        <div className="page">
-          <div className="page-head">
-            <h1>{t(HEADINGS[s.page])}</h1>
-          </div>
-          {s.loaded && s.page === "overview" && <Overview />}
-          {s.loaded && s.page === "profiles" && <Profiles />}
-          {s.loaded && s.page === "performance" && <PerformancePage />}
-          {s.loaded && s.page === "recording" && <RecordingPage />}
-          {s.loaded && s.page === "training" && <TrainingPage />}
-          {s.loaded && s.page === "sensitivity" && <SensitivityPage />}
-          {s.loaded && s.page === "settings" && <SettingsPage />}
         </div>
+      </header>
+
+      <UpdateBanner />
+
+      <main className="stage">
+        {overview ? (
+          <div className="page-view" key="overview">
+            <h1 className="sr-only">{t(HEADINGS.overview)}</h1>
+            {s.loaded && <Overview />}
+          </div>
+        ) : (
+          <div className="sheet glass" key={s.page}>
+            <div className="sheet-head">
+              <h1>{t(HEADINGS[s.page])}</h1>
+              {s.capabilities.demo && s.loaded && <span className="demo-banner">{t("Modo demonstração — nenhuma cor do sistema é alterada")}</span>}
+            </div>
+            <div className="sheet-body">
+              {s.loaded && s.page === "profiles" && <Profiles />}
+              {s.loaded && s.page === "performance" && <PerformancePage />}
+              {s.loaded && s.page === "recording" && <RecordingPage />}
+              {s.loaded && s.page === "training" && <TrainingPage />}
+              {s.loaded && s.page === "sensitivity" && <SensitivityPage />}
+              {s.loaded && s.page === "settings" && <SettingsPage />}
+            </div>
+          </div>
+        )}
       </main>
+
+      <nav className="glass dock" aria-label={t("Navegação principal")}>
+        {PAGES.map(({ id, title, Icon }) => (
+          <button
+            key={id}
+            type="button"
+            aria-current={s.page === id ? "page" : undefined}
+            onClick={() => s.setPage(id)}
+          >
+            <Icon />
+            <span className="dock-tip">{t(title)}</span>
+          </button>
+        ))}
+      </nav>
 
       {s.toast && (
         <div className={`toast ${s.toast.kind}`} role="status">

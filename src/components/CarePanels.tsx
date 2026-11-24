@@ -7,6 +7,23 @@ import { xrayItems, xrayScore } from "../lib/xray";
 import { useStore } from "../state/store";
 import { CheckIcon, ChevronDown, SparkIcon } from "./Icons";
 
+/** Itens e nota do Raio-X (lê o PC uma vez e de novo quando os ajustes mudam). */
+export function useXray() {
+  const settings = useStore((s) => s.settings);
+  const [modes, setModes] = useState<MonitorMode[] | null>(null);
+  const [tweaks, setTweaks] = useState<WindowsTweaks | null>(null);
+  const [perf, setPerf] = useState<PerfStatus | null>(null);
+  useEffect(() => {
+    void getNative().then(async (n) => {
+      setModes(await n.displayModes().catch(() => null));
+      setTweaks(await n.windowsTweaks().catch(() => null));
+      setPerf(await n.perfStatus().catch(() => null));
+    });
+  }, [settings.perf, settings.closeOnGame]);
+  const items = xrayItems({ modes, tweaks, perf, settings });
+  return { items, score: xrayScore(items) };
+}
+
 /** Raio-X: nota do PC para jogar, a partir dos ajustes que o app já mede. */
 export function XrayPanel() {
   const t = useT();

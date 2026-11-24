@@ -119,3 +119,6 @@ export const ValorantMark = (p: P) => (
     <path fill="#ff4655" d="M22 5v6.5l-3.6 4.4h-4.6z" />
   </svg>
 );
+export const EyeIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+);
