@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Goat Filter — vídeo 3D</title>
+<style>
+  /* Vídeo vertical 1080×1920 desenhado por código. window.seek(t) monta o quadro do segundo t. */
+  @font-face { font-family: "Barlow Condensed"; font-weight: 900; src: url("assets/fonts/barlow-condensed-latin-900-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; src: url("assets/fonts/inter-latin-600-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 800; src: url("assets/fonts/inter-latin-800-normal.woff2") format("woff2"); }
+  :root { --grad: linear-gradient(100deg, #ff48a8 0%, #ad78ff 50%, #4fd6ff 100%); --display: "Barlow Condensed", sans-serif; }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #07060a; color: #f6f3fb; font-family: Inter, sans-serif; }
+  .scene { position: absolute; inset: 0; overflow: hidden; visibility: hidden; perspective: 1600px; }
+  .full { position: absolute; inset: 0; }
+  .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .title { position: absolute; left: 70px; right: 70px; text-align: center; font: 900 150px/0.88 var(--display); text-transform: uppercase; letter-spacing: -0.005em; text-shadow: 0 10px 60px rgba(0, 0, 0, 0.6); }
+  .title .w { display: inline-block; transform-origin: 50% 100%; }
+  .sub { position: absolute; left: 80px; right: 80px; text-align: center; font: 600 44px/1.3 Inter, sans-serif; color: #e4dcf3; text-shadow: 0 4px 30px rgba(0, 0, 0, 0.7); }
+  .glass { background: rgba(16, 12, 24, 0.62); border: 1.5px solid rgba(255, 255, 255, 0.16); backdrop-filter: blur(20px) saturate(1.4); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+  .glow { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; }
+  #stars { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+  #grain { position: absolute; inset: -50%; z-index: 50; pointer-events: none; opacity: 0.07; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  #flash { position: absolute; inset: 0; z-index: 40; background: #fff; opacity: 0; pointer-events: none; mix-blend-mode: screen; }
+  #vign { position: absolute; inset: 0; z-index: 30; pointer-events: none; background: radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.65)); }
+
+  /* 1–2. Cena do jogo + seletor */
+  #game { position: absolute; left: -40%; right: -40%; top: 0; bottom: 0; }
+  #game img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  #gameGrey { filter: grayscale(1) brightness(0.62) contrast(1.05); }
+  #gameColor { filter: saturate(1.9) contrast(1.05); }
+  #ring { position: absolute; left: 50%; top: 50%; border-radius: 50%; transform: translate(-50%, -50%); border: 4px solid #ff7cc4; box-shadow: 0 0 40px 8px rgba(255, 72, 168, 0.7), 0 0 140px 40px rgba(173, 120, 255, 0.35), inset 0 0 60px rgba(173, 120, 255, 0.45); }
+  #dialWrap { position: absolute; left: 50%; top: 50%; width: 900px; height: 900px; margin: -450px 0 0 -450px; transform-style: preserve-3d; }
+  #dialWrap .disc { position: absolute; inset: 3%; border-radius: 50%; background: radial-gradient(circle, rgba(12, 9, 18, 0.2) 55%, rgba(12, 9, 18, 0.5)); backdrop-filter: blur(6px); border: 1.5px solid rgba(255, 255, 255, 0.12); }
+  #dialWrap .core { position: absolute; inset: 22%; border-radius: 50%; background: radial-gradient(circle at 50% 35%, rgba(40, 28, 60, 0.7), rgba(10, 8, 16, 0.88)); backdrop-filter: blur(16px); border: 1.5px solid rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 60px rgba(173, 120, 255, 0.35), 0 30px 80px rgba(0, 0, 0, 0.55); }
+  #dialSvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  #dialSvg text { fill: rgba(255, 255, 255, 0.9); font: 600 17px Inter, sans-serif; }
+  .dc { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .dc small { font: 600 24px Inter; letter-spacing: 0.22em; color: rgba(255, 255, 255, 0.85); }
+  #dialNum { font: 900 220px/0.9 var(--display); transform: skewX(-8deg); background: linear-gradient(180deg, #fff 35%, #e6dcff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #dialNum i { font-style: normal; font-size: 0.6em; }
+  #superBadge { margin-top: 10px; padding: 4px 26px 6px; border-radius: 16px; font: 900 40px/1.1 var(--display); transform: skewX(-8deg); border: 2px solid #ff48a8; background: rgba(255, 72, 168, 0.22); box-shadow: 0 0 24px rgba(255, 72, 168, 0.7); }
+
+  /* 3. Clipes */
+  #s3 .bg { background: radial-gradient(70% 45% at 50% 40%, #3b1a6e 0%, #120b20 60%, #07060a 100%); }
+  #win3 { position: absolute; left: 50%; top: 860px; width: 1120px; height: 700px; margin: -350px 0 0 -560px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 2px rgba(173, 120, 255, 0.5), 0 60px 160px rgba(0, 0, 0, 0.7); }
+  #win3 img { width: 100%; height: 100%; object-fit: cover; }
+  #key { position: absolute; left: 50%; top: 1250px; width: 240px; height: 240px; margin-left: -120px; transform-style: preserve-3d; }
+  #key .cap { position: absolute; inset: 0; border-radius: 34px; display: grid; place-items: center; font: 900 120px var(--display); color: #fff; background: linear-gradient(160deg, #3a2a58, #1c1430); border: 2px solid rgba(255, 255, 255, 0.25); box-shadow: 0 var(--kd, 18px) 0 #0c0814, 0 calc(var(--kd, 18px) + 30px) 60px rgba(0, 0, 0, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.2); }
+  #toast { position: absolute; left: 50%; top: 1560px; display: flex; align-items: center; gap: 22px; padding: 30px 50px; border-radius: 30px; font: 800 56px Inter; white-space: nowrap; transform: translateX(-50%); }
+  #toast i { width: 20px; height: 20px; border-radius: 50%; background: #3dff9a; box-shadow: 0 0 18px #3dff9a; }
+  #fps { position: absolute; left: 70px; top: 1270px; padding: 18px 28px; border-radius: 22px; text-align: center; }
+  #fps b { display: block; font: 900 96px/0.9 var(--display); }
+  #fps span { font: 600 26px Inter; color: #b9b2c6; }
+
+  /* 4. Sensibilidade */
+  #s4 .bg { background: radial-gradient(60% 40% at 50% 45%, #2a1650 0%, #0d0a14 65%, #07060a 100%); }
+  #cross { position: absolute; left: 50%; top: 700px; width: 0; height: 0; }
+  #cross i { position: absolute; background: #4fd6ff; box-shadow: 0 0 0 3px #000, 0 0 30px rgba(79, 214, 255, 0.8); }
+  .tgt { position: absolute; width: 120px; height: 120px; margin: -60px; border-radius: 50%; border: 6px solid #ff48a8; background: radial-gradient(circle, #ff48a8 0 20%, rgba(255, 72, 168, 0.18) 24%); box-shadow: 0 0 40px rgba(255, 72, 168, 0.6); }
+  #sensNum { position: absolute; left: 0; right: 0; top: 930px; text-align: center; font: 900 300px/0.85 var(--display); }
+  #sensCard { position: absolute; left: 50%; top: 1220px; width: 880px; height: 550px; margin-left: -440px; border-radius: 24px; overflow: hidden; box-shadow: 0 0 0 2px rgba(173, 120, 255, 0.45), 0 40px 120px rgba(0, 0, 0, 0.7); }
+  #sensCard img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* 5. Cilindro */
+  #s5 .bg { background: radial-gradient(70% 45% at 50% 52%, #33186a 0%, #0d0a14 65%, #07060a 100%); }
+  #cyl { position: absolute; left: 50%; top: 1000px; width: 860px; height: 538px; margin: -269px 0 0 -430px; transform-style: preserve-3d; }
+  #cyl figure { position: absolute; inset: 0; margin: 0; border-radius: 22px; overflow: hidden; backface-visibility: hidden; box-shadow: 0 0 0 2px rgba(173, 120, 255, 0.5), 0 30px 90px rgba(0, 0, 0, 0.6); }
+  #cyl img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* 6. Buraco negro + final */
+  #hole { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+  #coinWrap { position: absolute; left: 50%; top: 50%; width: 360px; height: 370px; margin: -185px 0 0 -180px; perspective: 1200px; }
+  .coin { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
+  .coin img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .coin img.edge { filter: brightness(0.5) saturate(1.4); }
+  #end { position: absolute; inset: 0; }
+  #endCoin { position: absolute; left: 50%; top: 520px; width: 420px; height: 432px; margin-left: -210px; perspective: 1400px; }
+  #letter { position: absolute; left: 50%; top: 1060px; width: 820px; margin-left: -410px; filter: drop-shadow(0 10px 50px rgba(173, 120, 255, 0.6)); }
+  #url { position: absolute; left: 50%; top: 1300px; transform: translateX(-50%); padding: 22px 50px; border-radius: 999px; font: 800 58px Inter; white-space: nowrap; }
+  #cta { position: absolute; left: 50%; top: 1460px; transform: translateX(-50%); padding: 30px 60px; border-radius: 30px; font: 800 52px Inter; white-space: nowrap; color: #fff; background: var(--grad); box-shadow: 0 20px 70px rgba(255, 72, 168, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.4); }
+</style>
+</head>
+<body>
+<canvas id="stars" width="1080" height="1920"></canvas>
+
+<!-- 1–2: jogo sem cor → seletor pinta a cena -->
+<section class="scene" id="s1">
+  <div id="game">
+    <img id="gameGrey" src="assets/cenario-hd.webp" alt="">
+    <img id="gameColor" src="assets/cenario-hd.webp" alt="">
+  </div>
+  <div id="ring"></div>
+  <div class="full" style="background: linear-gradient(180deg, rgba(7,6,10,.75), transparent 28%, transparent 70%, rgba(7,6,10,.85))"></div>
+  <h1 class="title safe" id="hook" style="top: 240px"><span class="w">Seu</span> <span class="w">Valorant</span><br><span class="w">tá</span> <span class="w">sem</span> <span class="w grad">cor?</span></h1>
+  <h1 class="title safe" id="t2" style="top: 200px; font-size: 128px">Digital Vibrance<br><span class="grad">até 200%</span></h1>
+  <div id="dialWrap">
+    <div class="disc"></div>
+    <div class="core"></div>
+    <svg id="dialSvg" viewBox="-20 -20 440 440"></svg>
+    <div class="dc"><small>DIGITAL VIBRANCE</small><div id="dialNum">50<i>%</i></div><div id="superBadge">super</div></div>
+  </div>
+</section>
+
+<!-- 3: clipes -->
+<section class="scene" id="s3">
+  <div class="full bg"></div>
+  <div class="glow" style="left: 140px; top: 520px; width: 800px; height: 700px; background: rgba(173,120,255,.35)"></div>
+  <h1 class="title safe" id="t3" style="top: 200px; font-size: 132px">Clipes<br><span class="grad">sem perder FPS</span></h1>
+  <div id="win3"><img src="assets/telas/gravacao.webp" alt=""></div>
+  <div id="fps" class="glass"><b class="grad">240</b><span>FPS estável</span></div>
+  <div id="key"><div class="cap">F8</div></div>
+  <div id="toast" class="glass"><i></i>Clipe salvo · 30 s</div>
+</section>
+
+<!-- 4: sensibilidade -->
+<section class="scene" id="s4">
+  <div class="full bg"></div>
+  <h1 class="title safe" id="t4" style="top: 200px; font-size: 128px">Sua sensibilidade<br><span class="grad">ideal em 3 min</span></h1>
+  <div id="targets"></div>
+  <div id="cross"><i style="width:56px;height:8px;left:24px;top:-4px"></i><i style="width:56px;height:8px;left:-80px;top:-4px"></i><i style="width:8px;height:56px;left:-4px;top:24px"></i><i style="width:8px;height:56px;left:-4px;top:-80px"></i></div>
+  <div id="sensNum" class="grad">0,35</div>
+  <div id="sensCard"><img src="assets/telas/sensibilidade.webp" alt=""></div>
+</section>
+
+<!-- 5: cilindro -->
+<section class="scene" id="s5">
+  <div class="full bg"></div>
+  <h1 class="title safe" id="t5" style="top: 220px; font-size: 128px">Tudo num app<br><span class="grad">leve</span></h1>
+  <p class="sub safe" id="sub5" style="top: 1420px">Não mexe no jogo. Não pesa no PC.</p>
+  <div id="cyl"></div>
+</section>
+
+<!-- 6: buraco negro + final -->
+<section class="scene" id="s6">
+  <canvas id="hole" width="540" height="960"></canvas>
+  <div id="coinWrap"><div class="coin" id="coin"></div></div>
+  <div id="end">
+    <div class="glow" style="left: 190px; top: 460px; width: 700px; height: 600px; background: rgba(173,120,255,.45)"></div>
+    <div id="endCoin"><div class="coin" id="coin2"></div></div>
+    <img id="letter" src="assets/lettering.svg" alt="">
+    <div id="url" class="glass safe">goatfilter.xyz</div>
+    <div id="cta" class="safe">Baixe grátis · Windows</div>
+  </div>
+</section>
+
+<div id="vign"></div>
+<div id="flash"></div>
+<div id="grain"></div>
+
+<script>
+const DURATION = 25;
+window.DURATION = DURATION;
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, k) => a + (b - a) * k;
+const easeOut = (k) => 1 - Math.pow(1 - k, 3);
+const easeInOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+const back = (k) => { const c = 2.2; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+// Cortes (s): gancho · vibrance · clipes · sensibilidade · cilindro · buraco/final
+const CUT = [0, 3.2, 8.2, 11.8, 15.8, 19.8, 25];
+
+/* Estrelas de fundo (fixas, com cintilar determinístico) */
+const SC = $("stars").getContext("2d");
+const STARS = Array.from({ length: 260 }, (_, i) => {
+  const r = (n) => { const x = Math.sin(i * 127.1 + n * 311.7) * 43758.5453; return x - Math.floor(x); };
+  return [r(1) * 1080, r(2) * 1920, 0.6 + r(3) * 2.2, r(4) * 6.28, 0.2 + r(5) * 0.8];
+});
+function drawStars(t, a) {
+  SC.clearRect(0, 0, 1080, 1920);
+  for (const [x, y, s, ph, b] of STARS) {
+    SC.globalAlpha = a * b * (0.55 + 0.45 * Math.sin(t * 2 + ph));
+    SC.fillStyle = "#d9ccff";
+    SC.fillRect(x, (y - t * 12 * s) % 1920 + (y - t * 12 * s < 0 ? 1920 : 0), s, s);
+  }
+}
+
+/* Moedas 3D (camadas do símbolo dão a espessura) */
+function buildCoin(el) {
+  for (let i = 0; i < 14; i++) {
+    const img = new Image(); img.src = "assets/simbolo.svg";
+    const z = -12 + (i / 13) * 24;
+    if (i > 0 && i < 13) img.className = "edge";
+    img.style.transform = `translateZ(${z}px)${i === 0 ? " rotateY(180deg)" : ""}`;
+    el.append(img);
+  }
+}
+buildCoin($("coin")); buildCoin($("coin2"));
+
+/* Seletor do vibrance (SVG) */
+const NS = "http://www.w3.org/2000/svg";
+const svg = $("dialSvg");
+svg.innerHTML = `<defs><linearGradient id="dg" gradientUnits="userSpaceOnUse" x1="60" y1="330" x2="350" y2="200"><stop offset="0" stop-color="#ff48a8"/><stop offset=".5" stop-color="#ad78ff"/><stop offset="1" stop-color="#4fd6ff"/></linearGradient>
+<pattern id="st" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="8" fill="rgba(255,255,255,.16)"/></pattern>
+<filter id="bl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7"/></filter></defs>`;
+const pt = (d, r) => { const a = d * Math.PI / 180; return [200 + r * Math.cos(a), 200 + r * Math.sin(a)]; };
+const arc = (f, t, r) => { if (t - f < 0.01) return ""; const [x1, y1] = pt(f, r), [x2, y2] = pt(t, r); return `M${x1} ${y1} A${r} ${r} 0 ${t - f > 180 ? 1 : 0} 1 ${x2} ${y2}`; };
+const ang = (v) => 135 + (v / 200) * 270;
+let ticks = "";
+for (let v = 0; v <= 200; v += 5) {
+  const major = v % 20 === 0, [x1, y1] = pt(ang(v), major ? 166 : 170), [x2, y2] = pt(ang(v), 178);
+  ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(255,255,255,${major ? 0.85 : 0.32})" stroke-width="${major ? 2.4 : 1.5}" stroke-linecap="round"/>`;
+  if (major) { const [lx, ly] = pt(ang(v), 196); ticks += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central">${v}</text>`; }
+}
+svg.insertAdjacentHTML("beforeend", `${ticks}<path d="${arc(135, 405, 150)}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="18" stroke-linecap="round"/>
+<path d="${arc(ang(100), 405, 150)}" fill="none" stroke="url(#st)" stroke-width="18"/>
+<path id="dGlow" fill="none" stroke="url(#dg)" stroke-width="26" stroke-linecap="round" filter="url(#bl)" opacity=".8"/>
+<path id="dFill" fill="none" stroke="url(#dg)" stroke-width="18" stroke-linecap="round"/>
+<circle id="dHalo" r="22" fill="rgba(79,214,255,.5)" filter="url(#bl)"/><circle id="dKnob" r="13" fill="#fff"/>`);
+function setDial(v) {
+  $("dFill").setAttribute("d", arc(135, ang(v), 150));
+  $("dGlow").setAttribute("d", arc(135, ang(v), 150));
+  const [x, y] = pt(ang(v), 150);
+  for (const id of ["dHalo", "dKnob"]) { $(id).setAttribute("cx", x); $(id).setAttribute("cy", y); }
+  $("dialNum").innerHTML = `${Math.round(v)}<i>%</i>`;
+}
+
+/* Cilindro */
+const SHOTS = ["visao-geral", "perfis", "desempenho", "gravacao", "treino", "sensibilidade", "configuracoes"];
+SHOTS.forEach((n, k) => { const f = document.createElement("figure"); f.innerHTML = `<img src="assets/telas/${n}.webp" alt="">`; f.style.transform = `rotateY(${k * 360 / 7}deg) translateZ(900px)`; $("cyl").append(f); });
+
+/* Alvos da sensibilidade (posições fixas em profundidade) */
+const TG = [[-300, 520, -400], [280, 600, -200], [-200, 820, 0], [320, 860, -500]];
+TG.forEach(() => { const d = document.createElement("div"); d.className = "tgt"; $("targets").append(d); });
+
+/* Buraco negro (WebGL, mesmo cálculo do site) */
+const gl = $("hole").getContext("webgl", { preserveDrawingBuffer: true });
+const FS = `precision highp float;uniform vec2 R;uniform float T,P;
+float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*n2(p);p=p*2.02+vec2(1.7,9.2);a*=.5;}return v;}
+vec3 stars(vec3 d){vec2 uv=vec2(atan(d.z,d.x),asin(clamp(d.y,-1.,1.)));vec3 c=vec3(0.);
+for(int k=0;k<2;k++){float sc=k==0?55.:120.;vec2 g=uv*sc;vec2 id=floor(g);vec2 f=fract(g)-.5;float h=h2(id+float(k)*31.7);
+if(h>.968){float b=(h-.968)/.032;c+=vec3(.82,.76,1.)*smoothstep(.05+.1*b,0.,length(f))*b*(1.3-.6*float(k));}}
+float neb=fbm(uv*1.8+3.)*fbm(uv*3.6+7.);c+=vec3(.16,.05,.3)*neb*neb*1.2;return c;}
+void main(){vec2 uv=(gl_FragCoord.xy-.5*R)/min(R.x,R.y);
+float appear=smoothstep(.0,.25,P);float sw=smoothstep(.35,.62,P);
+float dist=mix(24.,24.*.42,sw*sw);float incl=.13;float az=T*.05+P*.9+sw*sw*2.2;
+vec2 uv0=uv;float ru=length(uv);float tw=sw*sw*3.2*exp(-ru*1.1);
+uv=mat2(cos(tw),-sin(tw),sin(tw),cos(tw))*uv*(1.+sw*sw*.9*exp(-ru*2.));
+vec3 ro=vec3(sin(az)*cos(incl),sin(incl),-cos(az)*cos(incl))*dist;
+vec3 fw=normalize(-ro),rt=normalize(cross(vec3(0.,1.,0.),fw)),up=cross(fw,rt);
+vec3 rd=normalize(fw*1.9+uv.x*rt+uv.y*up);vec3 pos=ro,vel=rd;vec3 hv=cross(pos,vel);float hh=dot(hv,hv);
+vec3 col=vec3(0.);float alpha=0.;float minR=1e3;bool cap=false;
+for(int i=0;i<140;i++){float r=length(pos);minR=min(minR,r);if(r<1.){cap=true;break;}if(r>30.&&dot(pos,vel)>0.)break;
+float dt=clamp(.11*r,.015,1.1);vec3 pv=pos;vel+=-1.5*hh*pos/pow(r,5.)*dt;pos+=vel*dt;
+if(pv.y*pos.y<0.){vec3 hit=mix(pv,pos,pv.y/(pv.y-pos.y));float rr=length(hit.xz);
+if(rr>2.6&&rr<11.){float a=atan(hit.z,hit.x);float w=a+T*4.8*pow(rr,-1.5);float q=fbm(vec2(rr*1.4,w*2.2));float q2=fbm(vec2(rr*4.5,w*5.)+q*2.);
+float dens=(.42+.7*q*mix(1.,q2,.45))*smoothstep(2.6,3.2,rr)*smoothstep(11.,5.5,rr);float temp=pow(3./rr,1.6);
+vec3 tg=normalize(vec3(-hit.z,0.,hit.x));float dop=clamp(1.+.42*dot(tg,normalize(vel)),.45,1.6);
+vec3 dc=mix(vec3(.3,.09,.6),vec3(.7,.44,1.),smoothstep(.15,.6,temp));dc=mix(dc,vec3(1.,.94,1.),smoothstep(.75,1.25,temp));
+dc*=temp*2.4*pow(dop,2.6)*dens;float al=clamp(dens*1.1,0.,1.);col+=(1.-alpha)*dc*al;alpha+=(1.-alpha)*al;if(alpha>.98)break;}}}
+vec3 bg=cap?vec3(0.):stars(normalize(vel));float glow=cap?0.:exp(-max(minR-1.5,0.)*3.)*.28;
+vec3 o=mix(stars(rd),col+(1.-alpha)*(bg+vec3(.5,.3,1.)*glow),appear);
+float bR=sw*sw*sw*1.9;float r0=length(uv0);o*=smoothstep(bR,bR+.22,r0);
+o+=vec3(.62,.36,1.)*exp(-pow((r0-bR-.06)/.05,2.))*sw*(1.-smoothstep(.9,1.,sw))*.9;
+o=1.-exp(-o*1.35);gl_FragColor=vec4(pow(o,vec3(.92)),1.);}`;
+const sh = (ty, src) => { const o = gl.createShader(ty); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o)); return o; };
+const pr = gl.createProgram();
+gl.attachShader(pr, sh(gl.VERTEX_SHADER, "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}"));
+gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(pr); gl.useProgram(pr);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+const uR = gl.getUniformLocation(pr, "R"), uT = gl.getUniformLocation(pr, "T"), uP = gl.getUniformLocation(pr, "P");
+gl.viewport(0, 0, 540, 960);
+function drawHole(t, p) { gl.uniform2f(uR, 540, 960); gl.uniform1f(uT, t); gl.uniform1f(uP, p); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+
+/* Palavras que batem em 3D */
+function slam(el, t, start, gap = 0.12) {
+  [...el.querySelectorAll(".w")].forEach((w, i) => {
+    const k = prog(t, start + i * gap, start + i * gap + 0.35);
+    w.style.opacity = k > 0 ? 1 : 0;
+    w.style.transform = `translateZ(${lerp(500, 0, easeOut(k))}px) rotateX(${lerp(-70, 0, back(k))}deg)`;
+  });
+}
+function show(id, on) { $(id).style.visibility = on ? "visible" : "hidden"; }
+
+window.seek = (t) => {
+  const sc = CUT.findIndex((c, i) => t >= c && t < CUT[i + 1]);
+  show("s1", sc <= 1); show("s3", sc === 2); show("s4", sc === 3); show("s5", sc === 4); show("s6", sc === 5);
+  drawStars(t, sc >= 2 ? 0.8 : 0);
+  // Flash branco curto em cada corte.
+  let fl = 0;
+  for (const c of CUT.slice(1, 6)) fl = Math.max(fl, 1 - clamp(Math.abs(t - c) / 0.12));
+  $("flash").style.opacity = (fl * 0.55).toFixed(3);
+
+  if (sc <= 1) {
+    // Câmera avança pela cena do jogo, com leve giro (profundidade).
+    const cam = t / 8.2;
+    $("game").style.transform = `scale(${lerp(1.08, 1.28, cam)}) translateX(${lerp(-30, 30, cam)}px) rotate(${lerp(-1.5, 1, cam)}deg)`;
+    // Gancho
+    $("hook").style.opacity = sc === 0 ? 1 - prog(t, 2.9, 3.2) : 0;
+    $("hook").style.transform = `perspective(1200px) translateY(${lerp(0, -40, prog(t, 0, 3.2))}px)`;
+    slam($("hook"), t, 0.15, 0.22);
+    // Vibrance: seletor entra inclinado e gira de 50 a 200.
+    const din = easeOut(prog(t, 3.2, 4.1));
+    const v = lerp(50, 200, easeInOut(prog(t, 4.0, 7.2)));
+    setDial(sc === 1 ? v : 50);
+    $("dialWrap").style.opacity = din;
+    $("dialWrap").style.transform = `translateZ(${lerp(-900, 0, din)}px) rotateX(${lerp(55, 8, din) - 8 * prog(t, 4, 8)}deg) rotateZ(${lerp(-25, 0, din)}deg)`;
+    $("superBadge").style.opacity = v > 100 ? 1 : 0;
+    $("superBadge").style.transform = `skewX(-8deg) scale(${v > 100 ? back(prog(t, 5.6, 6)) : 0})`;
+    // A cor se espalha a partir do centro conforme o valor.
+    const rad = sc === 1 ? lerp(120, 1500, Math.pow((v - 50) / 150, 1.2)) : 0;
+    $("gameColor").style.webkitMaskImage = $("gameColor").style.maskImage = `radial-gradient(circle at 50% 47%, #000 ${Math.max(0, rad - 120)}px, transparent ${rad}px)`;
+    $("ring").style.width = $("ring").style.height = `${rad * 2 - 120}px`;
+    $("ring").style.top = "47%";
+    $("ring").style.opacity = sc === 1 && rad > 150 ? 1 - prog(t, 7.4, 8.1) : 0;
+    const t2 = prog(t, 3.5, 4.0);
+    $("t2").style.opacity = sc === 1 ? t2 : 0;
+    $("t2").style.transform = `translateY(${lerp(40, 0, easeOut(t2))}px)`;
+  }
+
+  if (sc === 2) {
+    const l = t - CUT[2];
+    const k = easeOut(prog(l, 0, 0.9));
+    $("win3").style.transform = `translateZ(${lerp(-1400, -420, k)}px) rotateY(${lerp(-38, -14, k) + l * 2.5}deg) rotateX(${lerp(18, 8, k)}deg)`;
+    const kp = prog(l, 1.1, 1.25) - prog(l, 1.35, 1.6);
+    $("key").style.transform = `rotateX(28deg) translateY(${(kp * 16).toFixed(1)}px) scale(${back(prog(l, 0.4, 0.9))})`;
+    $("key").firstElementChild.style.setProperty("--kd", `${18 - kp * 16}px`);
+    const ts = prog(l, 1.4, 1.8);
+    $("toast").style.opacity = ts;
+    $("toast").style.transform = `translateX(-50%) translateY(${lerp(60, 0, easeOut(ts))}px) scale(${lerp(0.9, 1, back(ts))})`;
+    $("fps").style.opacity = prog(l, 0.6, 1);
+    $("fps").style.transform = `translateZ(120px) rotateY(14deg) translateY(${Math.sin(l * 3) * 8}px)`;
+    $("fps").firstElementChild.textContent = String(240 - (Math.floor(l * 30) % 7 === 0 ? 1 : 0));
+    const tt = prog(l, 0.1, 0.5);
+    $("t3").style.opacity = tt; $("t3").style.transform = `translateY(${lerp(40, 0, easeOut(tt))}px)`;
+  }
+
+  if (sc === 3) {
+    const l = t - CUT[3];
+    // Alvos surgem em profundidade e a mira pula em cada um.
+    const tg = [...$("targets").children];
+    tg.forEach((d, i) => {
+      const [x, y, z] = TG[i];
+      const ap = prog(l, 0.2 + i * 0.35, 0.5 + i * 0.35);
+      const hit = prog(l, 0.55 + i * 0.35, 0.7 + i * 0.35);
+      d.style.left = `${540 + x}px`; d.style.top = `${y}px`;
+      d.style.transform = `translateZ(${z}px) scale(${back(ap) * (1 - hit)})`;
+      d.style.opacity = ap * (1 - hit);
+    });
+    let cx = 0, cy = 700;
+    for (let i = 0; i < TG.length; i++) {
+      const k = easeInOut(prog(l, 0.4 + i * 0.35, 0.58 + i * 0.35));
+      cx = lerp(cx, TG[i][0] * (1 + TG[i][2] / 2000), k); cy = lerp(cy, TG[i][1], k);
+    }
+    $("cross").style.left = `${540 + cx}px`; $("cross").style.top = `${cy}px`;
+    // Número da sensibilidade: oscila e assenta no 0,35.
+    const n = l < 2.2 ? lerp(1.2, 0.35, easeOut(prog(l, 0.3, 2.2))) + Math.sin(l * 9) * 0.08 * (1 - prog(l, 0.3, 2.2)) : 0.35;
+    $("sensNum").textContent = n.toFixed(2).replace(".", ",");
+    $("sensNum").style.transform = `scale(${l > 2.2 ? lerp(1.15, 1, easeOut(prog(l, 2.2, 2.6))) : 1})`;
+    const ck = easeOut(prog(l, 0.5, 1.4));
+    $("sensCard").style.transform = `perspective(1400px) translateY(${lerp(400, 0, ck)}px) rotateX(${lerp(40, 14, ck)}deg)`;
+    const tt = prog(l, 0.1, 0.5);
+    $("t4").style.opacity = tt; $("t4").style.transform = `translateY(${lerp(40, 0, easeOut(tt))}px)`;
+  }
+
+  if (sc === 4) {
+    const l = t - CUT[4];
+    const k = easeOut(prog(l, 0, 0.8));
+    $("cyl").style.transform = `translateZ(${lerp(-2600, -620, k)}px) rotateX(-6deg) rotateY(${-l * 70 - 40}deg)`;
+    const tt = prog(l, 0.1, 0.5);
+    $("t5").style.opacity = tt; $("t5").style.transform = `translateY(${lerp(40, 0, easeOut(tt))}px)`;
+    $("sub5").style.opacity = prog(l, 0.8, 1.2);
+  }
+
+  if (sc === 5) {
+    const l = t - CUT[5];
+    const P = clamp(l / 3.0);                       // 0–3 s: buraco surge, puxa e engole
+    drawHole(t, P);
+    $("hole").style.opacity = 1 - prog(l, 3.0, 3.3);
+    const fall = easeInOut(prog(l, 0.2, 1.7));
+    $("coin").style.transform = `rotateY(${l * 260}deg)`;
+    $("coinWrap").style.transform = `rotate(${fall * 300}deg) scale(${1 - 0.95 * fall})`;
+    $("coinWrap").style.opacity = 1 - prog(l, 1.5, 1.8);
+    // Final
+    const e = prog(l, 3.0, 3.6);
+    $("end").style.opacity = e;
+    $("coin2").style.transform = `rotateY(${l * 120}deg)`;
+    $("endCoin").style.transform = `scale(${lerp(0.4, 1, back(e))}) translateY(${Math.sin(l * 2) * 10}px)`;
+    $("letter").style.opacity = prog(l, 3.3, 3.8);
+    $("letter").style.transform = `translateY(${lerp(30, 0, easeOut(prog(l, 3.3, 3.8)))}px)`;
+    const u = prog(l, 3.6, 4.0);
+    $("url").style.opacity = u; $("url").style.transform = `translateX(-50%) scale(${lerp(0.8, 1, back(u))})`;
+    const c = prog(l, 3.9, 4.3);
+    $("cta").style.opacity = c; $("cta").style.transform = `translateX(-50%) scale(${lerp(0.8, 1, back(c)) * (1 + Math.sin(l * 6) * 0.02 * c)})`;
+  }
+};
+window.ready = Promise.all([...document.images].map((i) => i.decode().catch(() => {}))).then(() => document.fonts.ready).then(() => window.seek(0));
+</script>
+</body>
+</html>
