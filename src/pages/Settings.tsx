@@ -222,6 +222,12 @@ function About() {
           <button type="button" className="btn link" onClick={() => getNative().then((n) => n.openRelease(null))}>
             {t("Página de downloads")}
           </button>
+          <button type="button" className="btn link" onClick={() => getNative().then((n) => n.openRelease("https://www.goatfilter.xyz/"))}>
+            goatfilter.xyz
+          </button>
+          <button type="button" className="btn link" onClick={() => getNative().then((n) => n.openRelease("mailto:suporte-contato@goatfilter.xyz"))}>
+            {t("Suporte: {email}", { email: "suporte-contato@goatfilter.xyz" })}
+          </button>
         </div>
       </div>
     </section>

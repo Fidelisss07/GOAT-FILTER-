@@ -199,7 +199,7 @@ function End() {
       <Animate enter="rise" at={14} style={{ marginTop: 40, width: 740, height: 152 }}><Img src={lettering} style={{ width: 740, height: 152 }} /></Animate>
       <Animate enter="fade" at={30} style={{ ...sub, color: INK, fontSize: 46, marginTop: 50 }}>Grátis para Windows.</Animate>
       <Animate enter="pop" at={42} style={{ marginTop: 50, padding: "30px 70px", borderRadius: 999, background: "#fff", color: "#12091d", fontSize: 48, fontWeight: 800 }}>Baixe agora</Animate>
-      <Animate enter="fade" at={54} style={{ ...sub, fontSize: 36, marginTop: 40 }}>goat-filter-site.vercel.app</Animate>
+      <Animate enter="fade" at={54} style={{ ...sub, fontSize: 36, marginTop: 40 }}>goatfilter.xyz</Animate>
     </Animate>
     </AbsoluteFill>
   );

@@ -738,7 +738,7 @@ h1, h2, h3 { margin: 0; }
    --------------------------------------------------------------------------- */
 .sens-page { display: flex; flex-direction: column; gap: 18px; }
 .sens-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; }
-.sens-inputs { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.sens-inputs { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .conv-result .band { font-size: 18px; }
 .edpi-scale { margin-top: 14px; }
 .edpi-track { position: relative; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); }

@@ -216,7 +216,13 @@ async fn check_update() -> Result<goat_core::update::UpdateInfo, String> {
 fn open_release(app: AppHandle, url: Option<String>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let fallback = format!("https://github.com/{REPO}/releases/latest");
-    let url = url.filter(|u| u.starts_with(&format!("https://github.com/{REPO}/"))).unwrap_or(fallback);
+    // Só abre endereços conhecidos: o GitHub do projeto, o site e o e-mail de suporte.
+    let allowed = |u: &str| {
+        u.starts_with(&format!("https://github.com/{REPO}/"))
+            || u.starts_with("https://www.goatfilter.xyz/")
+            || u == "mailto:suporte-contato@goatfilter.xyz"
+    };
+    let url = url.filter(|u| allowed(u)).unwrap_or(fallback);
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
