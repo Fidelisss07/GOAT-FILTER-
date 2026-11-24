@@ -8,7 +8,7 @@ python3 audio.py out/audio.wav
 if [ "${1:-}" != "" ]; then
   # Música abaixa sozinha quando a voz fala (sidechain).
   ffmpeg -hide_banner -loglevel error -y -i out/audio.wav -i "$1" -filter_complex \
-    "[1:a]aresample=48000,pan=stereo|c0=c0|c1=c0,volume=1.6[vo];[vo]asplit[vo1][vo2];[0:a][vo1]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[bed];[bed][vo2]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]" \
+    "[1:a]aresample=48000,pan=stereo|c0=c0|c1=c0,volume=1.6,apad[vo];[vo]asplit[vo1][vo2];[0:a][vo1]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[bed];[bed][vo2]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
     -map "[a]" out/mix.wav
   AUDIO=out/mix.wav
 else
