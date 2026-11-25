@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  /* Comparação "duas formas": sem x com Goat Filter. 1080x1920. */
+  @font-face { font-family: "Barlow Condensed"; font-weight: 900; src: url("assets/fonts/barlow-condensed-latin-900-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 800; src: url("assets/fonts/inter-latin-800-normal.woff2") format("woff2"); }
+  :root { --grad: linear-gradient(100deg, #ff48a8 0%, #ad78ff 52%, #4fd6ff 100%); }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; font-family: "Inter", sans-serif; background: #0a0710; }
+  .disp { font-family: "Barlow Condensed", sans-serif; font-weight: 900; text-transform: uppercase; line-height: 0.9; }
+  .skew { transform: skewX(-7deg); }
+
+  #top { position: absolute; left: 0; right: 0; top: 150px; text-align: center; z-index: 5; }
+  #top h1 { font-size: 88px; color: #fff; text-shadow: 0 6px 30px rgba(0,0,0,.6); }
+  #top h1 em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #logo { position: absolute; top: 54px; left: 54px; display: flex; align-items: center; gap: 12px; z-index: 6; }
+  #logo img { width: 58px; } #logo span { font-family: "Barlow Condensed"; font-weight: 900; font-style: italic; font-size: 34px; color: #c9a8ff; text-transform: lowercase; }
+
+  .col { position: absolute; top: 310px; bottom: 0; width: 540px; overflow: hidden; }
+  .left { left: 0; background: linear-gradient(180deg,#17151b,#0c0a10); }
+  .right { right: 0; background: radial-gradient(70% 60% at 50% 40%, #3a1766 0%, #160a26 70%); }
+  .col .char { position: absolute; left: 50%; top: 40px; width: 540px; transform: translateX(-50%); }
+  .right .char { filter: drop-shadow(0 0 40px rgba(173,120,255,.6)); }
+  .right .aura { position: absolute; left: 50%; top: 240px; width: 560px; height: 560px; transform: translateX(-50%); border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(255,72,168,.55), rgba(79,214,255,.25) 60%, transparent); filter: blur(30px); }
+  .badge { position: absolute; top: 24px; left: 50%; transform: translateX(-50%) skewX(-7deg); padding: 10px 30px; border-radius: 14px; font-family: "Barlow Condensed"; font-weight: 900; font-size: 50px; text-transform: uppercase; z-index: 3; }
+  .left .badge { background: #2a2730; color: #8c8796; border: 2px solid #413d49; }
+  .right .badge { background: var(--grad); color: #fff; box-shadow: 0 10px 30px rgba(255,72,168,.5); }
+
+  .stats { position: absolute; left: 36px; right: 36px; bottom: 250px; z-index: 4; }
+  .row { margin-bottom: 22px; }
+  .row small { display: block; font-size: 24px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #8f8a99; margin-bottom: -4px; }
+  .row b { font-family: "Barlow Condensed"; font-weight: 900; font-size: 62px; display: block; }
+  .left .row b { color: #b7b2c0; }
+  .right .row b { color: #fff; }
+  .row.hl b { position: relative; display: inline-block; padding: 2px 16px; color: #fff; }
+  .right .row.hl b::before { content: ""; position: absolute; inset: 0; background: var(--grad); border-radius: 10px; transform: skewX(-7deg); z-index: -1; }
+  .left .row.hl b { color: #6b6672; }
+
+  /* divisória VS */
+  #vs { position: absolute; left: 50%; top: 640px; transform: translate(-50%,-50%); z-index: 7;
+    width: 150px; height: 150px; border-radius: 50%; background: #0a0710; border: 5px solid #fff; display: grid; place-items: center;
+    font-family: "Barlow Condensed"; font-weight: 900; font-size: 74px; color: #fff; box-shadow: 0 0 40px rgba(0,0,0,.6); }
+  #seam { position: absolute; left: 50%; top: 310px; bottom: 0; width: 5px; margin-left: -2.5px; background: linear-gradient(180deg,#ff48a8,#ad78ff,#4fd6ff); z-index: 6; }
+
+  #foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 0 46px; text-align: center; z-index: 8; background: linear-gradient(180deg, transparent, #0a0710 36%); }
+  #foot .cta { font-family: "Barlow Condensed"; font-weight: 900; font-size: 66px; color: #fff; }
+  #foot .cta em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #foot .sub { font-size: 34px; font-weight: 800; color: #b9b2c6; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div id="logo"><img src="assets/simbolo.svg" alt=""><span>goat filter</span></div>
+  <div id="top"><h1 class="disp skew">Qual é a sua <em>forma?</em></h1></div>
+
+  <div class="col left">
+    <span class="badge">sem goat filter</span>
+    <img class="char" src="assets/char-weak.png" alt="">
+    <div class="stats disp">
+      <div class="row"><small>Elo</small><b>Ferro 2</b></div>
+      <div class="row"><small>Resolução</small><b>1920 x 1080</b></div>
+      <div class="row"><small>DPI · Sens</small><b>400 · 0,5</b></div>
+      <div class="row hl"><small>Vibrance</small><b>0%</b></div>
+    </div>
+  </div>
+
+  <div class="col right">
+    <div class="aura"></div>
+    <span class="badge">com goat filter</span>
+    <img class="char" src="assets/char-strong.png" alt="">
+    <div class="stats disp">
+      <div class="row"><small>Elo</small><b>Radiante</b></div>
+      <div class="row"><small>Resolução</small><b>1440 x 1080 <span style="font-size:.5em">esticada</span></b></div>
+      <div class="row"><small>DPI · Sens</small><b>800 · 0,2</b></div>
+      <div class="row hl"><small>Vibrance</small><b>200% 🌈</b></div>
+    </div>
+  </div>
+
+  <div id="seam"></div>
+  <div id="vs" class="disp">VS</div>
+
+  <div id="foot">
+    <div class="cta disp skew">Desperta com o <em>Goat Filter</em></div>
+    <div class="sub">grátis · goatfilter.xyz</div>
+  </div>
+<script>
+window.ready = Promise.all([...document.images].map((i)=>i.decode().catch(()=>{}))).then(()=>document.fonts.ready);
+</script>
+</body>
+</html>
