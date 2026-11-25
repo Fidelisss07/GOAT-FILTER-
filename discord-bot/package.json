@@ -1,0 +1,17 @@
+{
+  "name": "goat-filter-bot",
+  "version": "1.0.0",
+  "description": "Bot do Discord do Goat Filter: suporte com tickets, ajuda automática e avisos de versão.",
+  "type": "module",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js"
+  },
+  "engines": { "node": ">=18.17" },
+  "dependencies": {
+    "discord.js": "14.28.1",
+    "dotenv": "16.4.5"
+  }
+}
