@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  /* Post de foto estilo "rouba meu setup". ?slide=1 (gancho) ou 2 (settings). 1080x1920. */
+  @font-face { font-family: "Barlow Condensed"; font-weight: 900; src: url("assets/fonts/barlow-condensed-latin-900-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 800; src: url("assets/fonts/inter-latin-800-normal.woff2") format("woff2"); }
+  :root { --grad: linear-gradient(100deg, #ff48a8 0%, #ad78ff 52%, #4fd6ff 100%); }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; font-family: "Inter", sans-serif; }
+  #bg { position: absolute; inset: 0; background: #f3f0ea; }
+  #bg::after { content: ""; position: absolute; inset: 0; opacity: 0.5; mix-blend-mode: multiply;
+    background-image: radial-gradient(circle at center, rgba(0,0,0,.18) 1.2px, transparent 1.3px); background-size: 12px 12px; }
+  .ink { color: #141018; }
+  .skew { transform: skewX(-7deg); transform-origin: left; }
+  .disp { font-family: "Barlow Condensed", sans-serif; font-weight: 900; text-transform: uppercase; line-height: 0.86; letter-spacing: -0.005em; }
+  .grad-t { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #logo { position: absolute; top: 56px; right: 56px; display: flex; align-items: center; gap: 14px; }
+  #logo img { width: 86px; }
+  #logo span { font-family: "Barlow Condensed", sans-serif; font-weight: 900; font-size: 46px; font-style: italic; color: #7b3ff2; text-transform: lowercase; }
+
+  /* ---- Slide 1: gancho ---- */
+  #s1 { position: absolute; inset: 0; display: none; }
+  #s1 .hook { position: absolute; left: 70px; right: 70px; top: 150px; font-size: 150px; }
+  #s1 .scene { position: absolute; left: 60px; right: 60px; top: 720px; height: 760px; border-radius: 40px; overflow: hidden; box-shadow: 0 40px 90px rgba(0,0,0,.35); border: 10px solid #141018; }
+  #s1 .scene img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  #s1 .grey { filter: grayscale(1) brightness(.74); clip-path: inset(0 50% 0 0); }
+  #s1 .col { filter: saturate(1.9) contrast(1.05); clip-path: inset(0 0 0 50%); }
+  #s1 .divider { position: absolute; left: 50%; top: 0; bottom: 0; width: 8px; margin-left: -4px; background: #fff; box-shadow: 0 0 0 3px #141018; }
+  #s1 .lbl { position: absolute; top: 40px; padding: 10px 26px; border-radius: 16px; font-weight: 800; font-size: 40px; color: #fff; }
+  #s1 .lblA { left: 40px; background: rgba(20,16,24,.82); }
+  #s1 .lblB { right: 40px; background: #7b3ff2; }
+  #s1 .foot { position: absolute; left: 70px; right: 70px; top: 1540px; font-size: 58px; }
+
+  /* ---- Slide 2: settings ---- */
+  #s2 { position: absolute; inset: 0; display: none; }
+  #s2 .title { position: absolute; left: 70px; top: 120px; font-size: 128px; }
+  #dial { position: absolute; right: 30px; top: 300px; width: 470px; height: 470px; }
+  #dial .core { position: absolute; inset: 23%; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #2a1c40, #0b0712); }
+  #dialSvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  #dialSvg text { fill: rgba(255,255,255,.85); font: 700 15px Inter; }
+  #dial .dc { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
+  #dial .dc small { font: 800 15px Inter; letter-spacing: .18em; opacity: .85; }
+  #dial .dc b { font-family: "Barlow Condensed"; font-weight: 900; font-size: 130px; line-height: .9; transform: skewX(-8deg); }
+  #dial .dc b i { font-style: normal; font-size: .58em; }
+  .stats { position: absolute; left: 80px; top: 820px; }
+  .stat { font-size: 104px; margin: 0 0 6px; }
+  .stat small { font-size: 0.42em; letter-spacing: .04em; color: #6b6472; display: block; font-weight: 800; font-family: Inter; text-transform: uppercase; margin-bottom: -6px; }
+  .hl { position: relative; display: inline-block; padding: 2px 16px; color: #fff; }
+  .hl::before { content: ""; position: absolute; inset: 0; background: var(--grad); border-radius: 12px; transform: skewX(-7deg); z-index: -1; }
+  .mouse { position: absolute; right: 90px; bottom: 300px; width: 300px; transform: rotate(8deg); filter: drop-shadow(0 30px 40px rgba(0,0,0,.35)); }
+  #s2 .foot { position: absolute; left: 80px; right: 80px; bottom: 150px; font-size: 54px; }
+  #s2 .foot .grad-t { font-family: "Barlow Condensed"; font-weight: 900; }
+  .pageno { position: absolute; right: 60px; bottom: 60px; font: 800 40px Inter; color: #9a93a3; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="logo"><img src="assets/simbolo.svg" alt=""><span>goat filter</span></div>
+
+<!-- Slide 1 -->
+<section id="s1">
+  <h1 class="hook disp ink skew">Seu Valorant<br>tá <span class="grad-t">sem cor?</span></h1>
+  <div class="scene">
+    <img class="grey" src="assets/cenario-hd.webp" alt="">
+    <img class="col" src="assets/cenario-hd.webp" alt="">
+    <div class="divider"></div>
+    <span class="lbl lblA">SEM</span>
+    <span class="lbl lblB">COM</span>
+  </div>
+  <p class="foot disp ink skew">arrasta pro setup →</p>
+</section>
+
+<!-- Slide 2 -->
+<section id="s2">
+  <h1 class="title disp ink skew">Rouba<br>meu setup</h1>
+  <div id="dial">
+    <div class="core"></div>
+    <svg id="dialSvg" viewBox="-20 -20 440 440"></svg>
+    <div class="dc"><small>VIBRANCE</small><b>150<i>%</i></b></div>
+  </div>
+  <div class="stats disp ink">
+    <p class="stat"><small>Resolução</small>1440 x 1080</p>
+    <p class="stat"><small>DPI · Sensibilidade</small>800 · 0,2</p>
+    <p class="stat"><small>Digital Vibrance</small><span class="hl skew">150% 🌈</span></p>
+    <p class="stat"><small>Aceleração do mouse</small>OFF</p>
+  </div>
+  <p class="foot ink"><span class="disp grad-t" style="font-size:72px">Vibrance é com o Goat Filter.</span><br><span style="font-weight:800;color:#4a4552">grátis · goatfilter.xyz</span></p>
+  <div class="pageno">2/2</div>
+</section>
+
+<script>
+const q = new URLSearchParams(location.search);
+const slide = q.get("slide") || "1";
+document.getElementById("s" + slide).style.display = "block";
+if (slide === "1") document.querySelector(".pageno, #s1")?.insertAdjacentHTML("beforeend", '<div class="pageno">1/2</div>');
+
+// Seletor do vibrance (150%)
+const svg = document.getElementById("dialSvg");
+if (svg) {
+  svg.innerHTML = `<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="60" y1="330" x2="350" y2="200"><stop offset="0" stop-color="#ff48a8"/><stop offset=".5" stop-color="#ad78ff"/><stop offset="1" stop-color="#4fd6ff"/></linearGradient>
+  <pattern id="st" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="8" fill="rgba(255,255,255,.18)"/></pattern></defs>`;
+  const pt = (d, r) => { const a = d * Math.PI / 180; return [200 + r * Math.cos(a), 200 + r * Math.sin(a)]; };
+  const arc = (f, t, r) => { const [x1, y1] = pt(f, r), [x2, y2] = pt(t, r); return `M${x1} ${y1} A${r} ${r} 0 ${t - f > 180 ? 1 : 0} 1 ${x2} ${y2}`; };
+  const ang = (v) => 135 + (v / 200) * 270;
+  let ticks = "";
+  for (let v = 0; v <= 200; v += 5) { const M = v % 20 === 0, [x1, y1] = pt(ang(v), M ? 166 : 170), [x2, y2] = pt(ang(v), 178);
+    ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(255,255,255,${M ? .85 : .3})" stroke-width="${M ? 2.4 : 1.5}" stroke-linecap="round"/>`;
+    if (M) { const [lx, ly] = pt(ang(v), 196); ticks += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central">${v}</text>`; } }
+  svg.insertAdjacentHTML("beforeend", `${ticks}<path d="${arc(135, 405, 150)}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="18" stroke-linecap="round"/>
+  <path d="${arc(ang(100), 405, 150)}" fill="none" stroke="url(#st)" stroke-width="18"/>
+  <path d="${arc(135, ang(150), 150)}" fill="none" stroke="url(#g)" stroke-width="18" stroke-linecap="round"/>
+  ${(() => { const [x, y] = pt(ang(150), 150); return `<circle cx="${x}" cy="${y}" r="20" fill="rgba(79,214,255,.5)"/><circle cx="${x}" cy="${y}" r="13" fill="#fff"/>`; })()}`);
+}
+window.ready = Promise.all([...document.images].map((i) => i.decode().catch(() => {}))).then(() => document.fonts.ready);
+</script>
+</body>
+</html>
