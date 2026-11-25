@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { AimTrainer } from "../components/AimTrainer";
+import { AimArena } from "../components/AimArena";
+import { AimDashboard } from "../components/AimProfile";
+import { buildProfile, dailyRoutine, loadSessions, RoutineStep } from "../lib/aimStats";
 import { CrosshairLibrary } from "../components/CrosshairLibrary";
 import { TargetIcon } from "../components/Icons";
 import { DoubleClickTest, PollingTest, ReactionTest } from "../components/QuickTests";
@@ -9,9 +11,10 @@ import { VALORANT_ID } from "../lib/types";
 import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
 
-type Tab = "warmup" | "aim" | "progress" | "reaction" | "mouse" | "sens" | "crosshair" | "visibility";
+type Tab = "dash" | "warmup" | "aim" | "progress" | "reaction" | "mouse" | "sens" | "crosshair" | "visibility";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "dash", label: "Painel" },
   { id: "warmup", label: "Aquecer e jogar" },
   { id: "aim", label: "Mira" },
   { id: "progress", label: "Evolução" },
@@ -22,7 +25,15 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "visibility", label: "Visibilidade" },
 ];
 
-/** Aquecimento: treino de flick pelo tempo escolhido e, no fim, abre o jogo. */
+/** Aquecimento do tamanho escolhido, montado pelo perfil (rotina do dia em sequência). */
+function warmupSteps(minutes: number): RoutineStep[] {
+  const base = dailyRoutine(buildProfile(loadSessions()));
+  const out: RoutineStep[] = [];
+  for (let i = 0; out.reduce((a, s) => a + s.dur, 0) < minutes * 60_000; i++) out.push({ mode: base[i % base.length].mode, dur: 30_000 });
+  return out;
+}
+
+/** Aquecimento: treinos da arena pelo tempo escolhido e, no fim, abre o jogo. */
 function WarmUp() {
   const t = useT();
   const s = useStore();
@@ -39,20 +50,20 @@ function WarmUp() {
 
   if (running)
     return (
-      <AimTrainer
-        mode="flick"
-        durationMs={minutes * 60_000}
-        autoStart
-        onFinish={() => {
+      <AimArena
+        steps={warmupSteps(minutes)}
+        title={t("Aquecimento")}
+        onDone={() => {
           setRunning(false);
           void launch();
         }}
+        onExit={() => setRunning(false)}
       />
     );
 
   return (
     <div className="warmup">
-      <p className="meta">{t("Faz um aquecimento de flick e, quando acabar, abre o jogo sozinho.")}</p>
+      <p className="meta">{t("Faz um aquecimento com os treinos que você mais precisa e, quando acabar, abre o jogo sozinho.")}</p>
       <div className="row">
         <span>{t("Duração")}</span>
         <div className="seg" role="radiogroup" aria-label={t("Duração")}>
@@ -86,7 +97,7 @@ function WarmUp() {
 export function TrainingPage() {
   const t = useT();
   const s = useStore();
-  const [tab, setTab] = useState<Tab>("warmup");
+  const [tab, setTab] = useState<Tab>("dash");
   return (
     <section className="panel training" aria-label={t("Treino")}>
       <div className="section-head">
@@ -102,7 +113,8 @@ export function TrainingPage() {
       </div>
       <div className="tab-body" role="tabpanel">
         {tab === "warmup" && <WarmUp />}
-        {tab === "aim" && <AimTrainer />}
+        {tab === "dash" && <AimDashboard />}
+        {tab === "aim" && <AimArena />}
         {tab === "progress" && <Progress />}
         {tab === "visibility" && <VisibilityTest />}
         {tab === "reaction" && <ReactionTest />}

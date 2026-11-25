@@ -318,7 +318,7 @@ describe("Treino v1.6", () => {
   it("abre a aba Treino, salva uma mira e mostra o conversor", async () => {
     await renderApp();
     await userEvent.click(screen.getByRole("button", { name: "Treino" }));
-    expect(screen.getByRole("button", { name: "Aquecer e jogar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Começar rotina" })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: "Miras" }));
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -535,10 +535,14 @@ describe("Cores e treino v1.10", () => {
   it("novos modos de mira e abas de evolução e visibilidade", async () => {
     await renderApp();
     await userEvent.click(screen.getByRole("button", { name: "Treino" }));
+    // Painel de mira é a primeira aba: rotina do dia e radar.
+    expect(screen.getByRole("button", { name: "Começar rotina" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Habilidades de mira" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("tab", { name: "Mira" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Peek" }));
-    expect(screen.getByText(/entra pela borda/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "Pequeno" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Peek de quina" }));
+    expect(screen.getByText(/sai de trás da parede/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Linha da cabeça" }));
+    expect(screen.getByText(/mais perto da cabeça/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("tab", { name: "Evolução" }));
     expect(screen.getByText(/dia\(s\) seguidos/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("tab", { name: "Visibilidade" }));
