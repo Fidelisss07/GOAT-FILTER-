@@ -6,6 +6,7 @@ import {
   Events,
   GatewayIntentBits,
   Partials,
+  PermissionFlagsBits,
   StringSelectMenuBuilder,
 } from "discord.js";
 import { buildServer, buildSummary } from "./build.js";
@@ -142,9 +143,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
         case "configurar": {
           const gate = interaction.options.getBoolean("verificacao") ?? true;
           const cleanup = interaction.options.getBoolean("limpar_padrao") ?? false;
+          const me = interaction.guild.members.me;
+          if (!me.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+              ephemeral: true,
+              embeds: [
+                brandEmbed()
+                  .setTitle("⚠️ Preciso de Administrador")
+                  .setDescription(
+                    "Para montar o servidor (criar cargos, permissões e o cargo Admin), o bot precisa da permissão **Administrador**.\n\n" +
+                      `**1.** Abra este link e autorize de novo neste servidor:\nhttps://discord.com/oauth2/authorize?client_id=${config.clientId}&permissions=8&integration_type=0&scope=bot+applications.commands\n` +
+                      "**2.** Em *Configurações do servidor › Cargos*, arraste o cargo **Goat Filter Bot** para o **topo**.\n**3.** Rode **/configurar** de novo.",
+                  ),
+              ],
+            });
+          }
           await interaction.deferReply({ ephemeral: true });
           const progress = (t) => interaction.editReply(`⏳ ${t}`).catch(() => {});
-          const result = await buildServer(interaction.guild, { gate, cleanup }, progress);
+          let result;
+          try {
+            result = await buildServer(interaction.guild, { gate, cleanup }, progress);
+          } catch (err) {
+            logFor(interaction.guild).error("Falha no /configurar", err);
+            return interaction.editReply(`❌ Parei no meio: \`${String(err?.message || err).slice(0, 300)}\`\nManda um print disso para o suporte do bot.`);
+          }
           scheduleCounter(interaction.guild, 2000);
           logTo(interaction.guild, `🏗️ **${interaction.user.tag}** montou/atualizou o servidor com /configurar.`);
           return interaction.editReply({ content: "", embeds: [buildSummary(interaction.guild, result, gate)] });
@@ -198,7 +220,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   } catch (err) {
     logFor(interaction.guild).error("Erro ao tratar interação", err);
-    const msg = { content: "Deu um erro aqui. Já registrei para a equipe — tente de novo.", ephemeral: true };
+    const admin = interaction.member?.permissions?.has(PermissionFlagsBits.ManageGuild);
+    const detail = admin ? `\nDetalhe: \`${String(err?.message || err).slice(0, 300)}\`` : "";
+    const msg = { content: `Deu um erro aqui. Já registrei para a equipe — tente de novo.${detail}`, ephemeral: true };
     if (interaction.deferred || interaction.replied) interaction.followUp(msg).catch(() => {});
     else interaction.reply(msg).catch(() => {});
   }
