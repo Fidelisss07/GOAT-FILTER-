@@ -13,11 +13,8 @@ function required(name) {
 export const config = {
   token: required("DISCORD_TOKEN"),
   clientId: required("CLIENT_ID"),
-  guildId: required("GUILD_ID"),
-  staffRoleId: process.env.STAFF_ROLE_ID || "",
-  ticketCategoryId: process.env.TICKET_CATEGORY_ID || "",
-  logChannelId: process.env.LOG_CHANNEL_ID || "",
-  welcomeChannelId: process.env.WELCOME_CHANNEL_ID || "",
+  /** Opcional: os canais e o cargo vêm do /configurar (veja store.js). */
+  guildId: process.env.GUILD_ID || "",
   siteUrl: process.env.SITE_URL || "https://www.goatfilter.xyz",
   brand: {
     name: "Goat Filter",

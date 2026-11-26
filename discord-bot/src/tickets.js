@@ -11,6 +11,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { config } from "./config.js";
+import { guildSettings } from "./store.js";
 
 const CATEGORIES = {
   suporte: { label: "Suporte geral", emoji: "💬", desc: "Dúvidas de uso, instalação, configuração." },
@@ -84,6 +85,7 @@ export async function handleModalSubmit(interaction, log) {
   }
 
   await interaction.deferReply({ ephemeral: true });
+  const gs = guildSettings(interaction.guild);
 
   const overwrites = [
     { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
@@ -93,9 +95,9 @@ export async function handleModalSubmit(interaction, log) {
     },
     { id: interaction.client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] },
   ];
-  if (config.staffRoleId) {
+  if (gs.staffRoleId) {
     overwrites.push({
-      id: config.staffRoleId,
+      id: gs.staffRoleId,
       allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ReadMessageHistory],
     });
   }
@@ -105,7 +107,7 @@ export async function handleModalSubmit(interaction, log) {
     channel = await interaction.guild.channels.create({
       name: `${cat.emoji}ticket-${interaction.user.username}`.slice(0, 95),
       type: ChannelType.GuildText,
-      parent: config.ticketCategoryId || undefined,
+      parent: gs.ticketCategoryId || undefined,
       topic: `ticket|${interaction.user.id}`,
       permissionOverwrites: overwrites,
     });
@@ -128,7 +130,7 @@ export async function handleModalSubmit(interaction, log) {
     new ButtonBuilder().setCustomId("ticket_close").setLabel("Fechar ticket").setEmoji("🔒").setStyle(ButtonStyle.Danger),
   );
 
-  const mention = config.staffRoleId ? `<@&${config.staffRoleId}>` : "";
+  const mention = gs.staffRoleId ? `<@&${gs.staffRoleId}>` : "";
   await channel.send({
     content: `${interaction.user} ${mention}`.trim(),
     embeds: [embed],
