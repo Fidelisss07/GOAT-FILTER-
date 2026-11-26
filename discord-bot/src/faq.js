@@ -89,6 +89,33 @@ export const FAQ = [
     keywords: ["baixar", "download", "atualizar", "atualização", "atualizacao", "onde baixo", "como instalo", "link do app"],
     answer: `Baixe sempre pelo site oficial: ${site}\nO app avisa e se atualiza sozinho quando sai versão nova.`,
   },
+  {
+    id: "compartilhar",
+    emoji: "📺",
+    title: "O filtro não aparece quando compartilho a tela",
+    keywords: ["compartilhar", "compartilhando", "compartilho", "live", "stream", "obs", "discord tela", "não aparece na gravação", "nao aparece na gravacao", "nao aparece no clipe", "não aparece no clipe"],
+    answer:
+      "É normal: o vibrance é aplicado pela placa de vídeo só na saída para o monitor, então nenhuma captura vê (Discord, OBS, gravação). " +
+      "No app, ligue **Gravação › Clipes com as cores do filtro** para os clipes saírem coloridos. Na live pelo OBS, adicione o filtro **Correção de cor** na captura com Saturação = (vibrance − 50) ÷ 100 (100% → 0,5).",
+  },
+  {
+    id: "travando",
+    emoji: "🎞️",
+    title: "O clipe gravado ficou travado / com FPS baixo",
+    keywords: ["clipe travado", "clipe travando", "gravação travada", "gravacao travada", "gravação lagada", "gravacao lagada", "fps baixo no clipe", "lagado"],
+    answer:
+      "Atualize o app (a versão 1.19.1 corrigiu quadros perdidos). Se ainda travar em lances com muita ação, limite o FPS do Valorant um pouco acima dos Hz do monitor " +
+      "(144 Hz → 160) para a placa não ficar em 100%. Em **Gravação › Testar gravação** o app mostra o ritmo real dos quadros.",
+  },
+  {
+    id: "treino",
+    emoji: "🎯",
+    title: "Como funciona o treino de mira?",
+    keywords: ["treino de mira", "treinar mira", "aim", "aim trainer", "rotina", "elo de mira", "coach"],
+    answer:
+      "Na aba **Treino** tem uma arena 3D com a mesma sensibilidade e campo de visão do Valorant: flick, tracking, peek, segurar ângulo, linha da cabeça e o mapa Base Goat. " +
+      "Cada tiro é medido; o **Painel** mostra seu elo de mira, um radar de habilidades, dicas do coach e uma **rotina do dia** focada nos seus pontos fracos.",
+  },
 ];
 
 export const faqById = (id) => FAQ.find((f) => f.id === id);

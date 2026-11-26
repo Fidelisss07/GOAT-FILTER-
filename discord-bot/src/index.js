@@ -29,11 +29,14 @@ import { config } from "./config.js";
 import { FAQ, faqById, matchFaq } from "./faq.js";
 import { cmdAnunciar, cmdAviso, cmdBanir, cmdCastigo, cmdExpulsar, cmdLimpar, handleAnnounceModal } from "./moderation.js";
 import { handleRankSelect, handleRoleToggle, handleVerify } from "./panels.js";
-import { savedId } from "./store.js";
+import { handleQuestion, handleSolved } from "./extras.js";
+import { guildSettings, savedId } from "./store.js";
 import {
   handleCloseCancel,
+  handleClaim,
   handleCloseConfirm,
   handleClosePrompt,
+  handleRating,
   handleModalSubmit,
   handleOpenSelect,
   panelComponents,
@@ -108,6 +111,8 @@ client.on(Events.GuildMemberRemove, (m) => onLeave(m));
 /* ------------------------------------------------------------------ interações */
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
+    // Avaliação de ticket chega por mensagem direta (sem servidor).
+    if (interaction.isButton() && interaction.customId.startsWith("rate:")) return handleRating(interaction, logTo);
     if (interaction.isChatInputCommand()) {
       switch (interaction.commandName) {
         case "ajuda":
@@ -215,6 +220,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (id === "verify") return handleVerify(interaction);
       if (id.startsWith("role:")) return handleRoleToggle(interaction);
       if (id.startsWith("vote:")) return handleVote(interaction);
+      if (id.startsWith("solved:")) return handleSolved(interaction);
+      if (id === "ticket_claim") return handleClaim(interaction, guildSettings(interaction.guild).staffRoleId);
       if (id === "ticket_close") return handleClosePrompt(interaction);
       if (id === "ticket_close_confirm") return handleCloseConfirm(interaction, logFor(interaction.guild));
       if (id === "ticket_close_cancel") return handleCloseCancel(interaction);
@@ -239,6 +246,12 @@ client.on(Events.MessageCreate, async (message) => {
     const g = message.guild.id;
     if (id === savedId(g, "ch:sugestoes")) return handleSuggestionMessage(message);
     if (id === savedId(g, "ch:clipes")) return handleClip(message);
+    // #dúvidas: cada pergunta vira um tópico (a resposta automática vai dentro dele).
+    let replyTo = message;
+    if (id === savedId(g, "ch:duvidas") && !message.channel.isThread()) {
+      const thread = await handleQuestion(message);
+      if (thread) replyTo = { reply: (p) => thread.send(p) };
+    }
     if (message.channel.topic?.startsWith("ticket|")) return; // dentro de ticket a equipe cuida
     // Ajuda automática (em qualquer canal público, mais solta em #dúvidas).
     const item = matchFaq(message.content);
@@ -246,7 +259,7 @@ client.on(Events.MessageCreate, async (message) => {
     const last = cooldown.get(message.author.id) || 0;
     if (Date.now() - last < 60_000) return;
     cooldown.set(message.author.id, Date.now());
-    await message.reply({
+    await replyTo.reply({
       embeds: [faqAnswer(item).setFooter({ text: "Resposta automática · use /ajuda para ver tudo" })],
       allowedMentions: { repliedUser: false },
     });

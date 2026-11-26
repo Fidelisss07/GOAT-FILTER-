@@ -1,6 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits as P } from "discord.js";
 import { config } from "./config.js";
 import { STAFF } from "./layout.js";
+import { welcomeDM } from "./extras.js";
 import { bucket, guildData, guildSettings, savedId, setData, touch } from "./store.js";
 
 const brand = () => new EmbedBuilder().setColor(config.brand.color);
@@ -38,6 +39,7 @@ export async function onJoin(member) {
     const role = g.roles.cache.get(savedId(g.id, "role:membro"));
     if (role) member.roles.add(role).catch(() => {});
   }
+  welcomeDM(member);
   logTo(g, `📥 **Entrou:** ${member} (${member.user.tag}) · conta criada <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`);
   scheduleCounter(g);
 }
