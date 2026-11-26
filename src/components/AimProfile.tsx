@@ -5,6 +5,7 @@ import {
   buildProfile,
   coach,
   dailyRoutine,
+  modeDuration,
   Insight,
   loadSessions,
   MODE_LABEL,
@@ -150,7 +151,7 @@ export function AimDashboard() {
 
   if (view.kind === "routine")
     return <AimArena steps={view.steps} title={t("Rotina do dia")} onDone={() => setList(loadSessions())} onExit={back} />;
-  if (view.kind === "drill") return <AimArena steps={[{ mode: view.mode, dur: view.mode === "hold" ? 40_000 : 30_000 }]} title={t(MODE_LABEL[view.mode])} onExit={back} />;
+  if (view.kind === "drill") return <AimArena steps={[{ mode: view.mode, dur: modeDuration(view.mode) }]} title={t(MODE_LABEL[view.mode])} onExit={back} />;
 
   const totalMin = Math.round(routine.reduce((a, s) => a + s.dur, 0) / 60_000);
 
