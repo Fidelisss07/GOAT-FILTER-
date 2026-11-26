@@ -144,6 +144,8 @@ export interface RecorderSettings {
   discordWebhook: string;
   /** Nomes dos clipes favoritos (a limpeza não apaga). */
   favorites: string[];
+  /** Clipes com as cores do filtro (a captura não vê o vibrance da placa). */
+  clipColors: boolean;
 }
 
 export const DEFAULT_RECORDER: RecorderSettings = {
@@ -162,6 +164,7 @@ export const DEFAULT_RECORDER: RecorderSettings = {
   maxGb: 0,
   discordWebhook: "",
   favorites: [],
+  clipColors: true,
 };
 
 export const isDiscordWebhook = (u: string) =>

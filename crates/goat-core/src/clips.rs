@@ -77,6 +77,35 @@ pub fn compress_args(input: &str, output: &str, enc: VideoEncoder, duration: f64
     a
 }
 
+/// Saturação que um valor do Goat Filter representa na tela (50% = normal):
+/// 100% → 1,5×, 200% → 2,5× (a mesma regra da camada Super).
+pub fn vibrance_saturation(percent: u8) -> f32 {
+    let p = percent.min(200) as f32;
+    if p <= 50.0 {
+        p / 50.0
+    } else {
+        1.0 + (p - 50.0) / 100.0
+    }
+}
+
+/// Junta o clipe já com as cores do filtro. O vibrance é aplicado pela placa
+/// na saída para o monitor, então a captura não o vê; aqui a saturação é
+/// somada ao vídeo (`eq`), recodificando só a imagem. O som é copiado.
+pub fn color_args(input: &str, output: &str, enc: VideoEncoder, kbps: u32, saturation: f32, last_secs: Option<u32>) -> Vec<String> {
+    let mut a = vec![s("-hide_banner"), s("-loglevel"), s("error"), s("-y")];
+    if let Some(n) = last_secs {
+        a.extend([s("-sseof"), format!("-{n}")]);
+    }
+    a.extend([
+        s("-i"), s(input),
+        s("-map"), s("0:v:0"), s("-map"), s("0:a?"),
+        s("-vf"), format!("eq=saturation={:.2},format=nv12", saturation.clamp(0.0, 3.0)),
+    ]);
+    a.extend(encoder_args(enc, kbps));
+    a.extend([s("-c:a"), s("copy"), s("-bsf:a"), s("aac_adtstoasc"), s("-movflags"), s("+faststart"), s(output)]);
+    a
+}
+
 /// Versão vertical 1080x1920: recorta o centro da tela (onde fica a mira).
 pub fn vertical_args(input: &str, output: &str, enc: VideoEncoder) -> Vec<String> {
     let mut a = vec![
@@ -403,4 +432,18 @@ mod tests {
         let jpg = std::fs::read(&thumb).unwrap();
         assert_eq!(&jpg[..2], &[0xFF, 0xD8]);
     }
+    #[test]
+    fn clipe_com_as_cores_do_filtro() {
+        assert_eq!(vibrance_saturation(50), 1.0);
+        assert_eq!(vibrance_saturation(100), 1.5);
+        assert_eq!(vibrance_saturation(200), 2.5);
+        assert_eq!(vibrance_saturation(25), 0.5);
+        let a = color_args("in.ts", "out.mp4", VideoEncoder::Nvenc, 12_000, 1.5, Some(30)).join(" ");
+        assert!(a.contains("-sseof -30 -i in.ts"));
+        assert!(a.contains("eq=saturation=1.50,format=nv12"));
+        assert!(a.contains("h264_nvenc"));
+        assert!(a.contains("-c:a copy"));
+        assert!(a.ends_with("out.mp4"));
+    }
+
 }
