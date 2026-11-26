@@ -9,6 +9,7 @@ import {
   loadSessions,
   MODE_HELP,
   MODE_LABEL,
+  modeDuration,
   nextLevel,
   RoutineStep,
   saveLevel,
@@ -22,6 +23,7 @@ import { convertSens } from "../lib/sens";
 import { angularDistance, Approach, degPerCount, loadProfile, VALORANT_HFOV } from "../lib/sensFinder";
 import { saveResult, TrainMode } from "../lib/trainStats";
 import { useT } from "../lib/useT";
+import { skinById, WeaponSkin, WEAPON_SKINS } from "../lib/weaponSkins";
 import { useStore } from "../state/store";
 import { InsightList } from "./AimProfile";
 
@@ -158,6 +160,12 @@ interface Sim {
   track: { frames: number; head: number; body: number; lag: number; off: number };
   fired: number;
   killsLive: number;
+  /** Mapa: metros andados, checkpoint atual, andando, rota limpa. */
+  walked: number;
+  cp: number;
+  walking: boolean;
+  routeDone: boolean;
+  lastShotAt: number;
 }
 
 /* ---------------------------------------------------------------- cenário por modo */
@@ -173,8 +181,39 @@ function wallsFor(mode: ArenaMode): Box[] {
   if (mode === "hold") return [back, box(-14, -1.4, 18, 2, 4), box(1.4, 14, 18, 2, 4)];
   if (mode === "headline")
     return [back, box(-12, -8, 12, 2, 1.0, CRATE), box(-3, 0, 18, 2, 1.0, CRATE), box(6, 10, 10, 2, 1.0, CRATE), box(-18, -14, 24, 3, 3, WALL2), box(13, 17, 22, 3, 3, WALL)];
+  if (mode === "preaim") return ROUTE_WALLS.map((b) => ({ ...b }));
   return [back];
 }
+
+/* ---------------------------------------------------------------- mapa Base Goat (original) */
+const box = (x0: number, x1: number, z0: number, z1: number, h: number, color = WALL): Box => ({ x0, x1, y0: FLOOR, y1: FLOOR + h, z0, z1, color });
+/** Corredor de entrada, janela à direita e o bomb A com caixas, pilar e plataforma. */
+const ROUTE_WALLS: Box[] = [
+  box(-60, 60, 48, 49, 7, "#221d33"), // fundo do bomb
+  box(-3.1, -2.4, -2, 19, 4.2), // parede esquerda do corredor
+  box(2.4, 3.1, -2, 14, 4.2), // parede direita (acaba na janela)
+  box(3.1, 12, 18.6, 19.3, 4.2, WALL2), // fundo da janela
+  box(-30, -3.1, 18.6, 19.3, 4.2, WALL2), // parede da entrada do bomb
+  box(-8, -5, 26, 29, 1.2, CRATE), // caixa baixa
+  box(4, 7, 30, 33, 2.4, CRATE), // caixa alta
+  box(-1, 1, 34, 36, 4.2, WALL2), // pilar
+  box(-16, -9, 38, 44, 2, WALL2), // plataforma (heaven)
+  box(10, 13, 22, 25, 1.2, CRATE), // caixa da direita
+];
+
+interface Checkpoint {
+  /** Onde o jogador para (metros andados). */
+  z: number;
+  enemies: { pos: V3; raised?: boolean }[];
+}
+/** Rota de pre-aim: em cada parada os inimigos já estão nos ângulos comuns. */
+const ROUTE: Checkpoint[] = [
+  { z: 12.8, enemies: [{ pos: [6, 0, 17] }] },
+  { z: 17, enemies: [{ pos: [-6.5, 0, 30.6] }, { pos: [11.5, 0, 26.4] }] },
+  { z: 21, enemies: [{ pos: [3.3, 0, 31.5] }, { pos: [-12.5, 2, 41], raised: true }] },
+  { z: 26, enemies: [{ pos: [1.7, 0, 35.2] }, { pos: [-4, 0, 44] }] },
+];
+const ROUTE_TOTAL = ROUTE.reduce((a, c) => a + c.enemies.length, 0);
 
 /** Pontos de peek: borda da parede, frente da parede (z), lado para onde o inimigo sai e onde ele fica (z). */
 const PEEK_SPOTS = [
@@ -336,9 +375,24 @@ function bodyBox(t: Tgt): Box {
 }
 
 /* ---------------------------------------------------------------- desenho */
+/** Corta o polígono no plano perto da câmera (paredes que passam ao lado). */
+function clipNear(q: V3[]): V3[] {
+  const out: V3[] = [];
+  for (let i = 0; i < q.length; i++) {
+    const a = q[i], b = q[(i + 1) % q.length];
+    const ina = a[2] >= NEAR, inb = b[2] >= NEAR;
+    if (ina) out.push(a);
+    if (ina !== inb) {
+      const k = (NEAR - a[2]) / (b[2] - a[2]);
+      out.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, NEAR]);
+    }
+  }
+  return out;
+}
+
 function poly(ctx: CanvasRenderingContext2D, c: Cam, pts: V3[], fill: string, stroke?: string) {
-  const q = pts.map((p) => toCam(c, p));
-  if (q.some((v) => v[2] < NEAR)) return;
+  const q = clipNear(pts.map((p) => toCam(c, p)));
+  if (q.length < 3) return;
   ctx.beginPath();
   q.forEach((v, i) => {
     const s = screen(c, v);
@@ -449,7 +503,167 @@ function drawBall(ctx: CanvasRenderingContext2D, c: Cam, t: Tgt, accent: string)
   ctx.fill();
 }
 
-function drawScene(ctx: CanvasRenderingContext2D, w: number, h: number, s: Sim, look: { accent: string; enemy: string; xh: Rect[] }, now: number) {
+/** Arma em primeira pessoa com a skin escolhida, recuo e clarão do tiro. */
+function drawGun(ctx: CanvasRenderingContext2D, w: number, h: number, skin: WeaponSkin, since: number) {
+  const u = h / 100;
+  const kick = since < 140 ? 1 - since / 140 : 0;
+  ctx.save();
+  ctx.translate(w / 2 + 96 * u + kick * 1.5 * u, h + 1 * u + kick * 3 * u);
+  ctx.rotate(0.28 + kick * 0.05);
+  ctx.scale(u * 1.25, u * 1.25);
+  const rr = (x: number, y: number, wd: number, ht: number, r: number) => {
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + wd, y, x + wd, y + ht, r);
+    ctx.arcTo(x + wd, y + ht, x, y + ht, r);
+    ctx.arcTo(x, y + ht, x, y, r);
+    ctx.arcTo(x, y, x + wd, y, r);
+    ctx.closePath();
+  };
+  // Silhueta (cano para a esquerda).
+  ctx.beginPath();
+  rr(0, -5, 18, 8, 2.5); // coronha
+  rr(-30, -7, 31, 9, 1.5); // corpo
+  rr(-53, -5.5, 24, 6, 1.2); // guarda-mão
+  rr(-67, -3.6, 15, 2.6, 0.8); // cano
+  ctx.moveTo(-20, 2);
+  ctx.lineTo(-12, 2);
+  ctx.lineTo(-10, 13);
+  ctx.lineTo(-17, 14);
+  ctx.closePath(); // pente
+  ctx.moveTo(-6, 2);
+  ctx.lineTo(0, 2);
+  ctx.lineTo(3, 12);
+  ctx.lineTo(-2, 12.5);
+  ctx.closePath(); // empunhadura
+  const g = ctx.createLinearGradient(18, 0, -67, 0);
+  g.addColorStop(0, skin.body[0]);
+  g.addColorStop(1, skin.body[1]);
+  if (skin.glow) {
+    ctx.shadowColor = skin.glow;
+    ctx.shadowBlur = 14;
+  }
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = "rgba(0,0,0,.6)";
+  ctx.stroke();
+  // Padrão por cima, só dentro da arma.
+  ctx.save();
+  ctx.clip();
+  drawPattern(ctx, skin);
+  // Luz de cima.
+  const sh = ctx.createLinearGradient(0, -9, 0, 14);
+  sh.addColorStop(0, "rgba(255,255,255,.22)");
+  sh.addColorStop(0.35, "rgba(255,255,255,0)");
+  sh.addColorStop(1, "rgba(0,0,0,.35)");
+  ctx.fillStyle = sh;
+  ctx.fillRect(-70, -10, 92, 26);
+  ctx.restore();
+  // Detalhes: faixa, trilho e mira de cima.
+  ctx.fillStyle = skin.accent;
+  ctx.fillRect(-29, -2.2, 27, 0.9);
+  ctx.fillRect(-27, -9, 20, 2);
+  ctx.fillRect(-50, -7.4, 3, 2);
+  ctx.globalAlpha = 0.85;
+  ctx.fillRect(-66, -3.1, 2, 1.6);
+  ctx.globalAlpha = 1;
+  // Clarão do tiro.
+  if (since < 55) {
+    const f = ctx.createRadialGradient(-69, -2.3, 0, -69, -2.3, 9);
+    f.addColorStop(0, "rgba(255,250,220,.95)");
+    f.addColorStop(0.4, "rgba(255,190,80,.6)");
+    f.addColorStop(1, "rgba(255,120,0,0)");
+    ctx.fillStyle = f;
+    ctx.beginPath();
+    ctx.arc(-69, -2.3, 9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawPattern(ctx: CanvasRenderingContext2D, skin: WeaponSkin) {
+  const a = skin.accent;
+  switch (skin.pattern) {
+    case "stars":
+      ctx.fillStyle = a;
+      for (let i = 0; i < 60; i++) {
+        const x = -68 + ((i * 37) % 88), y = -9 + ((i * 53) % 23);
+        ctx.globalAlpha = 0.35 + ((i * 7) % 10) / 16;
+        ctx.fillRect(x, y, 0.5, 0.5);
+      }
+      ctx.globalAlpha = 1;
+      break;
+    case "stripes":
+      ctx.strokeStyle = a;
+      ctx.globalAlpha = 0.25;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      for (let x = -80; x < 30; x += 6) {
+        ctx.moveTo(x, 15);
+        ctx.lineTo(x + 14, -10);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      break;
+    case "camo":
+      for (let i = 0; i < 70; i++) {
+        ctx.fillStyle = i % 3 === 0 ? a : i % 3 === 1 ? "#26301b" : "#6b7a4a";
+        ctx.globalAlpha = 0.55;
+        ctx.fillRect(-68 + ((i * 29) % 88), -9 + ((i * 17) % 23), 3, 2);
+      }
+      ctx.globalAlpha = 1;
+      break;
+    case "carbon":
+      ctx.fillStyle = "rgba(255,255,255,.05)";
+      for (let x = -70; x < 20; x += 2) for (let y = -10; y < 16; y += 2) if (((x + y) / 2) % 2 === 0) ctx.fillRect(x, y, 1, 1);
+      ctx.fillStyle = a;
+      ctx.fillRect(-52, -1.2, 22, 0.7);
+      break;
+    case "petals":
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < 22; i++) {
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.ellipse(-66 + ((i * 41) % 86), -8 + ((i * 23) % 21), 1.4, 0.7, i, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    case "flames": {
+      const f = ctx.createLinearGradient(0, 14, 0, -8);
+      f.addColorStop(0, "rgba(255,210,80,.7)");
+      f.addColorStop(1, "rgba(255,80,0,0)");
+      ctx.fillStyle = f;
+      ctx.beginPath();
+      ctx.moveTo(-70, 14);
+      for (let x = -70; x <= 20; x += 5) ctx.lineTo(x + 2.5, -2 - ((x * 7) % 5));
+      ctx.lineTo(20, 14);
+      ctx.fill();
+      break;
+    }
+    case "frost":
+      ctx.strokeStyle = a;
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 0.4;
+      ctx.beginPath();
+      for (let i = 0; i < 14; i++) {
+        const x = -64 + ((i * 47) % 80), y = -6 + ((i * 13) % 16);
+        for (let k = 0; k < 3; k++) {
+          const ang = (k * Math.PI) / 3;
+          ctx.moveTo(x - Math.cos(ang) * 2, y - Math.sin(ang) * 2);
+          ctx.lineTo(x + Math.cos(ang) * 2, y + Math.sin(ang) * 2);
+        }
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      break;
+    default:
+      break;
+  }
+}
+
+function drawScene(ctx: CanvasRenderingContext2D, w: number, h: number, s: Sim, look: { accent: string; enemy: string; xh: Rect[]; skin: WeaponSkin | null }, now: number) {
   const c = camera(s.yaw, s.pitch, w, h);
   const horizon = h / 2 + Math.tan(s.pitch * R) * c.F;
   const sky = ctx.createLinearGradient(0, 0, 0, Math.max(1, horizon));
@@ -462,17 +676,31 @@ function drawScene(ctx: CanvasRenderingContext2D, w: number, h: number, s: Sim, 
   // Grade do chão (dá noção de distância).
   ctx.beginPath();
   ctx.strokeStyle = "rgba(255,255,255,.05)";
-  for (let z = 2; z <= 42; z += 2) line(ctx, c, [-40, FLOOR, z], [40, FLOOR, z]);
-  for (let x = -40; x <= 40; x += 2) line(ctx, c, [x, FLOOR, 1], [x, FLOOR, 42]);
+  const off = s.walked % 2;
+  for (let z = 2 - off; z <= 48; z += 2) line(ctx, c, [-40, FLOOR, z], [40, FLOOR, z]);
+  for (let x = -40; x <= 40; x += 2) line(ctx, c, [x, FLOOR, 1], [x, FLOOR, 48]);
   ctx.stroke();
   // Pintor: do mais longe para o mais perto.
-  type D = { z: number; draw(): void };
-  const items: D[] = s.walls.map((b) => ({ z: b.z0, draw: () => drawBox(ctx, c, b) }));
-  for (const t of s.targets) {
-    if (t.kind === "agent" && t.phase === "wait") continue;
-    items.push({ z: t.pos[2] + 0.01, draw: () => (t.kind === "ball" ? drawBall(ctx, c, t, look.accent) : drawAgent(ctx, c, t, look.enemy)) });
+  // Pintor: paredes do mais longe para o mais perto; cada alvo entra logo
+  // antes da primeira parede que está na frente dele.
+  const cl = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const near = (b: Box) => Math.hypot(cl(0, b.x0, b.x1), cl(0, b.y0, b.y1), cl(0, b.z0, b.z1));
+  /** A parede fica atrás do alvo (há um plano dela separando o alvo do lado da câmera)? */
+  const behind = (b: Box, t: Tgt) => {
+    const [x, , z] = t.pos, r = t.kind === "agent" ? BODY_W + 0.1 : t.rad;
+    return (b.z0 > 0 && z + r <= b.z0) || (b.x0 > 0 && x + r <= b.x0) || (b.x1 < 0 && x - r >= b.x1);
+  };
+  type D = { draw(): void; wall?: Box };
+  const order: D[] = [...s.walls].sort((a, b) => near(b) - near(a)).map((b) => ({ wall: b, draw: () => drawBox(ctx, c, b) }));
+  const vis = s.targets.filter((t) => !(t.kind === "agent" && t.phase === "wait")).sort((a, b) => len(b.pos) - len(a.pos));
+  for (const t of vis) {
+    const d: D = { draw: () => (t.kind === "ball" ? drawBall(ctx, c, t, look.accent) : drawAgent(ctx, c, t, look.enemy)) };
+    const i = order.findIndex((o) => o.wall && !behind(o.wall, t));
+    if (i < 0) order.push(d);
+    else order.splice(i, 0, d);
   }
-  items.sort((a, b) => b.z - a.z).forEach((d) => d.draw());
+  order.forEach((d) => d.draw());
+  if (look.skin) drawGun(ctx, w, h, look.skin, now - s.lastShotAt);
   // Mira do jogador.
   const k = Math.max(1, h / 1080);
   ctx.save();
@@ -659,6 +887,11 @@ function step(s: Sim, now: number, dt: number) {
     // Atraso: quanto a mira está atrás do inimigo na direção em que ele anda.
     tr.lag += -(s.yaw - ty) * Math.sign(t.vx || 1);
   }
+  // Mapa: anda pela rota e para em cada checkpoint.
+  if (s.mode === "preaim") {
+    routeStep(s, now, dt);
+    return;
+  }
   // Novos alvos.
   if (now >= s.nextAt) {
     if (s.mode === "switch") spawnFor(s, now);
@@ -666,8 +899,45 @@ function step(s: Sim, now: number, dt: number) {
   }
 }
 
+/** Anda o mundo para trás (a câmera fica parada no centro). */
+function shiftWorld(s: Sim, dz: number) {
+  s.walked += dz;
+  for (const b of s.walls) {
+    b.z0 -= dz;
+    b.z1 -= dz;
+  }
+  for (const t of s.targets) t.pos[2] -= dz;
+}
+
+function routeStep(s: Sim, now: number, dt: number) {
+  if (s.routeDone) return;
+  if (s.walking) {
+    const cp = ROUTE[s.cp];
+    const dz = Math.min(RUN * dt, cp.z - s.walked);
+    if (dz > 0) shiftWorld(s, dz);
+    if (s.walked >= cp.z - 1e-3) {
+      s.walking = false;
+      for (const e of cp.enemies) {
+        const t = newTarget(s, "agent", [e.pos[0], e.pos[1], e.pos[2] - s.walked], HEAD_R, now);
+        t.raised = !!e.raised;
+        t.phase = "up";
+        t.expires = now + 6000;
+        s.targets.push(t);
+      }
+    }
+    return;
+  }
+  if (s.targets.length === 0 && now >= s.nextAt) {
+    if (s.cp + 1 < ROUTE.length) {
+      s.cp++;
+      s.walking = true;
+    } else s.routeDone = true;
+  }
+}
+
 function fire(s: Sim, now: number) {
   if (s.mode === "tracking") return; // tracking não usa clique
+  s.lastShotAt = now;
   s.fired++;
   const d = dirOf(s.yaw, s.pitch);
   const wallT = Math.min(...s.walls.map((b) => hitBox(d, b) ?? Infinity));
@@ -718,7 +988,7 @@ function fire(s: Sim, now: number) {
     const fresh = s.targets[s.targets.length - 1];
     markVisible(s, fresh, now);
   } else {
-    s.nextAt = now + (s.mode === "flick" || s.mode === "micro" ? 120 : rand(450, 1100));
+    s.nextAt = now + (s.mode === "flick" || s.mode === "micro" ? 120 : s.mode === "preaim" ? 250 : rand(450, 1100));
   }
 }
 
@@ -728,6 +998,7 @@ type Phase = "setup" | "ready" | "running" | "result" | "summary";
 
 const SENS_KEY = "goat-filter:arena-sens";
 const XH_KEY = "goat-filter:arena-xh";
+const SKIN_KEY = "goat-filter:arena-skin";
 const DEFAULT_XH = "0;P;c;5;h;0;0l;4;0o;2;0a;1;0f;0;1b;0";
 
 function initialSens(): number {
@@ -771,7 +1042,22 @@ export function AimArena({
       return "";
     }
   });
-  const plan: RoutineStep[] = useMemo(() => steps ?? [{ mode, dur: mode === "hold" ? 40_000 : 30_000 }], [steps, mode]);
+  const [skinId, setSkinId] = useState(() => {
+    try {
+      return localStorage.getItem(SKIN_KEY) || "goat-neon";
+    } catch {
+      return "goat-neon";
+    }
+  });
+  const changeSkin = (id: string) => {
+    setSkinId(id);
+    try {
+      localStorage.setItem(SKIN_KEY, id);
+    } catch {
+      /* ignora */
+    }
+  };
+  const plan: RoutineStep[] = useMemo(() => steps ?? [{ mode, dur: modeDuration(mode) }], [steps, mode]);
   const [idx, setIdx] = useState(0);
   const [phase, setPhase] = useState<Phase>(steps ? "ready" : "setup");
   const [paused, setPaused] = useState(false);
@@ -802,7 +1088,7 @@ export function AimArena({
     const ctx = el?.getContext("2d");
     if (!el || !ctx) return;
     const css = getComputedStyle(document.documentElement);
-    const look = { accent: css.getPropertyValue("--accent").trim() || "#ff48a8", enemy: "#ff4655", xh: xhRects };
+    const look = { accent: css.getPropertyValue("--accent").trim() || "#ff48a8", enemy: "#ff4655", xh: xhRects, skin: skinId === "none" ? null : skinById(skinId) };
     let hudAt = 0;
     const loop = () => {
       const s = sim.current;
@@ -822,7 +1108,7 @@ export function AimArena({
       const elapsed = now - s.start - s.pausedTotal;
       if (!s.paused) {
         step(s, now, dt);
-        if (elapsed >= s.dur) {
+        if (elapsed >= s.dur || s.routeDone) {
           finish(s);
           return;
         }
@@ -939,6 +1225,11 @@ export function AimArena({
       track: { frames: 0, head: 0, body: 0, lag: 0, off: 0 },
       fired: 0,
       killsLive: 0,
+      walked: 0,
+      cp: 0,
+      walking: true,
+      routeDone: false,
+      lastShotAt: -1e9,
     };
     setPaused(false);
     setHud({ left: cur.dur, kills: 0, acc: 100 });
@@ -964,7 +1255,7 @@ export function AimArena({
       id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
       mode: s.mode,
       at: Date.now(),
-      dur: s.dur,
+      dur: s.mode === "preaim" ? Math.round(Math.min(s.dur, performance.now() - s.start - s.pausedTotal)) : s.dur,
       level: s.level,
       sens: s.sens,
       shots: s.shots,
@@ -1064,6 +1355,17 @@ export function AimArena({
                   aria-label={t("Sensibilidade do Valorant")}
                 />
               </label>
+              <label>
+                {t("Skin da arma")}
+                <select value={skinId} onChange={(e) => changeSkin(e.target.value)} aria-label={t("Skin da arma")}>
+                  {WEAPON_SKINS.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {t(k.name)}
+                    </option>
+                  ))}
+                  <option value="none">{t("Sem arma")}</option>
+                </select>
+              </label>
               {crosshairs.length > 0 && (
                 <label>
                   {t("Mira")}
@@ -1104,6 +1406,7 @@ export function AimArena({
             <span>{(hud.left / 1000).toFixed(1)}s</span>
             <span>{cur.mode === "tracking" ? t("{p}% na cabeça", { p: hud.kills }) : t("{n} abates", { n: hud.kills })}</span>
             {cur.mode !== "tracking" && <span>{t("{p}% precisão", { p: hud.acc })}</span>}
+            {cur.mode === "preaim" && <span>{t("{n} inimigos na rota", { n: ROUTE_TOTAL })}</span>}
           </div>
         )}
         {phase === "result" && last && <ResultCard {...last} hasNext={idx + 1 < plan.length} onNext={next} onAgain={() => setPhase("ready")} single={plan.length === 1} />}
@@ -1163,6 +1466,7 @@ function ResultCard({
           ...(st.medianMs != null ? ([[t("Tempo por alvo"), `${Math.round(st.medianMs)} ms`]] as [string, string][]) : []),
           ...(st.react != null && (session.mode === "peek" || session.mode === "hold") ? ([[t("Reação"), `${Math.round(st.react)} ms`]] as [string, string][]) : []),
           ...(st.place != null ? ([[t("Mira longe da cabeça"), `${st.place.toFixed(1)}°`]] as [string, string][]) : []),
+          ...(session.mode === "preaim" ? ([[t("Tempo da rota"), `${(session.dur / 1000).toFixed(2)} s`]] as [string, string][]) : []),
           ...(session.mode === "flick" || session.mode === "micro" || session.mode === "switch"
             ? ([[t("Passou do alvo"), `${Math.round(st.overRate * 100)}%`]] as [string, string][])
             : []),

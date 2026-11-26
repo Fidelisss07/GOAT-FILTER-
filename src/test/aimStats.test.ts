@@ -108,3 +108,19 @@ describe("estatística da arena", () => {
     expect(loadSessions()).toHaveLength(1);
   });
 });
+
+describe("mapa e skins", () => {
+  it("o mapa entra no perfil de posição da mira e dura até 90 s", async () => {
+    const { modeDuration, MODE_SKILL, dailyRoutine: routine } = await import("../lib/aimStats");
+    expect(modeDuration("preaim")).toBe(90_000);
+    expect(MODE_SKILL.preaim).toBe("placement");
+    expect(routine(buildProfile([])).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("12 skins próprias com ids únicos", async () => {
+    const { WEAPON_SKINS, skinById } = await import("../lib/weaponSkins");
+    expect(WEAPON_SKINS).toHaveLength(12);
+    expect(new Set(WEAPON_SKINS.map((s) => s.id)).size).toBe(12);
+    expect(skinById("nao-existe").id).toBe("padrao");
+  });
+});

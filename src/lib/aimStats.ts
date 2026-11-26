@@ -9,7 +9,7 @@ import { fittsId } from "./sensFinder";
 /** Marca frases para tradução (o teste de i18n procura as chamadas de tr). */
 const tr = (s: string) => s;
 
-export type ArenaMode = "flick" | "micro" | "switch" | "tracking" | "peek" | "hold" | "headline";
+export type ArenaMode = "flick" | "micro" | "switch" | "tracking" | "peek" | "hold" | "headline" | "preaim";
 export type Skill = "flick" | "precision" | "tracking" | "reaction" | "placement" | "consistency";
 
 export const SKILLS: Skill[] = ["flick", "precision", "tracking", "reaction", "placement", "consistency"];
@@ -31,6 +31,7 @@ export const MODE_LABEL: Record<ArenaMode, string> = {
   peek: tr("Peek de quina"),
   hold: tr("Segurar ângulo"),
   headline: tr("Linha da cabeça"),
+  preaim: tr("Mapa: Base Goat"),
 };
 
 export const MODE_HELP: Record<ArenaMode, string> = {
@@ -41,6 +42,7 @@ export const MODE_HELP: Record<ArenaMode, string> = {
   peek: tr("O inimigo sai de trás da parede. Deixe a mira na altura da cabeça e atire antes que ele volte."),
   hold: tr("Segure o ângulo sem mexer. O inimigo passa rápido em algum momento: reaja e acerte."),
   headline: tr("Inimigos aparecem em pontos diferentes. Quanto mais perto da cabeça a sua mira já estiver, melhor."),
+  preaim: tr("Entre no bomb A do mapa Base Goat. Você anda sozinho pela rota e para em cada ângulo: deixe a mira onde o inimigo vai estar (pre-aim) e limpe tudo no menor tempo."),
 };
 
 /** Que habilidade cada modo treina mais (para a rotina e as dicas). */
@@ -52,6 +54,7 @@ export const MODE_SKILL: Record<ArenaMode, Skill> = {
   peek: "reaction",
   hold: "reaction",
   headline: "placement",
+  preaim: "placement",
 };
 
 /** Um alvo (ou inimigo) do treino. */
@@ -314,16 +317,16 @@ export function aggregate(sessions: ArenaSession[], now = Date.now(), windowDays
   const rows = recent.map((s, i) => ({ s, st: sessionStats(s), w: Math.pow(0.9, i) }));
   const pick = (f: (r: (typeof rows)[number]) => number | null, modes?: ArenaMode[]) =>
     wavg(rows.filter((r) => !modes || modes.includes(r.s.mode)).map((r) => [f(r), r.w]));
-  const click: ArenaMode[] = ["flick", "micro", "switch", "peek", "hold", "headline"];
+  const click: ArenaMode[] = ["flick", "micro", "switch", "peek", "hold", "headline", "preaim"];
   return {
     accuracy: pick((r) => (r.st.kills ? r.st.accuracy : null), click),
-    headRate: pick((r) => r.st.headRate, ["peek", "hold", "headline", "switch"]),
+    headRate: pick((r) => r.st.headRate, ["peek", "hold", "headline", "switch", "preaim"]),
     perBit: pick((r) => r.st.perBit, ["flick", "switch", "micro"]),
     react: pick((r) => r.st.react, ["peek", "hold"]),
     overRate: pick((r) => (r.st.kills ? r.st.overRate : null), ["flick", "switch", "micro"]),
     corrRate: pick((r) => (r.st.kills ? r.st.corrRate : null), ["flick", "switch", "micro"]),
-    place: pick((r) => r.st.place, ["peek", "headline", "hold"]),
-    pitchErr: pick((r) => r.st.pitchErr, ["peek", "headline", "hold"]),
+    place: pick((r) => r.st.place, ["peek", "headline", "hold", "preaim"]),
+    pitchErr: pick((r) => r.st.pitchErr, ["peek", "headline", "hold", "preaim"]),
     cv: pick((r) => r.st.cv, click),
     fatigue: pick((r) => r.st.fatigue, click),
     onHead: pick((r) => r.s.track?.onHead ?? null, ["tracking"]),
@@ -574,6 +577,11 @@ export function coach(p: AimProfile, prev?: AimProfile | null): Insight[] {
 
 // ------------------------------------------------------------------ rotina
 
+/** Duração padrão de cada treino (o mapa acaba antes, quando a rota é limpa). */
+export function modeDuration(mode: ArenaMode): number {
+  return mode === "preaim" ? 90_000 : mode === "hold" ? 40_000 : 30_000;
+}
+
 export interface RoutineStep {
   mode: ArenaMode;
   /** Duração em ms. */
@@ -585,7 +593,7 @@ const SKILL_DRILL: Record<Skill, ArenaMode[]> = {
   precision: ["micro", "flick"],
   tracking: ["tracking", "tracking"],
   reaction: ["hold", "peek"],
-  placement: ["headline", "peek"],
+  placement: ["preaim", "headline"],
   consistency: ["micro", "switch"],
 };
 
@@ -599,7 +607,7 @@ export function dailyRoutine(p: AimProfile): RoutineStep[] {
   const steps: ArenaMode[] = ["flick", SKILL_DRILL[w1][0], SKILL_DRILL[w2][0], SKILL_DRILL[w1][1], "peek"];
   // Evita o mesmo treino duas vezes seguidas.
   const dedup = steps.filter((m, i) => i === 0 || m !== steps[i - 1]);
-  return dedup.map((mode) => ({ mode, dur: mode === "hold" ? 40_000 : 30_000 }));
+  return dedup.map((mode) => ({ mode, dur: modeDuration(mode) }));
 }
 
 /** Habilidades mais fracas (para mostrar o foco). */
