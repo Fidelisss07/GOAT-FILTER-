@@ -616,7 +616,7 @@ describe("Miras prontas", () => {
     await userEvent.click(screen.getByRole("radio", { name: "Pros" }));
     await userEvent.type(screen.getByLabelText("Buscar mira"), "tenz");
     const grid = screen.getByRole("list", { name: "Miras prontas" });
-    expect(within(grid).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(grid).getAllByRole("listitem")).toHaveLength(3);
     await userEvent.click(within(grid).getByRole("button", { name: "Salvar TenZ em Minhas miras" }));
     await waitFor(() =>
       expect(JSON.parse(localStorage.getItem("goat-filter:settings")!).crosshairs[0]).toMatchObject({ name: "TenZ", code: CROSSHAIR_PRESETS[0].code }),

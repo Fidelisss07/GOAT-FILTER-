@@ -131,7 +131,8 @@ export interface CrosshairPreset {
  * Miras prontas reunidas de sites de miras e de configurações de pros
  * (prosettings.net, thespike.gg, fragster.com, dotesports.com, specs.gg,
  * raidgg.com, velocrosshairs.com, ruinerlabs.com, valorantcrosshair.com,
- * vcrosshair.com), em novembro de 2026. Pros trocam de mira com frequência.
+ * vcrosshair.com, valorant-spind.de, beebom.com, unplayed.gg, eloboss.net,
+ * dexerto.com, pcgamesn.com, bo3.gg e outros), em novembro de 2026. Pros trocam de mira com frequência.
  */
 export const CROSSHAIR_PRESETS: CrosshairPreset[] = [
   { name: "TenZ", info: "Cruz ciano fina", kind: "pro", code: "0;s;1;P;c;5;h;0;0l;4;0o;2;0a;1;0f;0;1b;0" },
@@ -155,6 +156,24 @@ export const CROSSHAIR_PRESETS: CrosshairPreset[] = [
   { name: "Quadrado", info: "Divertida", kind: "divertida", code: "0;P;c;1;o;1;0t;10;0l;1;0o;5;0a;1;0f;0;1l;0;1o;0;1a;1;1m;0;1f;0" },
   { name: "Setas", info: "Divertida", kind: "divertida", code: "0;P;h;0;f;0;m;1;0t;4;0l;1;0a;1;0f;0;1l;5;1o;2;1a;1;1m;0;1f;0" },
   { name: "Flash rosa", info: "Divertida", kind: "divertida", code: "0;P;c;6;t;6;o;0.3;f;0;0t;1;0l;5;0o;5;0a;1;0f;0;1t;10;1l;4;1o;5;1a;0.5;1m;0;1f;0" },
+  { name: "f0rsakeN", info: "Paper Rex · ponto branco", kind: "pro", code: "0;p;0;c;1;s;1;P;h;0;f;0;s;0;0l;3;0v;3;0g;1;0o;0;0a;1;0f;0;1b;0;A;o;1;d;1;0b;0;1b;0;S;d;0" },
+  { name: "something", info: "Paper Rex · cruz pequena branca", kind: "pro", code: "0;s;1;P;h;0;0l;2;0o;1;0a;1;0f;0;1b;0;S;c;0;s;0.713;o;1" },
+  { name: "Zekken", info: "Cruz ciano sem contorno", kind: "pro", code: "0;s;1;P;c;5;h;0;0l;3;0o;2;0a;1;0f;0;1b;0" },
+  { name: "Zekken (ponto)", info: "Ponto verde com contorno", kind: "pro", code: "0;P;c;1;o;1;d;1;0b;0;1b;0" },
+  { name: "ScreaM", info: "Ponto ciano", kind: "pro", code: "0;P;c;5;o;0.286;d;1;f;0;0t;0;0l;0;0o;0;0a;1;0f;0;1b;0" },
+  { name: "TenZ (antiga)", info: "Cruz ciano sem contorno", kind: "pro", code: "0;P;c;5;h;0;0l;4;0o;2;0a;1;1b;0" },
+  { name: "TenZ (2026)", info: "Cruz ciano pequena", kind: "pro", code: "0;s;1;P;c;5;o;0;f;0;0l;2;0v;2;0g;1;0o;1;0a;1;0f;0;1b;0" },
+  { name: "aspas (ponto)", info: "Ponto ciano grande", kind: "pro", code: "0;P;c;5;o;1;d;1;z;3;f;0;0b;0;1b;0" },
+  { name: "Verno", info: "MIBR · ponto branco com contorno", kind: "pro", code: "0;P;o;1;d;1;0b;0;1b;0" },
+  { name: "pANcada", info: "Cruz verde", kind: "pro", code: "0;P;c;1;h;0;s;0;0l;3;0o;2;0a;1;0f;0;1b;0" },
+  { name: "pANcada (branca)", info: "Cruz branca", kind: "pro", code: "0;P;h;0;f;0;0l;3;0o;2;0a;1;0f;0;1b;0" },
+  { name: "Less (fina)", info: "Cruz colada fina", kind: "pro", code: "0;P;o;0;0t;1;0l;2;0o;0;0a;1;0f;0;1b;0" },
+  { name: "Less (ponto)", info: "Cruz branca com ponto", kind: "pro", code: "0;s;1;P;o;1;d;1;f;0;0l;2;0o;0;0a;1;0f;0;1b;0" },
+  { name: "Sacy", info: "Cruz com linhas de fora", kind: "pro", code: "0;P;h;0;f;0;0t;1;0l;4;0o;1;0a;1;0f;0;1t;3;1o;2;1a;1;1m;0;1f;0" },
+  { name: "Clássica 1-4-2-2", info: "Cruz ciano equilibrada", kind: "estilo", code: "0;P;c;5;h;0;0t;1;0l;4;0o;2;0a;1;0f;0;1b;0" },
+  { name: "Sorriso amarelo", info: "Divertida", kind: "divertida", code: "0;P;c;4;t;2;o;1;d;1;z;3;a;0;f;0;0t;10;0l;2;0o;2;0a;1;0f;0;1b;0" },
+  { name: "Coração rosa-claro", info: "Divertida", kind: "divertida", code: "0;P;c;8;u;F97AC0FF;o;0.1;m;1;0t;5;0l;3;0o;1;0a;0.7;0f;0;1t;1;1l;5;1o;0;1a;0.7;1m;0;1f;0" },
+  { name: "Sorriso humilde", info: "Divertida", kind: "divertida", code: "0;P;c;8;u;000000FF;h;0;b;1;0t;4;0l;20;0v;0;0g;1;0o;0;0a;1;0f;0;1t;10;1l;10;1v;0;1g;1;1o;40;1a;1" },
 ];
 
 export const CROSSHAIR_SOURCES = [
@@ -168,4 +187,16 @@ export const CROSSHAIR_SOURCES = [
   "ruinerlabs.com",
   "valorantcrosshair.com",
   "vcrosshair.com",
+  "valorant-spind.de",
+  "beebom.com",
+  "unplayed.gg",
+  "agatasmurf.com",
+  "overgear.com",
+  "valorantcrosshair.cc",
+  "eloboss.net",
+  "dexerto.com",
+  "pcgamesn.com",
+  "bo3.gg",
+  "pichauarena.com.br",
+  "theclutch.com.br",
 ];
