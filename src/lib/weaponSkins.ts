@@ -18,9 +18,12 @@ export interface WeaponSkin {
   pattern: SkinPattern;
   /** Brilho em volta (neon). */
   glow?: string;
+  /** Detalhes desenhados à parte (ex.: cabeça de dragão). */
+  special?: "dragon";
 }
 
 export const WEAPON_SKINS: WeaponSkin[] = [
+  { id: "draconica", name: tr("Dracônica"), body: ["#2a2a30", "#141418"], accent: "#e8b64a", pattern: "carbon", special: "dragon" },
   { id: "padrao", name: tr("Padrão"), body: ["#3b3f48", "#22252c"], accent: "#8a93a3", pattern: "none" },
   { id: "goat-neon", name: tr("Goat Neon"), body: ["#ff48a8", "#7c5cff"], accent: "#ffffff", pattern: "stripes", glow: "#ff48a8" },
   { id: "galaxia", name: tr("Galáxia"), body: ["#1b1446", "#3a1d6e"], accent: "#b69cff", pattern: "stars", glow: "#7c5cff" },
@@ -35,4 +38,4 @@ export const WEAPON_SKINS: WeaponSkin[] = [
   { id: "vazio", name: tr("Vazio"), body: ["#0b0912", "#000000"], accent: "#b18cff", pattern: "stars", glow: "#9b5cff" },
 ];
 
-export const skinById = (id: string) => WEAPON_SKINS.find((s) => s.id === id) ?? WEAPON_SKINS[0];
+export const skinById = (id: string) => WEAPON_SKINS.find((s) => s.id === id) ?? WEAPON_SKINS.find((s) => s.id === "padrao")!;
