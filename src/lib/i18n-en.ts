@@ -800,4 +800,5 @@ export const EN: Record<string, string> = {
   "Tóxico": "Toxic",
   "Oceano": "Ocean",
   "Vazio": "Void",
+  "Dracônica": "Draconic",
 };

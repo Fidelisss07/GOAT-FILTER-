@@ -43,6 +43,8 @@ const pitchOf = (p: V3) => Math.atan2(p[1], Math.hypot(p[0], p[2])) / R;
 const len = (p: V3) => Math.hypot(p[0], p[1], p[2]);
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
+type Mat = "plaster" | "brick" | "wood" | "panel" | "metal";
+
 interface Box {
   x0: number;
   x1: number;
@@ -51,6 +53,10 @@ interface Box {
   z0: number;
   z1: number;
   color: string;
+  /** Textura desenhada por cima (padrão: pela cor). */
+  mat?: Mat;
+  /** Letra pintada na frente (ex.: "A" do bomb). */
+  decal?: string;
 }
 
 interface Cam {
@@ -169,12 +175,15 @@ interface Sim {
 }
 
 /* ---------------------------------------------------------------- cenário por modo */
-const WALL = "#3a3350";
-const WALL2 = "#2e2942";
-const CRATE = "#4a3c2c";
+// Paleta do cenário: fim de tarde, reboco claro, tijolo, madeira e metal.
+const WALL = "#d2b892";
+const WALL2 = "#b07a5c";
+const CRATE = "#b37440";
+const METAL = "#5d8a91";
+const BACK = "#c4a37e";
 
 function wallsFor(mode: ArenaMode): Box[] {
-  const back: Box = { x0: -60, x1: 60, y0: FLOOR, y1: 6, z0: 42, z1: 43, color: "#221d33" };
+  const back: Box = { x0: -60, x1: 60, y0: FLOOR, y1: 6, z0: 42, z1: 43, color: BACK, mat: "panel" };
   const box = (x0: number, x1: number, z0: number, depth: number, h: number, color = WALL): Box => ({ x0, x1, y0: FLOOR, y1: FLOOR + h, z0, z1: z0 + depth, color });
   if (mode === "peek")
     return [back, box(-9, -4, 11, 0.6, 3.2), box(3.5, 8.5, 15, 0.6, 3.2, WALL2), box(-1.2, 1.2, 22, 2, 1.1, CRATE)];
@@ -189,14 +198,14 @@ function wallsFor(mode: ArenaMode): Box[] {
 const box = (x0: number, x1: number, z0: number, z1: number, h: number, color = WALL): Box => ({ x0, x1, y0: FLOOR, y1: FLOOR + h, z0, z1, color });
 /** Corredor de entrada, janela à direita e o bomb A com caixas, pilar e plataforma. */
 const ROUTE_WALLS: Box[] = [
-  box(-60, 60, 48, 49, 7, "#221d33"), // fundo do bomb
+  { ...box(-60, 60, 48, 49, 7, BACK), mat: "panel", decal: "A" }, // fundo do bomb
   box(-3.1, -2.4, -2, 19, 4.2), // parede esquerda do corredor
   box(2.4, 3.1, -2, 14, 4.2), // parede direita (acaba na janela)
   box(3.1, 12, 18.6, 19.3, 4.2, WALL2), // fundo da janela
-  box(-30, -3.1, 18.6, 19.3, 4.2, WALL2), // parede da entrada do bomb
+  { ...box(-30, -3.1, 18.6, 19.3, 4.2, WALL2), decal: "A" }, // parede da entrada do bomb
   box(-8, -5, 26, 29, 1.2, CRATE), // caixa baixa
   box(4, 7, 30, 33, 2.4, CRATE), // caixa alta
-  box(-1, 1, 34, 36, 4.2, WALL2), // pilar
+  box(-1, 1, 34, 36, 4.2, METAL), // pilar
   box(-16, -9, 38, 44, 2, WALL2), // plataforma (heaven)
   box(10, 13, 22, 25, 1.2, CRATE), // caixa da direita
 ];
@@ -422,12 +431,86 @@ function line(ctx: CanvasRenderingContext2D, c: Cam, a: V3, b: V3) {
   ctx.lineTo(s2.x, s2.y);
 }
 
+const matOf = (b: Box): Mat => b.mat ?? (b.color === CRATE ? "wood" : b.color === WALL2 ? "brick" : b.color === METAL ? "metal" : b.color === BACK ? "panel" : "plaster");
+
+/** Mistura duas cores (#rrggbb ou rgb()) — usada para a névoa de distância. */
+function mix(a: string, b: string, k: number): string {
+  const rgb = (c: string) => (c.startsWith("#") ? [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)] : c.match(/\d+/g)!.slice(0, 3).map(Number));
+  const x = rgb(a), y = rgb(b);
+  return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * k)).join(",")})`;
+}
+const FOG = "#f0c9a0";
+
+/** Linhas de textura numa face: ponto(u, v) = P + U·u + V·v (U horizontal, V vertical). */
+function faceTexture(ctx: CanvasRenderingContext2D, c: Cam, P: V3, U: V3, V: V3, W: number, H: number, mat: Mat, top: boolean) {
+  const at = (u: number, v: number): V3 => [P[0] + U[0] * u + V[0] * v, P[1] + U[1] * u + V[1] * v, P[2] + U[2] * u + V[2] * v];
+  ctx.beginPath();
+  if (mat === "brick" && !top) {
+    const rh = 0.42, bw = 0.9;
+    for (let v = rh, row = 0; v < H; v += rh, row++) line(ctx, c, at(0, v), at(W, v));
+    for (let v = 0, row = 0; v < H; v += rh, row++) for (let u = (row % 2) * bw * 0.5 + bw; u < W; u += bw) line(ctx, c, at(u, v), at(u, Math.min(H, v + rh)));
+  } else if (mat === "plaster" && !top) {
+    for (const v of [1.1, 2.6]) if (v < H) line(ctx, c, at(0, v), at(W, v));
+    for (let u = 2; u < W; u += 2) line(ctx, c, at(u, 0), at(u, H));
+  } else if (mat === "panel" && !top) {
+    for (const v of [1.4, 3.6]) if (v < H) line(ctx, c, at(0, v), at(W, v));
+    for (let u = 4; u < W; u += 4) line(ctx, c, at(u, 0), at(u, H));
+  } else if (mat === "wood") {
+    for (let v = 0.3; v < H; v += 0.3) line(ctx, c, at(0.08, v), at(W - 0.08, v));
+    if (!top) {
+      line(ctx, c, at(0.12, 0.12), at(W - 0.12, H - 0.12));
+      line(ctx, c, at(0.12, H - 0.12), at(W - 0.12, 0.12));
+    }
+  } else if (mat === "metal" && !top) {
+    for (let u = 0.35; u < W; u += 0.35) line(ctx, c, at(u, 0), at(u, H));
+  }
+  ctx.strokeStyle = mat === "wood" ? "rgba(60,30,10,.35)" : "rgba(60,40,30,.22)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+/** Letra pintada numa face (traços grossos), centrada em (cu, cv), altura S. */
+function faceDecal(ctx: CanvasRenderingContext2D, c: Cam, P: V3, U: V3, V: V3, cu: number, cv: number, S: number, letter: string) {
+  const at = (u: number, v: number): V3 => [P[0] + U[0] * u + V[0] * v, P[1] + U[1] * u + V[1] * v, P[2] + U[2] * u + V[2] * v];
+  const strokes: [number, number, number, number][] =
+    letter === "A"
+      ? [[-0.42, -0.5, 0, 0.5], [0, 0.5, 0.42, -0.5], [-0.22, -0.08, 0.22, -0.08]]
+      : [[-0.3, -0.5, -0.3, 0.5], [-0.3, 0.5, 0.25, 0.25], [0.25, 0.25, -0.3, 0], [-0.3, 0, 0.3, -0.25], [0.3, -0.25, -0.3, -0.5]];
+  const t = 0.09;
+  for (const [a, b, d, e] of strokes) {
+    const du = d - a, dv = e - b, L = Math.hypot(du, dv) || 1;
+    const nu = (-dv / L) * t, nv = (du / L) * t;
+    poly(ctx, c, [at(cu + (a + nu) * S, cv + (b + nv) * S), at(cu + (d + nu) * S, cv + (e + nv) * S), at(cu + (d - nu) * S, cv + (e - nv) * S), at(cu + (a - nu) * S, cv + (b - nv) * S)], "rgba(255,206,74,.92)");
+  }
+}
+
 function drawBox(ctx: CanvasRenderingContext2D, c: Cam, b: Box) {
-  // Topo e frente (o jogador sempre olha de frente para o cenário).
-  poly(ctx, c, [[b.x0, b.y1, b.z0], [b.x1, b.y1, b.z0], [b.x1, b.y1, b.z1], [b.x0, b.y1, b.z1]], shade(b.color, 1.25));
-  if (b.x0 > 0) poly(ctx, c, [[b.x0, b.y0, b.z0], [b.x0, b.y1, b.z0], [b.x0, b.y1, b.z1], [b.x0, b.y0, b.z1]], shade(b.color, 0.8));
-  if (b.x1 < 0) poly(ctx, c, [[b.x1, b.y0, b.z0], [b.x1, b.y1, b.z0], [b.x1, b.y1, b.z1], [b.x1, b.y0, b.z1]], shade(b.color, 0.8));
-  poly(ctx, c, [[b.x0, b.y0, b.z0], [b.x1, b.y0, b.z0], [b.x1, b.y1, b.z0], [b.x0, b.y1, b.z0]], b.color, "rgba(255,255,255,.06)");
+  const cl = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const dist = Math.hypot(cl(0, b.x0, b.x1), cl(0, b.y0, b.y1), cl(0, b.z0, b.z1));
+  const fog = Math.max(0, Math.min(0.5, (dist - 8) / 70));
+  const col = (k: number) => mix(shade(b.color, k), FOG, fog);
+  const mat = matOf(b);
+  const W = b.x1 - b.x0, H = b.y1 - b.y0, D = b.z1 - b.z0;
+  // Luz do sol vindo da esquerda e de cima.
+  poly(ctx, c, [[b.x0, b.y1, b.z0], [b.x1, b.y1, b.z0], [b.x1, b.y1, b.z1], [b.x0, b.y1, b.z1]], col(1.16));
+  faceTexture(ctx, c, [b.x0, b.y1, b.z0], [1, 0, 0], [0, 0, 1], W, D, mat, true);
+  const side = (x: number, k: number, dir: 1 | -1) => {
+    poly(ctx, c, [[x, b.y0, b.z0], [x, b.y1, b.z0], [x, b.y1, b.z1], [x, b.y0, b.z1]], col(k));
+    faceTexture(ctx, c, dir > 0 ? [x, b.y0, b.z0] : [x, b.y0, b.z1], [0, 0, dir], [0, 1, 0], D, H, mat, false);
+    poly(ctx, c, [[x, b.y0, b.z0], [x, b.y0 + 0.28, b.z0], [x, b.y0 + 0.28, b.z1], [x, b.y0, b.z1]], "rgba(40,25,20,.18)");
+  };
+  if (b.x0 > 0) side(b.x0, 1.04, 1);
+  if (b.x1 < 0) side(b.x1, 0.8, -1);
+  if (b.z0 > 0) {
+    poly(ctx, c, [[b.x0, b.y0, b.z0], [b.x1, b.y0, b.z0], [b.x1, b.y1, b.z0], [b.x0, b.y1, b.z0]], col(0.95));
+    faceTexture(ctx, c, [b.x0, b.y0, b.z0], [1, 0, 0], [0, 1, 0], W, H, mat, false);
+    poly(ctx, c, [[b.x0, b.y0, b.z0], [b.x1, b.y0, b.z0], [b.x1, b.y0 + 0.28, b.z0], [b.x0, b.y0 + 0.28, b.z0]], "rgba(40,25,20,.18)");
+    if (b.decal) {
+      // No fundo do bomb a letra fica em frente ao pilar; na parede da entrada, perto da quina.
+      const cu = W > 50 ? -b.x0 - 6 : W - 2.2;
+      faceDecal(ctx, c, [b.x0, b.y0, b.z0 - 0.01], [1, 0, 0], [0, 1, 0], cu, H * 0.55, Math.min(H * 0.55, 3), b.decal);
+    }
+  }
 }
 
 function shade(hex: string, k: number) {
@@ -503,83 +586,421 @@ function drawBall(ctx: CanvasRenderingContext2D, c: Cam, t: Tgt, accent: string)
   ctx.fill();
 }
 
-/** Arma em primeira pessoa com a skin escolhida, recuo e clarão do tiro. */
+/** Céu de fim de tarde, sol com brilho e montanhas ao longe. */
+function drawSky(ctx: CanvasRenderingContext2D, c: Cam, w: number, h: number, horizon: number) {
+  const top = horizon - c.F * 1.2;
+  const g = ctx.createLinearGradient(0, top, 0, horizon);
+  g.addColorStop(0, "#2d2a6e");
+  g.addColorStop(0.45, "#8f4f9a");
+  g.addColorStop(0.78, "#f08a7a");
+  g.addColorStop(1, "#ffcf8f");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, Math.max(0, Math.min(h, horizon)) + 1);
+  // Sol.
+  const sq = toCam(c, dirOf(-32, 7).map((v) => v * 500) as V3);
+  if (sq[2] > NEAR) {
+    const p = screen(c, sq);
+    const r = c.F * 0.05;
+    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 8);
+    glow.addColorStop(0, "rgba(255,240,200,.95)");
+    glow.addColorStop(0.12, "rgba(255,214,150,.75)");
+    glow.addColorStop(1, "rgba(255,170,120,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(p.x - r * 8, p.y - r * 8, r * 16, r * 16);
+  }
+  // Montanhas (duas camadas).
+  for (const [dist, col, amp, seed] of [[420, "#7a4f86", 9, 1.3], [300, "#5a3c6e", 6, 2.1]] as [number, string, number, number][]) {
+    ctx.beginPath();
+    let started = false;
+    for (let yw = -100; yw <= 100; yw += 4) {
+      const hgt = amp * (0.55 + 0.45 * Math.sin(yw * 0.09 * seed) * Math.cos(yw * 0.031 + seed));
+      const q = toCam(c, dirOf(yw, Math.atan2(hgt, dist) / R).map((v) => v * dist) as V3);
+      if (q[2] < NEAR) continue;
+      const p = screen(c, q);
+      if (!started) {
+        ctx.moveTo(p.x, horizon + 2);
+        started = true;
+      }
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.lineTo(w + 50, horizon + 2);
+    ctx.closePath();
+    ctx.fillStyle = col;
+    ctx.fill();
+  }
+}
+
+/** Chão de placas de pedra (com névoa perto do horizonte). */
+function drawFloor(ctx: CanvasRenderingContext2D, c: Cam, w: number, h: number, horizon: number, walked: number, plantZone: boolean) {
+  const y0 = Math.max(0, Math.min(h, horizon));
+  const g = ctx.createLinearGradient(0, y0, 0, h);
+  g.addColorStop(0, "#d9b58f");
+  g.addColorStop(0.25, "#a88e74");
+  g.addColorStop(1, "#6f6152");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, y0, w, h - y0);
+  const T = 4;
+  const off = walked % T;
+  for (let zi = 0; zi < 13; zi++) {
+    const z0 = zi * T - off - T;
+    for (let xi = -6; xi < 6; xi++) {
+      const x0 = xi * T;
+      if ((xi + zi + Math.floor(walked / T)) % 2 === 0) continue;
+      poly(ctx, c, [[x0, FLOOR, z0], [x0 + T, FLOOR, z0], [x0 + T, FLOOR, z0 + T], [x0, FLOOR, z0 + T]], "rgba(70,50,35,.10)");
+    }
+  }
+  ctx.beginPath();
+  for (let z = -off; z <= 48; z += T) line(ctx, c, [-24, FLOOR, z], [24, FLOOR, z]);
+  for (let x = -24; x <= 24; x += T) line(ctx, c, [x, FLOOR, 0.2], [x, FLOOR, 48]);
+  ctx.strokeStyle = "rgba(60,40,30,.22)";
+  ctx.stroke();
+  if (plantZone) {
+    // Área de plantar do bomb (tinta laranja no chão).
+    const zz = 29 - walked;
+    ctx.beginPath();
+    line(ctx, c, [-6, FLOOR + 0.01, zz], [6, FLOOR + 0.01, zz]);
+    line(ctx, c, [6, FLOOR + 0.01, zz], [6, FLOOR + 0.01, zz + 9]);
+    line(ctx, c, [6, FLOOR + 0.01, zz + 9], [-6, FLOOR + 0.01, zz + 9]);
+    line(ctx, c, [-6, FLOOR + 0.01, zz + 9], [-6, FLOOR + 0.01, zz]);
+    ctx.strokeStyle = "rgba(255,150,40,.85)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+}
+
+/** Arma em primeira pessoa com a skin escolhida, mãos com luva, recuo e clarão do tiro. */
 function drawGun(ctx: CanvasRenderingContext2D, w: number, h: number, skin: WeaponSkin, since: number) {
   const u = h / 100;
   const kick = since < 140 ? 1 - since / 140 : 0;
   ctx.save();
-  ctx.translate(w / 2 + 96 * u + kick * 1.5 * u, h + 1 * u + kick * 3 * u);
-  ctx.rotate(0.28 + kick * 0.05);
-  ctx.scale(u * 1.25, u * 1.25);
-  const rr = (x: number, y: number, wd: number, ht: number, r: number) => {
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + wd, y, x + wd, y + ht, r);
-    ctx.arcTo(x + wd, y + ht, x, y + ht, r);
-    ctx.arcTo(x, y + ht, x, y, r);
-    ctx.arcTo(x, y, x + wd, y, r);
-    ctx.closePath();
-  };
-  // Silhueta (cano para a esquerda).
-  ctx.beginPath();
-  rr(0, -5, 18, 8, 2.5); // coronha
-  rr(-30, -7, 31, 9, 1.5); // corpo
-  rr(-53, -5.5, 24, 6, 1.2); // guarda-mão
-  rr(-67, -3.6, 15, 2.6, 0.8); // cano
-  ctx.moveTo(-20, 2);
-  ctx.lineTo(-12, 2);
-  ctx.lineTo(-10, 13);
-  ctx.lineTo(-17, 14);
-  ctx.closePath(); // pente
-  ctx.moveTo(-6, 2);
-  ctx.lineTo(0, 2);
-  ctx.lineTo(3, 12);
-  ctx.lineTo(-2, 12.5);
-  ctx.closePath(); // empunhadura
-  const g = ctx.createLinearGradient(18, 0, -67, 0);
+  ctx.translate(w / 2 + 85 * u + kick * 1.8 * u, h + 4 * u + kick * 3.5 * u);
+  ctx.rotate(0.36 + kick * 0.05);
+  ctx.scale(u * 1.2, u * 1.2);
+  ctx.lineJoin = "round";
+
+  drawLeftArm(ctx);
+
+  // Silhueta da arma (desenho do Goat Filter), cano para a esquerda.
+  const body = new Path2D();
+  body.moveTo(0, -5); body.lineTo(16, -6.2); body.lineTo(19.5, -4); body.lineTo(19.5, 4.5); body.lineTo(14, 6.5); body.lineTo(1, 3); body.closePath(); // coronha
+  body.moveTo(-31, -6.4); body.lineTo(-6, -7.6); body.lineTo(1.5, -6); body.lineTo(1.5, 3); body.lineTo(-31, 2.6); body.closePath(); // corpo
+  body.moveTo(-55, -5); body.lineTo(-31, -6); body.lineTo(-31, 1.8); body.lineTo(-55, 1.2); body.closePath(); // guarda-mão
+  body.rect(-69, -3.5, 14.5, 2.5); // cano
+  body.rect(-72.5, -4.3, 4, 4.1); // quebra-chama
+  body.moveTo(-53, -5); body.lineTo(-52, -10); body.lineTo(-48.5, -10); body.lineTo(-47.5, -5.2); body.closePath(); // massa de mira
+  body.moveTo(-21, 2.5); body.lineTo(-13, 2.5); body.quadraticCurveTo(-10.5, 8, -9.5, 14.5); body.lineTo(-16.5, 15.5); body.quadraticCurveTo(-17.5, 8, -21, 2.5); body.closePath(); // pente
+  body.moveTo(-6, 2.6); body.lineTo(0.5, 2.6); body.lineTo(4, 12); body.lineTo(-1.5, 13); body.closePath(); // empunhadura
+  const g = ctx.createLinearGradient(20, 0, -72, 0);
   g.addColorStop(0, skin.body[0]);
   g.addColorStop(1, skin.body[1]);
   if (skin.glow) {
     ctx.shadowColor = skin.glow;
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = 12;
   }
   ctx.fillStyle = g;
-  ctx.fill();
+  ctx.fill(body);
   ctx.shadowBlur = 0;
-  ctx.lineWidth = 0.5;
-  ctx.strokeStyle = "rgba(0,0,0,.6)";
-  ctx.stroke();
-  // Padrão por cima, só dentro da arma.
   ctx.save();
-  ctx.clip();
+  ctx.clip(body);
   drawPattern(ctx, skin);
-  // Luz de cima.
-  const sh = ctx.createLinearGradient(0, -9, 0, 14);
-  sh.addColorStop(0, "rgba(255,255,255,.22)");
+  if (skin.special === "dragon") dragonPanels(ctx);
+  const sh = ctx.createLinearGradient(0, -10, 0, 15);
+  sh.addColorStop(0, "rgba(255,255,255,.2)");
   sh.addColorStop(0.35, "rgba(255,255,255,0)");
-  sh.addColorStop(1, "rgba(0,0,0,.35)");
+  sh.addColorStop(1, "rgba(0,0,0,.38)");
   ctx.fillStyle = sh;
-  ctx.fillRect(-70, -10, 92, 26);
+  ctx.fillRect(-74, -11, 96, 28);
   ctx.restore();
-  // Detalhes: faixa, trilho e mira de cima.
+  ctx.lineWidth = 0.45;
+  ctx.strokeStyle = "rgba(0,0,0,.65)";
+  ctx.stroke(body);
+  // Guarda-mato e gatilho.
+  ctx.beginPath();
+  ctx.moveTo(-12, 2.8);
+  ctx.quadraticCurveTo(-10, 7.5, -5.5, 6.8);
+  ctx.strokeStyle = skin.special === "dragon" ? "#e8b64a" : "rgba(20,20,24,.9)";
+  ctx.lineWidth = 0.9;
+  ctx.stroke();
+  // Detalhes comuns: trilho e faixa.
   ctx.fillStyle = skin.accent;
-  ctx.fillRect(-29, -2.2, 27, 0.9);
-  ctx.fillRect(-27, -9, 20, 2);
-  ctx.fillRect(-50, -7.4, 3, 2);
-  ctx.globalAlpha = 0.85;
-  ctx.fillRect(-66, -3.1, 2, 1.6);
-  ctx.globalAlpha = 1;
+  ctx.fillRect(-27, -9.6, 19, 2);
+  if (skin.special !== "dragon") ctx.fillRect(-29, -2.2, 27, 0.9);
+  if (skin.special === "dragon") dragonHead(ctx);
+
+  drawRightHand(ctx);
+  drawLeftFingers(ctx);
+
   // Clarão do tiro.
   if (since < 55) {
-    const f = ctx.createRadialGradient(-69, -2.3, 0, -69, -2.3, 9);
+    const f = ctx.createRadialGradient(-74, -2.3, 0, -74, -2.3, 10);
     f.addColorStop(0, "rgba(255,250,220,.95)");
     f.addColorStop(0.4, "rgba(255,190,80,.6)");
     f.addColorStop(1, "rgba(255,120,0,0)");
     ctx.fillStyle = f;
     ctx.beginPath();
-    ctx.arc(-69, -2.3, 9, 0, Math.PI * 2);
+    ctx.arc(-74, -2.3, 10, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
+}
+
+/* ---------------------------------------------------------------- mãos (luva tática sem dedos) */
+const GLOVE = "#26272d";
+const GLOVE_HI = "#3c3e47";
+const SKIN = "#d39b77";
+const SLEEVE = "#3a2f5c";
+
+function capsule(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, r: number, fill: string) {
+  ctx.beginPath();
+  ctx.lineCap = "round";
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = fill;
+  ctx.lineWidth = r * 2;
+  ctx.stroke();
+}
+
+/** Dedo de luva com a ponta de fora (pele). */
+function finger(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, r: number) {
+  capsule(ctx, x1, y1, x2, y2, r * 1.05, "rgba(0,0,0,.45)");
+  capsule(ctx, x1, y1, x2, y2, r, GLOVE);
+  const k = 0.72;
+  capsule(ctx, x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, x2, y2, r * 0.92, SKIN);
+}
+
+function drawLeftArm(ctx: CanvasRenderingContext2D) {
+  // Antebraço esquerdo saindo por baixo, até a mão no guarda-mão.
+  const arm = ctx.createLinearGradient(-60, 50, -42, 4);
+  arm.addColorStop(0, "#241d3b");
+  arm.addColorStop(1, SLEEVE);
+  ctx.beginPath();
+  ctx.moveTo(-49, 5);
+  ctx.lineTo(-36, 6);
+  ctx.lineTo(-40, 60);
+  ctx.lineTo(-70, 60);
+  ctx.closePath();
+  ctx.fillStyle = arm;
+  ctx.fill();
+  // Punho da luva.
+  ctx.beginPath();
+  ctx.moveTo(-50, 4);
+  ctx.lineTo(-36, 5);
+  ctx.lineTo(-37, 11);
+  ctx.lineTo(-52, 10.5);
+  ctx.closePath();
+  ctx.fillStyle = GLOVE;
+  ctx.fill();
+  // Palma por baixo do guarda-mão.
+  ctx.beginPath();
+  ctx.ellipse(-44, 2.6, 7.5, 3.6, -0.05, 0, Math.PI * 2);
+  ctx.fillStyle = GLOVE;
+  ctx.fill();
+}
+
+function drawLeftFingers(ctx: CanvasRenderingContext2D) {
+  // Dedos envolvendo o lado de cá do guarda-mão; polegar aparece por cima.
+  for (const [i, x] of [-48.5, -46, -43.5, -41].entries()) finger(ctx, x + 0.6, 3, x - 0.3, -1.4 + (i === 0 ? 0.5 : 0), 0.95);
+  ctx.fillStyle = GLOVE_HI;
+  ctx.fillRect(-48.5, 1.4, 7.5, 0.9);
+  finger(ctx, -40, -5.6, -48, -6.6, 1.0);
+}
+
+function drawRightHand(ctx: CanvasRenderingContext2D) {
+  // Antebraço direito saindo pela direita de baixo.
+  ctx.beginPath();
+  ctx.moveTo(3, 6);
+  ctx.lineTo(9, 2);
+  ctx.lineTo(48, 30);
+  ctx.lineTo(30, 48);
+  ctx.closePath();
+  const arm = ctx.createLinearGradient(5, 4, 40, 40);
+  arm.addColorStop(0, SLEEVE);
+  arm.addColorStop(1, "#1e1832");
+  ctx.fillStyle = arm;
+  ctx.fill();
+  // Faixa do punho.
+  ctx.beginPath();
+  ctx.moveTo(4.5, 5);
+  ctx.lineTo(10, 1.2);
+  ctx.lineTo(13.5, 4);
+  ctx.lineTo(8, 8.6);
+  ctx.closePath();
+  ctx.fillStyle = "#ff48a8";
+  ctx.globalAlpha = 0.85;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  // Mão fechada na empunhadura.
+  ctx.beginPath();
+  ctx.moveTo(-8, 1.6);
+  ctx.quadraticCurveTo(-2, -0.6, 5, 1.4);
+  ctx.quadraticCurveTo(9.5, 6, 6.5, 13.5);
+  ctx.quadraticCurveTo(1, 16.5, -5, 14.5);
+  ctx.quadraticCurveTo(-9.5, 9, -8, 1.6);
+  ctx.closePath();
+  const gl = ctx.createLinearGradient(0, 0, 0, 16);
+  gl.addColorStop(0, GLOVE_HI);
+  gl.addColorStop(1, GLOVE);
+  ctx.fillStyle = gl;
+  ctx.fill();
+  ctx.lineWidth = 0.4;
+  ctx.strokeStyle = "rgba(0,0,0,.6)";
+  ctx.stroke();
+  // Nós dos dedos e placa de proteção.
+  for (let i = 0; i < 3; i++) capsule(ctx, -6.5, 6 + i * 2.6, -1.5, 6.3 + i * 2.6, 0.95, i % 2 ? "#2d2f36" : "#33353d");
+  ctx.fillStyle = "#575a66";
+  ctx.beginPath();
+  ctx.moveTo(-1, 3);
+  ctx.lineTo(4, 3.5);
+  ctx.lineTo(3.5, 7);
+  ctx.lineTo(-1.5, 6.5);
+  ctx.closePath();
+  ctx.fill();
+  // Indicador no gatilho.
+  finger(ctx, -6.5, 3.6, -10.8, 4.9, 0.95);
+}
+
+/* ---------------------------------------------------------------- skin Dracônica */
+const CRIMSON = ["#e0353f", "#8f1420"] as const;
+const GOLD = "#e8b64a";
+
+function glowLine(ctx: CanvasRenderingContext2D, pts: [number, number][], color: string, width = 0.55) {
+  ctx.save();
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(255,255,255,.75)";
+  ctx.lineWidth = width * 0.35;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Painéis carmesim, escamas, frisos dourados e linhas neon (dentro da arma). */
+function dragonPanels(ctx: CanvasRenderingContext2D) {
+  const red = ctx.createLinearGradient(0, -8, 0, 3);
+  red.addColorStop(0, CRIMSON[0]);
+  red.addColorStop(1, CRIMSON[1]);
+  ctx.fillStyle = red;
+  ctx.beginPath();
+  ctx.moveTo(-30, -6.4); ctx.lineTo(-7, -7.6); ctx.lineTo(-4, -4); ctx.lineTo(-30, -3.2); ctx.closePath(); // painel do corpo
+  ctx.moveTo(2, -5.2); ctx.lineTo(16, -6.2); ctx.lineTo(19.5, -4); ctx.lineTo(19.5, 0.5); ctx.lineTo(3, -0.5); ctx.closePath(); // coronha
+  ctx.moveTo(-54, 1.2); ctx.lineTo(-31, 1.8); ctx.lineTo(-31, -0.4); ctx.lineTo(-54, -0.8); ctx.closePath(); // base do guarda-mão
+  ctx.fill();
+  // Escamas no guarda-mão.
+  for (let i = 0; i < 9; i++) {
+    const x = -54 + i * 2.6;
+    ctx.beginPath();
+    ctx.moveTo(x, -5);
+    ctx.quadraticCurveTo(x + 1.6, -6.2, x + 3, -5.2);
+    ctx.quadraticCurveTo(x + 2.4, -3.2, x + 1.2, -2.6);
+    ctx.quadraticCurveTo(x + 0.2, -3.4, x, -5);
+    ctx.fillStyle = i % 2 ? CRIMSON[0] : "#b51f2b";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(60,0,8,.6)";
+    ctx.lineWidth = 0.25;
+    ctx.stroke();
+  }
+  // Frisos dourados.
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(-31.8, -7, 1.5, 10);
+  ctx.fillRect(0.6, -6.2, 1.3, 9.4);
+  ctx.fillRect(-72.5, -4.3, 1.6, 4.1);
+  ctx.fillRect(-21, 6.5, 7.8, 0.9);
+  // Linhas neon roxas e ciano.
+  glowLine(ctx, [[-29, -1.4], [-17, -1.9], [-12, -0.4], [-4, -0.9]], "#b46bff");
+  glowLine(ctx, [[3, 1.6], [12, 1.1], [17, 3.4]], "#b46bff");
+  glowLine(ctx, [[-53, 0.2], [-42, 0.5], [-33, 0.1]], "#3ff2ff");
+  glowLine(ctx, [[-18.5, 4.5], [-15.8, 9], [-14.6, 13.6]], "#3ff2ff");
+  glowLine(ctx, [[-66, -2.3], [-61, -2.3]], "#3ff2ff", 0.4);
+}
+
+/** Cabeça de dragão estilizada sobre a frente do corpo, com chifres dourados e olho ciano. */
+function dragonHead(ctx: CanvasRenderingContext2D) {
+  // Pescoço em escamas indo para trás.
+  for (let i = 0; i < 6; i++) {
+    const x = -22 + i * 2.6;
+    ctx.beginPath();
+    ctx.moveTo(x, -7);
+    ctx.quadraticCurveTo(x + 1.3, -9.6 + i * 0.25, x + 2.8, -7.2);
+    ctx.closePath();
+    ctx.fillStyle = i % 2 ? "#c42634" : CRIMSON[0];
+    ctx.fill();
+  }
+  // Chifres.
+  const horn = (x: number, y: number, tx: number, ty: number, wd: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x - wd, y);
+    ctx.quadraticCurveTo((x + tx) / 2 - 1, ty + 2.5, tx, ty);
+    ctx.quadraticCurveTo((x + tx) / 2 + 1, ty + 4, x + wd, y);
+    ctx.closePath();
+    const gg = ctx.createLinearGradient(x, y, tx, ty);
+    gg.addColorStop(0, "#9c6a14");
+    gg.addColorStop(1, "#ffe08a");
+    ctx.fillStyle = gg;
+    ctx.fill();
+  };
+  horn(-25.5, -12.6, -14, -19.5, 1.1);
+  horn(-23, -11.8, -12.5, -15.2, 0.8);
+  // Cabeça.
+  ctx.beginPath();
+  ctx.moveTo(-35, -8.6);
+  ctx.lineTo(-32, -10.6);
+  ctx.lineTo(-28.5, -11.4);
+  ctx.lineTo(-25.5, -13.2);
+  ctx.lineTo(-21.5, -11.8);
+  ctx.lineTo(-19.5, -7.4);
+  ctx.lineTo(-26, -6.6);
+  ctx.lineTo(-30, -7.2);
+  ctx.lineTo(-34.5, -7);
+  ctx.closePath();
+  const hg = ctx.createLinearGradient(-30, -13, -26, -6);
+  hg.addColorStop(0, "#ff5560");
+  hg.addColorStop(1, "#8f1420");
+  ctx.shadowColor = "rgba(0,0,0,.5)";
+  ctx.shadowBlur = 3;
+  ctx.fillStyle = hg;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(70,0,10,.8)";
+  ctx.lineWidth = 0.3;
+  ctx.stroke();
+  // Sobrancelha dourada e dentes.
+  ctx.beginPath();
+  ctx.moveTo(-31.5, -10.4);
+  ctx.lineTo(-27.5, -11.2);
+  ctx.lineTo(-25.8, -12.6);
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+  ctx.fillStyle = "#fff1c2";
+  for (let i = 0; i < 4; i++) {
+    const x = -34 + i * 1.1;
+    ctx.beginPath();
+    ctx.moveTo(x, -7.2);
+    ctx.lineTo(x + 0.45, -6.2);
+    ctx.lineTo(x + 0.9, -7.15);
+    ctx.fill();
+  }
+  // Olho ciano brilhando.
+  ctx.save();
+  ctx.shadowColor = "#3ff2ff";
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = "#3ff2ff";
+  ctx.beginPath();
+  ctx.ellipse(-28.6, -10.1, 0.9, 0.45, -0.25, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  // Narina.
+  ctx.fillStyle = "rgba(40,0,6,.8)";
+  ctx.beginPath();
+  ctx.arc(-33.6, -8.8, 0.3, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawPattern(ctx: CanvasRenderingContext2D, skin: WeaponSkin) {
@@ -666,20 +1087,8 @@ function drawPattern(ctx: CanvasRenderingContext2D, skin: WeaponSkin) {
 function drawScene(ctx: CanvasRenderingContext2D, w: number, h: number, s: Sim, look: { accent: string; enemy: string; xh: Rect[]; skin: WeaponSkin | null }, now: number) {
   const c = camera(s.yaw, s.pitch, w, h);
   const horizon = h / 2 + Math.tan(s.pitch * R) * c.F;
-  const sky = ctx.createLinearGradient(0, 0, 0, Math.max(1, horizon));
-  sky.addColorStop(0, "#151127");
-  sky.addColorStop(1, "#3a2f5a");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "#1d1a26";
-  ctx.fillRect(0, Math.max(0, Math.min(h, horizon)), w, h);
-  // Grade do chão (dá noção de distância).
-  ctx.beginPath();
-  ctx.strokeStyle = "rgba(255,255,255,.05)";
-  const off = s.walked % 2;
-  for (let z = 2 - off; z <= 48; z += 2) line(ctx, c, [-40, FLOOR, z], [40, FLOOR, z]);
-  for (let x = -40; x <= 40; x += 2) line(ctx, c, [x, FLOOR, 1], [x, FLOOR, 48]);
-  ctx.stroke();
+  drawSky(ctx, c, w, h, horizon);
+  drawFloor(ctx, c, w, h, horizon, s.walked, s.mode === "preaim");
   // Pintor: do mais longe para o mais perto.
   // Pintor: paredes do mais longe para o mais perto; cada alvo entra logo
   // antes da primeira parede que está na frente dele.
@@ -1044,9 +1453,9 @@ export function AimArena({
   });
   const [skinId, setSkinId] = useState(() => {
     try {
-      return localStorage.getItem(SKIN_KEY) || "goat-neon";
+      return localStorage.getItem(SKIN_KEY) || "draconica";
     } catch {
-      return "goat-neon";
+      return "draconica";
     }
   });
   const changeSkin = (id: string) => {

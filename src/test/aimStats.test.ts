@@ -117,10 +117,11 @@ describe("mapa e skins", () => {
     expect(routine(buildProfile([])).length).toBeGreaterThanOrEqual(3);
   });
 
-  it("12 skins próprias com ids únicos", async () => {
+  it("13 skins próprias com ids únicos", async () => {
     const { WEAPON_SKINS, skinById } = await import("../lib/weaponSkins");
-    expect(WEAPON_SKINS).toHaveLength(12);
-    expect(new Set(WEAPON_SKINS.map((s) => s.id)).size).toBe(12);
+    expect(WEAPON_SKINS).toHaveLength(13);
+    expect(new Set(WEAPON_SKINS.map((s) => s.id)).size).toBe(13);
+    expect(WEAPON_SKINS[0]).toMatchObject({ id: "draconica", special: "dragon" });
     expect(skinById("nao-existe").id).toBe("padrao");
   });
 });
