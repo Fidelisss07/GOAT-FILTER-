@@ -258,14 +258,26 @@ fn s(v: impl ToString) -> String {
 }
 
 /// Grafo do filtro de vídeo (entrada lavfi).
+/// Limite da captura: o dobro do fps do vídeo (máx. 240).
+///
+/// Com o limite igual ao fps do vídeo, a tela chega a cada ~16,6 ms e um
+/// quadro um pouco adiantado é descartado por "chegar cedo demais": metade
+/// some e o vídeo de 60 fps sai com ~30 quadros diferentes por segundo
+/// (travado). Capturando com folga, o `fps=` escolhe o quadro certo para
+/// cada instante do vídeo.
+pub fn capture_rate(fps: u32) -> u32 {
+    (fps * 2).clamp(fps, 240)
+}
+
 pub fn video_graph(p: Pipeline, output_idx: u32, hmonitor: u64, w: u32, h: u32, fps: u32) -> String {
+    let cap = capture_rate(fps);
     let grab = match p.source {
-        Source::Dda => format!("ddagrab=output_idx={output_idx}:framerate={fps}:dup_frames=1:draw_mouse=1"),
+        Source::Dda => format!("ddagrab=output_idx={output_idx}:framerate={cap}:dup_frames=1:draw_mouse=1,fps={fps}"),
         // O WGC só entrega quadro quando a tela muda, com o horário certo de
         // cada um; o fps= completa o ritmo constante para o codificador.
         Source::Wgc => {
             let target = if hmonitor != 0 { format!("hmonitor={hmonitor}") } else { "monitor_idx=0".into() };
-            format!("gfxcapture={target}:max_framerate={fps}:capture_cursor=1:display_border=0,fps={fps}")
+            format!("gfxcapture={target}:max_framerate={cap}:capture_cursor=1:display_border=0,fps={fps}")
         }
     };
     match p.path {
@@ -780,13 +792,17 @@ mod tests {
     #[test]
     fn grafo_gpu_e_cpu() {
         let g = video_graph(PIPELINES[4], 0, 0, 2560, 1440, 60);
-        assert!(g.starts_with("ddagrab=output_idx=0:framerate=60"));
+        assert!(g.starts_with("ddagrab=output_idx=0:framerate=120:dup_frames=1:draw_mouse=1,fps=60,"), "{g}");
         let w = video_graph(PIPELINES[0], 0, 65537, 1440, 1080, 60);
-        assert!(w.starts_with("gfxcapture=hmonitor=65537:max_framerate=60:capture_cursor=1:display_border=0,fps=60,scale_d3d11=width=1440:height=1080"), "{w}");
+        assert!(w.starts_with("gfxcapture=hmonitor=65537:max_framerate=120:capture_cursor=1:display_border=0,fps=60,scale_d3d11=width=1440:height=1080"), "{w}");
         assert!(video_graph(PIPELINES[0], 0, 0, 1920, 1080, 60).starts_with("gfxcapture=monitor_idx=0"));
         assert!(g.ends_with("scale_d3d11=width=2560:height=1440:format=nv12"));
         let c = video_graph(Pipeline { encoder: VideoEncoder::MfSw, path: FramePath::Cpu, source: Source::Dda }, 1, 0, 1280, 720, 30);
         assert!(c.contains("hwdownload,format=bgra,scale=1280:720"));
+        // Captura com folga (o dobro), nunca acima de 240.
+        assert_eq!(capture_rate(30), 60);
+        assert_eq!(capture_rate(60), 120);
+        assert_eq!(capture_rate(144), 240);
     }
 
     #[test]
