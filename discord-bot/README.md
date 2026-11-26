@@ -29,18 +29,25 @@ FAQ por comando e aviso de versão. Feito em [discord.js](https://discord.js.org
    **Read Message History**. Abra a URL gerada e **adicione o bot ao seu servidor**.
 
 ### 2. Configurar
-1. Tenha o **Node.js 18+** instalado.
-2. Nesta pasta, rode `npm install`.
-3. Copie `.env.example` para `.env` e preencha (veja os comentários no arquivo). Para pegar os IDs,
-   ligue o **Modo Desenvolvedor** no Discord (Configurações → Avançado) e clique com o botão direito
-   para "Copiar ID".
+Só precisa de duas coisas no `.env` (copie de `.env.example`): **DISCORD_TOKEN** e **CLIENT_ID**.
+O bot registra os comandos sozinho em cada servidor quando liga.
 
-### 3. Ligar
+### 3. Ligar e configurar o servidor
 ```bash
-npm run deploy   # registra os comandos de barra (uma vez, e sempre que mudar os comandos)
-npm start        # liga o bot
+npm install
+npm start
 ```
-No servidor, vá ao canal de suporte e rode **/painel** para publicar o menu de tickets.
+No Discord, rode **/configurar** (só administradores veem). O bot cria o cargo **Equipe Goat Filter**,
+a categoria **Tickets** e os canais **#suporte** (já com o painel de tickets), **#registros** e
+**#boas-vindas**. Pode rodar de novo quando quiser: nada é duplicado. Depois, dê o cargo da equipe
+para quem vai atender.
+
+## Hospedar de graça na Discloud
+1. Entre em <https://discloud.com> com a sua conta do Discord.
+2. Crie um `.env` nesta pasta com `DISCORD_TOKEN=...` e `CLIENT_ID=1575604897645199511`.
+3. Compacte **o conteúdo desta pasta** em um `.zip` **sem** a pasta `node_modules`
+   (precisa ter `discloud.config`, `package.json`, `src/` e `.env`).
+4. No painel da Discloud, faça o upload do `.zip`. O bot liga sozinho.
 
 ## Onde hospedar (para ficar 24h no ar)
 

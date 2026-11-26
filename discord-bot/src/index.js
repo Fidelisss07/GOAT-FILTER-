@@ -10,6 +10,9 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import { config } from "./config.js";
+import { registerGuildCommands } from "./commands.js";
+import { runSetup } from "./setup.js";
+import { guildSettings } from "./store.js";
 import { FAQ, faqById, matchFaq } from "./faq.js";
 import {
   handleClosePrompt,
@@ -31,22 +34,32 @@ const client = new Client({
 });
 
 /* ----------------------------------------------------------------- registros */
-const log = {
-  async send(content, files = []) {
-    if (!config.logChannelId) return;
+/** Registros no canal "registros" do servidor (criado pelo /configurar). */
+function logFor(guild) {
+  const send = async (content, files = []) => {
+    const id = guild && guildSettings(guild).logChannelId;
+    if (!id) return;
     try {
-      const ch = await client.channels.fetch(config.logChannelId);
+      const ch = await client.channels.fetch(id);
       await ch.send({ content, files });
     } catch {
       /* canal de log indisponível: não trava o bot */
     }
-  },
-  ticket(msg, files = []) {
-    return this.send(msg, files);
-  },
+  };
+  return {
+    send,
+    ticket: (msg, files = []) => send(msg, files),
+    error(msg, err) {
+      console.error(msg, err);
+      return send(`⚠️ **${msg}**\n\`\`\`${String(err?.stack || err).slice(0, 1600)}\`\`\``);
+    },
+  };
+}
+/** Erros sem servidor (conexão etc.): vão para o registro de todos os servidores. */
+const log = {
   error(msg, err) {
     console.error(msg, err);
-    return this.send(`⚠️ **${msg}**\n\`\`\`${String(err?.stack || err).slice(0, 1600)}\`\`\``);
+    for (const g of client.guilds.cache.values()) logFor(g).send(`⚠️ **${msg}**\n\`\`\`${String(err?.stack || err).slice(0, 1600)}\`\`\``);
   },
 };
 
@@ -75,16 +88,29 @@ function faqAnswerEmbed(item) {
 }
 
 /* --------------------------------------------------------------------- ready */
+async function registerIn(guild) {
+  try {
+    await registerGuildCommands(guild.id);
+    console.log(`Comandos registrados em ${guild.name}`);
+  } catch (err) {
+    console.error(`Não consegui registrar os comandos em ${guild.name}:`, err.message);
+  }
+}
+
+client.on(Events.GuildCreate, (guild) => registerIn(guild));
+
 client.once(Events.ClientReady, (c) => {
-  console.log(`✅ Bot online como ${c.user.tag}`);
+  console.log(`✅ Bot online como ${c.user.tag} em ${c.guilds.cache.size} servidor(es)`);
+  for (const g of c.guilds.cache.values()) registerIn(g);
   c.user.setPresence({ activities: [{ name: "goatfilter.xyz", type: 3 }], status: "online" }); // type 3 = Watching
 });
 
 /* ------------------------------------------------------------ boas-vindas */
 client.on(Events.GuildMemberAdd, async (member) => {
-  if (!config.welcomeChannelId) return;
+  const welcomeId = guildSettings(member.guild).welcomeChannelId;
+  if (!welcomeId) return;
   try {
-    const ch = await member.guild.channels.fetch(config.welcomeChannelId);
+    const ch = await member.guild.channels.fetch(welcomeId);
     const embed = brandEmbed()
       .setTitle(`Bem-vindo, ${member.user.username}! 🐐`)
       .setDescription(
@@ -95,7 +121,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
       );
     await ch.send({ content: `${member}`, embeds: [embed] });
   } catch (err) {
-    log.error("Falha nas boas-vindas", err);
+    logFor(member.guild).error("Falha nas boas-vindas", err);
   }
 });
 
@@ -122,6 +148,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return interaction.editReply("Não consegui consultar a versão agora. Tente de novo em instantes.");
         }
       }
+      if (name === "configurar") return runSetup(interaction);
       if (name === "painel") {
         await interaction.channel.send(panelComponents());
         return interaction.reply({ content: "Painel publicado neste canal. ✅", ephemeral: true });
@@ -138,19 +165,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     // Modais
     if (interaction.isModalSubmit()) {
-      if (interaction.customId.startsWith("ticket_modal:")) return handleModalSubmit(interaction, log);
+      if (interaction.customId.startsWith("ticket_modal:")) return handleModalSubmit(interaction, logFor(interaction.guild));
       return;
     }
 
     // Botões
     if (interaction.isButton()) {
       if (interaction.customId === "ticket_close") return handleClosePrompt(interaction);
-      if (interaction.customId === "ticket_close_confirm") return handleCloseConfirm(interaction, log);
+      if (interaction.customId === "ticket_close_confirm") return handleCloseConfirm(interaction, logFor(interaction.guild));
       if (interaction.customId === "ticket_close_cancel") return handleCloseCancel(interaction);
       return;
     }
   } catch (err) {
-    log.error("Erro ao tratar interação", err);
+    logFor(interaction.guild).error("Erro ao tratar interação", err);
     // Tenta avisar a pessoa sem quebrar.
     const msg = { content: "Deu um erro aqui. Já registrei para a equipe — tente de novo.", ephemeral: true };
     if (interaction.deferred || interaction.replied) interaction.followUp(msg).catch(() => {});
