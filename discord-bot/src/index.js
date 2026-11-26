@@ -143,6 +143,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         case "configurar": {
           const gate = interaction.options.getBoolean("verificacao") ?? true;
           const cleanup = interaction.options.getBoolean("limpar_padrao") ?? false;
+          const look = interaction.options.getBoolean("aparencia") ?? true;
           const me = interaction.guild.members.me;
           if (!me.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
@@ -162,7 +163,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const progress = (t) => interaction.editReply(`⏳ ${t}`).catch(() => {});
           let result;
           try {
-            result = await buildServer(interaction.guild, { gate, cleanup }, progress);
+            result = await buildServer(interaction.guild, { gate, cleanup, look }, progress);
           } catch (err) {
             logFor(interaction.guild).error("Falha no /configurar", err);
             return interaction.editReply(`❌ Parei no meio: \`${String(err?.message || err).slice(0, 300)}\`\nManda um print disso para o suporte do bot.`);

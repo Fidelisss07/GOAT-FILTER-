@@ -16,6 +16,8 @@ export const config = {
   /** Opcional: os canais e o cargo vêm do /configurar (veja store.js). */
   guildId: process.env.GUILD_ID || "",
   siteUrl: process.env.SITE_URL || "https://www.goatfilter.xyz",
+  /** Artes do servidor (ícone, banner e cabeçalhos), hospedadas no site. */
+  art: (name) => `${process.env.SITE_URL || "https://www.goatfilter.xyz"}/assets/discord/${name}`,
   brand: {
     name: "Goat Filter",
     color: 0xad78ff,

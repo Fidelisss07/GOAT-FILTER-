@@ -34,7 +34,8 @@ export const commands = [
     .setDescription("(Admin) Monta o servidor inteiro: cargos, categorias, canais, regras e painéis.")
     .setDefaultMemberPermissions(P.Administrator)
     .addBooleanOption((o) => o.setName("verificacao").setDescription("Quem entra só vê as regras até aceitar (padrão: sim)"))
-    .addBooleanOption((o) => o.setName("limpar_padrao").setDescription("Apagar os canais padrão do Discord (#geral e Geral)")),
+    .addBooleanOption((o) => o.setName("limpar_padrao").setDescription("Apagar os canais padrão do Discord (#geral e Geral)"))
+    .addBooleanOption((o) => o.setName("aparencia").setDescription("Trocar ícone (e banner, se tiver impulsos) pela arte do Goat Filter (padrão: sim)")),
   new SlashCommandBuilder()
     .setName("painel")
     .setDescription("(Equipe) Publica o painel de abrir tickets neste canal.")

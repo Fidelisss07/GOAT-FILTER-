@@ -25,6 +25,7 @@ export async function onJoin(member) {
     const embed = brand()
       .setAuthor({ name: `${member.user.username} chegou!`, iconURL: member.user.displayAvatarURL() })
       .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+      .setImage(config.art("bemvindo.jpg"))
       .setDescription(
         `Seja bem-vindo(a), ${member}! Você é o membro **#${g.memberCount}** da comunidade. 🐐\n\n` +
           (gate ? `**1.** Leia e aceite as ${regras ?? "regras"} para liberar o servidor\n` : "") +
@@ -200,6 +201,7 @@ export async function announceVersion(guild, v, { force = false } = {}) {
   const role = guild.roles.cache.get(savedId(guild.id, "role:notif:atualizacoes"));
   const embed = brand()
     .setTitle(`🆕 Goat Filter v${v.version} saiu!`)
+    .setImage(config.art("atualizacoes.jpg"))
     .setDescription((await releaseNotes(v.version)) + `\n\n⬇️ ${config.siteUrl}`)
     .setTimestamp();
   await c.send({ content: role ? `${role}` : undefined, embeds: [embed], allowedMentions: { roles: role ? [role.id] : [] } });
