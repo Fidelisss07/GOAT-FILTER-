@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from "react";
-import { CROSSHAIR_PRESETS, CROSSHAIR_SOURCES, crosshairRects, parseCrosshair, PresetKind } from "../lib/crosshair";
+import { CROSSHAIR_PRESETS, CROSSHAIR_SOURCES, CrosshairPreset, crosshairRects, parseCrosshair, PresetKind } from "../lib/crosshair";
+import { GenPreset, generatedCrosshairs, XH_COLORS, XH_FAMILIES, XhFamily } from "../lib/crosshairGen";
 import { Crosshair, isCrosshairCode } from "../lib/types";
 import { useT } from "../lib/useT";
 import { useStore } from "../state/store";
@@ -23,6 +24,9 @@ export function CrosshairPreview({ code, size = 96 }: { code: string; size?: num
     </svg>
   );
 }
+
+/** Quantas miras aparecem por vez (mais leve com 1500+). */
+const PAGE = 60;
 
 const KINDS: { id: PresetKind | "todas"; label: string }[] = [
   { id: "todas", label: "Todas" },
@@ -55,9 +59,22 @@ export function CrosshairLibrary() {
 
   const [kind, setKind] = useState<PresetKind | "todas">("todas");
   const [query, setQuery] = useState("");
-  const presets = CROSSHAIR_PRESETS.filter(
-    (p) => (kind === "todas" || p.kind === kind) && (p.name + " " + p.info).toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  const [family, setFamily] = useState<XhFamily | "">("");
+  const [color, setColor] = useState("");
+  const [limit, setLimit] = useState(PAGE);
+  const all = useMemo<(CrosshairPreset | GenPreset)[]>(() => [...CROSSHAIR_PRESETS, ...generatedCrosshairs()], []);
+  const colorName = (id: string) => XH_COLORS.find((c) => c.id === id)?.name ?? id;
+  /** Nome na língua do app: as geradas montam o nome com partes traduzidas. */
+  const label = (p: CrosshairPreset | GenPreset) =>
+    "family" in p ? `${t(XH_FAMILIES[p.family])} ${t(colorName(p.color))} ${p.detail}` : p.name;
+  const q = query.trim().toLowerCase();
+  const presets = all.filter((p) => {
+    if (kind !== "todas" && p.kind !== kind) return false;
+    if (family && (!("family" in p) || p.family !== family)) return false;
+    if (color && (!("family" in p) || p.color !== color)) return false;
+    return !q || `${label(p)} ${p.name} ${t(p.info)}`.toLowerCase().includes(q);
+  });
+  const shown = presets.slice(0, limit);
   const saved = (code: string) => list.some((x) => x.code === code);
   const savePreset = (name: string, code: string) => {
     if (saved(code)) return;
@@ -126,34 +143,65 @@ export function CrosshairLibrary() {
       <div className="section xh-presets">
         <div className="section-head">
           <h3>{t("Miras prontas")}</h3>
-          <span className="pill">{CROSSHAIR_PRESETS.length}</span>
+          <span className="pill">{all.length}</span>
         </div>
         <div className="xh-filter">
           <div className="seg" role="radiogroup" aria-label={t("Tipo de mira")}>
             {KINDS.map((k) => (
-              <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} onClick={() => setKind(k.id)}>
+              <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} onClick={() => { setKind(k.id); setLimit(PAGE); }}>
                 {t(k.label)}
               </button>
             ))}
           </div>
-          <input className="input" aria-label={t("Buscar mira")} placeholder={t("Buscar (ex.: TenZ, ponto)")} value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input className="input" aria-label={t("Buscar mira")} placeholder={t("Buscar (ex.: TenZ, ponto)")} value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} />
+        </div>
+        <div className="xh-filter">
+          <div className="select small-select">
+            <select aria-label={t("Estilo")} value={family} onChange={(e) => { setFamily(e.target.value as XhFamily | ""); setLimit(PAGE); }}>
+              <option value="">{t("Todos os estilos")}</option>
+              {(Object.keys(XH_FAMILIES) as XhFamily[]).map((f) => (
+                <option key={f} value={f}>
+                  {t(XH_FAMILIES[f])}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="xh-colors" role="radiogroup" aria-label={t("Cor")}>
+            <button type="button" role="radio" aria-checked={color === ""} className="xh-color all" onClick={() => { setColor(""); setLimit(PAGE); }}>
+              {t("Todas")}
+            </button>
+            {XH_COLORS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                role="radio"
+                aria-checked={color === c.id}
+                aria-label={t(c.name)}
+                title={t(c.name)}
+                className="xh-color"
+                style={{ background: c.swatch }}
+                onClick={() => { setColor(c.id); setLimit(PAGE); }}
+              />
+            ))}
+          </div>
+          <span className="note">{t("{n} miras", { n: presets.length })}</span>
         </div>
         <ul className="xh-grid" aria-label={t("Miras prontas")}>
-          {presets.map((p) => (
+          {shown.map((p) => (
             <li key={p.code} className="xh-card">
               <CrosshairPreview code={p.code} />
-              <strong>{p.name}</strong>
-              <small>{t(p.info)}</small>
+              <strong>{label(p)}</strong>
+              <small>{"family" in p ? t("Gerada pelo Goat Filter") : t(p.info)}</small>
               <span className="xh-actions">
-                <button type="button" className="btn small" onClick={() => copy(p)}>
+                <button type="button" className="btn small" onClick={() => copy({ name: label(p), code: p.code })}>
                   {t("Copiar")}
                 </button>
                 <button
                   type="button"
                   className="btn small"
                   disabled={saved(p.code)}
-                  aria-label={t("Salvar {name} em Minhas miras", { name: p.name })}
-                  onClick={() => savePreset(p.name, p.code)}
+                  aria-label={t("Salvar {name} em Minhas miras", { name: label(p) })}
+                  onClick={() => savePreset(label(p), p.code)}
                 >
                   {saved(p.code) ? t("Salva") : t("Salvar")}
                 </button>
@@ -162,6 +210,11 @@ export function CrosshairLibrary() {
           ))}
           {presets.length === 0 && <li className="note">{t("Nenhuma mira encontrada.")}</li>}
         </ul>
+        {presets.length > shown.length && (
+          <button type="button" className="btn block" onClick={() => setLimit(limit + PAGE * 2)}>
+            {t("Mostrar mais ({n} restantes)", { n: presets.length - shown.length })}
+          </button>
+        )}
         <p className="note">
           {t("Reunidas de sites de miras e de configurações de pros ({sites}). Pros trocam de mira com frequência: confira no jogo.", {
             sites: CROSSHAIR_SOURCES.join(", "),

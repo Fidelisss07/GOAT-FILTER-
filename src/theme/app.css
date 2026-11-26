@@ -774,3 +774,7 @@ h1, h2, h3 { margin: 0; }
 .game-field span { color: #d8d4dc; }
 .game-field strong { font-size: 20px; text-align: right; }
 .game-field em { font-style: normal; font-size: 12px; color: var(--muted, #9a959a); }
+.xh-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.xh-color { width: 24px; height: 24px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.18); cursor: pointer; padding: 0; }
+.xh-color.all { width: auto; height: 26px; padding: 0 10px; border-radius: 999px; background: transparent; color: var(--text-2); font: inherit; font-size: 12px; }
+.xh-color[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.45); }
