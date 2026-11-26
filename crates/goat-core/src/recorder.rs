@@ -64,6 +64,8 @@ pub struct RecorderSettings {
     pub discord_webhook: String,
     /// Nomes dos clipes favoritos (nunca apagados pela limpeza).
     pub favorites: Vec<String>,
+    /// Clipes com as cores do filtro (a captura não vê o vibrance da placa).
+    pub clip_colors: bool,
 }
 
 impl Default for RecorderSettings {
@@ -84,6 +86,7 @@ impl Default for RecorderSettings {
             max_gb: 0,
             discord_webhook: String::new(),
             favorites: Vec::new(),
+            clip_colors: true,
         }
     }
 }

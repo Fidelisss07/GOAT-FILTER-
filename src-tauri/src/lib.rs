@@ -531,7 +531,8 @@ async fn save_clip(app: AppHandle, seconds: Option<u32>) -> Result<String, Strin
     let st = app.state::<Arc<AppState>>().inner().clone();
     let secs = seconds.unwrap_or_else(|| lock(&st.settings).recorder.clip_seconds);
     let rec = st.recorder.clone();
-    let r = tauri::async_runtime::spawn_blocking(move || rec.save_clip(secs)).await.map_err(|e| e.to_string())?;
+    let colors = clip_colors(&st);
+    let r = tauri::async_runtime::spawn_blocking(move || rec.save_clip(secs, colors)).await.map_err(|e| e.to_string())?;
     finish_export(&app, &st, r, true)
 }
 
@@ -546,8 +547,21 @@ fn start_recording(app: AppHandle, state: Shared) -> Result<(), String> {
 async fn stop_recording(app: AppHandle) -> Result<String, String> {
     let st = app.state::<Arc<AppState>>().inner().clone();
     let rec = st.recorder.clone();
-    let r = tauri::async_runtime::spawn_blocking(move || rec.stop_recording()).await.map_err(|e| e.to_string())?;
+    let colors = clip_colors(&st);
+    let r = tauri::async_runtime::spawn_blocking(move || rec.stop_recording(colors)).await.map_err(|e| e.to_string())?;
     finish_export(&app, &st, r, false)
+}
+
+/// Saturação do filtro aplicado agora no monitor principal, para os clipes
+/// saírem com as mesmas cores da tela (a captura não vê o vibrance).
+fn clip_colors(st: &AppState) -> Option<f32> {
+    if !lock(&st.settings).recorder.clip_colors {
+        return None;
+    }
+    let e = lock(&st.engine);
+    let p = e.current(&e.primary_id()?)?;
+    let f = goat_core::clips::vibrance_saturation(p);
+    ((f - 1.0).abs() > 0.03).then_some(f)
 }
 
 /// Aviso no app e no Windows depois de salvar um vídeo.
@@ -1000,7 +1014,7 @@ fn run_action(app: &AppHandle, action: &str) {
             std::thread::spawn(move || {
                 let st = app.state::<Arc<AppState>>().inner().clone();
                 let secs = lock(&st.settings).recorder.clip_seconds;
-                let _ = finish_export(&app, &st, st.recorder.save_clip(secs), true);
+                let _ = finish_export(&app, &st, st.recorder.save_clip(secs, clip_colors(&st)), true);
             });
             return;
         }
@@ -1017,7 +1031,7 @@ fn run_action(app: &AppHandle, action: &str) {
             std::thread::spawn(move || {
                 let st = app.state::<Arc<AppState>>().inner().clone();
                 if st.recorder.recording() {
-                    let _ = finish_export(&app, &st, st.recorder.stop_recording(), false);
+                    let _ = finish_export(&app, &st, st.recorder.stop_recording(clip_colors(&st)), false);
                 } else {
                     match st.recorder.start_recording() {
                         Ok(()) => {

@@ -733,4 +733,6 @@ export const EN: Record<string, string> = {
   "{p}% dos seus abates são na cabeça. Excelente.": "{p}% of your kills are headshots. Excellent.",
   "Aquecimento": "Warm-up",
   "Faz um aquecimento com os treinos que você mais precisa e, quando acabar, abre o jogo sozinho.": "Runs a warm-up with the drills you need most and opens the game by itself when it ends.",
+  "Clipes com as cores do filtro": "Clips with the filter colors",
+  "O vibrance é aplicado pela placa só na saída para o monitor, então gravações e lives não o veem. Com isto ligado, o app soma a mesma saturação ao salvar o clipe (leva alguns segundos a mais).": "Vibrance is applied by the graphics card only on the output to the monitor, so recordings and streams don't see it. With this on, the app adds the same saturation when saving the clip (takes a few extra seconds).",
 };

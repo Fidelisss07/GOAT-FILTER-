@@ -367,6 +367,14 @@ export function RecordingPage() {
             <div className="rows">
               <ToggleRow label={t("Bipe ao salvar um clipe")} checked={rec.saveSound} onChange={(v) => set({ saveSound: v })} />
               <ToggleRow
+                label={t("Clipes com as cores do filtro")}
+                checked={rec.clipColors ?? true}
+                onChange={(v) => set({ clipColors: v })}
+              />
+              <p className="note">
+                {t("O vibrance é aplicado pela placa só na saída para o monitor, então gravações e lives não o veem. Com isto ligado, o app soma a mesma saturação ao salvar o clipe (leva alguns segundos a mais).")}
+              </p>
+              <ToggleRow
                 label={t("Jogo e microfone em faixas separadas")}
                 checked={rec.separateTracks}
                 disabled={!rec.mic}

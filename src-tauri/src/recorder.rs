@@ -505,7 +505,7 @@ impl Recorder {
     }
 
     /// Junta os pedaços em um .mp4 na pasta dos clipes.
-    fn export(&self, picks: &[u64], prefix: &str, last_secs: Option<u32>) -> Result<PathBuf, String> {
+    fn export(&self, picks: &[u64], prefix: &str, last_secs: Option<u32>, colors: Option<f32>) -> Result<PathBuf, String> {
         if picks.len() < 2 {
             return Err("Ainda não há vídeo suficiente. Espere alguns segundos.".into());
         }
@@ -532,6 +532,30 @@ impl Recorder {
         }
         let out = folder.join(&name);
         let (inp, outp) = (joined.to_string_lossy().into_owned(), out.to_string_lossy().into_owned());
+        // Com as cores do filtro: recodifica só a imagem com a saturação. Se
+        // falhar, salva do jeito normal (sem recodificar).
+        let mut colored = false;
+        if let Some(sat) = colors {
+            if let Ok(enc) = self.transcoder(&exe) {
+                let kbps = {
+                    let g = lock(&self.inner);
+                    let (w, h, fps) = g.run.as_ref().map(|r| (r.size.0, r.size.1, r.fps)).unwrap_or((1920, 1080, g.settings.fps));
+                    // Um pouco mais de taxa: recodificar perde um pouco de detalhe.
+                    rc::bitrate_kbps(w, h, fps, g.settings.quality) * 6 / 5
+                };
+                let mut cmd = command(&exe);
+                cmd.args(goat_core::clips::color_args(&inp, &outp, enc, kbps, sat, last_secs));
+                let (ok, _) = run_with_timeout(cmd, Duration::from_secs(240));
+                colored = ok && std::fs::metadata(&out).map(|m| m.len() > 0).unwrap_or(false);
+                if !colored {
+                    let _ = std::fs::remove_file(&out);
+                }
+            }
+        }
+        if colored {
+            let _ = std::fs::remove_file(&joined);
+            return Ok(out);
+        }
         let mut cmd = command(&exe);
         cmd.args(rc::remux_args(&inp, &outp, last_secs));
         let (mut ok, mut err) = run_with_timeout(cmd, Duration::from_secs(120));
@@ -550,7 +574,8 @@ impl Recorder {
     }
 
     /// Salva os últimos `seconds` segundos.
-    pub fn save_clip(&self, seconds: u32) -> Result<PathBuf, String> {
+    /// `colors`: saturação do filtro para somar ao vídeo (None = como capturado).
+    pub fn save_clip(&self, seconds: u32, colors: Option<f32>) -> Result<PathBuf, String> {
         if lock(&self.inner).run.is_none() {
             return Err("O replay não está ligado agora.".into());
         }
@@ -558,7 +583,7 @@ impl Recorder {
         let picks = rc::clip_segments(&self.indices(), seconds);
         // Segura esses pedaços enquanto junta.
         lock(&self.inner).pinned_from = picks.first().copied();
-        let r = self.export(&picks, "Clipe", Some(seconds));
+        let r = self.export(&picks, "Clipe", Some(seconds), colors);
         lock(&self.inner).pinned_from = None;
         r
     }
@@ -589,7 +614,7 @@ impl Recorder {
     }
 
     /// Para a gravação manual e salva o vídeo.
-    pub fn stop_recording(&self) -> Result<PathBuf, String> {
+    pub fn stop_recording(&self, colors: Option<f32>) -> Result<PathBuf, String> {
         let from = {
             let mut g = lock(&self.inner);
             let Some((from, _)) = g.recording.take() else {
@@ -600,7 +625,7 @@ impl Recorder {
         };
         let picks = rc::segments_since(&self.indices(), from);
         let markers = std::mem::take(&mut lock(&self.inner).markers);
-        let r = self.export(&picks, "Gameplay", None);
+        let r = self.export(&picks, "Gameplay", None, colors);
         if let (Ok(p), false) = (&r, markers.is_empty()) {
             let _ = std::fs::write(markers_path(p), serde_json::to_string(&markers).unwrap_or_default());
         }
