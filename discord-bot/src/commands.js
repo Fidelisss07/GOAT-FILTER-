@@ -1,4 +1,4 @@
-import { PermissionFlagsBits, REST, Routes, SlashCommandBuilder } from "discord.js";
+import { PermissionFlagsBits as P, REST, Routes, SlashCommandBuilder } from "discord.js";
 import { config } from "./config.js";
 
 /** Comandos de barra (/) do bot. */
@@ -26,14 +26,71 @@ export const commands = [
     ),
   new SlashCommandBuilder().setName("versao").setDescription("Mostra a versão mais nova publicada do app."),
   new SlashCommandBuilder().setName("baixar").setDescription("Link oficial para baixar o Goat Filter."),
+  new SlashCommandBuilder().setName("servidor").setDescription("Informações do servidor e da comunidade."),
+
+  // ---- administração
   new SlashCommandBuilder()
     .setName("configurar")
-    .setDescription("(Admin) Cria os canais de suporte, registros, boas-vindas e o cargo da equipe.")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription("(Admin) Monta o servidor inteiro: cargos, categorias, canais, regras e painéis.")
+    .setDefaultMemberPermissions(P.Administrator)
+    .addBooleanOption((o) => o.setName("verificacao").setDescription("Quem entra só vê as regras até aceitar (padrão: sim)"))
+    .addBooleanOption((o) => o.setName("limpar_padrao").setDescription("Apagar os canais padrão do Discord (#geral e Geral)")),
   new SlashCommandBuilder()
     .setName("painel")
     .setDescription("(Equipe) Publica o painel de abrir tickets neste canal.")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    .setDefaultMemberPermissions(P.ManageGuild),
+  new SlashCommandBuilder()
+    .setName("anunciar")
+    .setDescription("(Equipe) Posta um anúncio bonito em #anúncios.")
+    .setDefaultMemberPermissions(P.ManageMessages)
+    .addStringOption((o) =>
+      o
+        .setName("marcar")
+        .setDescription("Quem marcar")
+        .addChoices(
+          { name: "Ninguém", value: "nada" },
+          { name: "Quem quer aviso de atualização", value: "notif:atualizacoes" },
+          { name: "Quem quer aviso de eventos", value: "notif:eventos" },
+          { name: "Quem quer aviso de vídeos", value: "notif:videos" },
+          { name: "Todo mundo (@everyone)", value: "todos" },
+        ),
+    ),
+  new SlashCommandBuilder()
+    .setName("anunciar-versao")
+    .setDescription("(Equipe) Posta agora a versão mais nova em #atualizações.")
+    .setDefaultMemberPermissions(P.ManageMessages),
+
+  // ---- moderação
+  new SlashCommandBuilder()
+    .setName("limpar")
+    .setDescription("(Moderação) Apaga as últimas mensagens deste canal.")
+    .setDefaultMemberPermissions(P.ManageMessages)
+    .addIntegerOption((o) => o.setName("quantidade").setDescription("De 1 a 100").setMinValue(1).setMaxValue(100).setRequired(true)),
+  new SlashCommandBuilder()
+    .setName("castigo")
+    .setDescription("(Moderação) Deixa um membro sem falar por um tempo.")
+    .setDefaultMemberPermissions(P.ModerateMembers)
+    .addUserOption((o) => o.setName("membro").setDescription("Quem").setRequired(true))
+    .addIntegerOption((o) => o.setName("minutos").setDescription("Quantos minutos").setMinValue(1).setMaxValue(40320).setRequired(true))
+    .addStringOption((o) => o.setName("motivo").setDescription("Motivo")),
+  new SlashCommandBuilder()
+    .setName("aviso")
+    .setDescription("(Moderação) Dá um aviso (3 avisos = 1 hora de castigo).")
+    .setDefaultMemberPermissions(P.ModerateMembers)
+    .addUserOption((o) => o.setName("membro").setDescription("Quem").setRequired(true))
+    .addStringOption((o) => o.setName("motivo").setDescription("Motivo").setRequired(true)),
+  new SlashCommandBuilder()
+    .setName("expulsar")
+    .setDescription("(Moderação) Expulsa um membro.")
+    .setDefaultMemberPermissions(P.KickMembers)
+    .addUserOption((o) => o.setName("membro").setDescription("Quem").setRequired(true))
+    .addStringOption((o) => o.setName("motivo").setDescription("Motivo")),
+  new SlashCommandBuilder()
+    .setName("banir")
+    .setDescription("(Moderação) Bane um membro.")
+    .setDefaultMemberPermissions(P.BanMembers)
+    .addUserOption((o) => o.setName("membro").setDescription("Quem").setRequired(true))
+    .addStringOption((o) => o.setName("motivo").setDescription("Motivo")),
 ].map((c) => c.toJSON());
 
 const rest = () => new REST({ version: "10" }).setToken(config.token);

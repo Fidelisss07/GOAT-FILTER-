@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 /**
- * Configuração por servidor (canais, cargo e categoria) criada pelo /configurar.
- * Fica num arquivo JSON; se ele sumir (ex.: hospedagem que apaga arquivos a cada
- * deploy), o bot reencontra tudo pelos nomes dos canais.
+ * Dados por servidor (IDs dos canais/cargos criados pelo /configurar, votos de
+ * sugestões, avisos de moderação, última versão anunciada). Fica num JSON; se
+ * ele sumir, o bot reencontra canais e cargos pelos nomes.
  */
 const FILE = process.env.DATA_FILE || path.resolve("data", "guilds.json");
 
@@ -17,37 +17,64 @@ function load() {
 }
 
 let cache = load();
+let saveTimer = null;
 
-/** Nomes usados pelo /configurar (e para reencontrar sem o arquivo). */
-export const NAMES = {
-  role: "Equipe Goat Filter",
-  category: "Tickets",
-  support: "suporte",
-  logs: "registros",
-  welcome: "boas-vindas",
-};
-
-/** Configuração do servidor: o que foi salvo, ou o .env, ou o que achar pelos nomes. */
-export function guildSettings(guild) {
-  const id = guild?.id ?? guild;
-  const saved = cache[id] || {};
-  const g = typeof guild === "object" ? guild : null;
-  const byName = (type, name) => g?.channels.cache.find((c) => c.type === type && c.name === name)?.id || "";
-  return {
-    staffRoleId: saved.staffRoleId || process.env.STAFF_ROLE_ID || g?.roles.cache.find((r) => r.name === NAMES.role)?.id || "",
-    ticketCategoryId: saved.ticketCategoryId || process.env.TICKET_CATEGORY_ID || byName(4, NAMES.category),
-    logChannelId: saved.logChannelId || process.env.LOG_CHANNEL_ID || byName(0, NAMES.logs),
-    welcomeChannelId: saved.welcomeChannelId || process.env.WELCOME_CHANNEL_ID || byName(0, NAMES.welcome),
-    supportChannelId: saved.supportChannelId || byName(0, NAMES.support),
-  };
+function persist() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      fs.mkdirSync(path.dirname(FILE), { recursive: true });
+      fs.writeFileSync(FILE, JSON.stringify(cache, null, 2));
+    } catch (err) {
+      console.error("[store] não consegui salvar:", err.message);
+    }
+  }, 300);
 }
 
-export function saveGuild(guildId, patch) {
-  cache[guildId] = { ...(cache[guildId] || {}), ...patch };
-  try {
-    fs.mkdirSync(path.dirname(FILE), { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(cache, null, 2));
-  } catch (err) {
-    console.error("[store] não consegui salvar a configuração:", err.message);
-  }
+export function guildData(guildId) {
+  cache[guildId] ??= {};
+  cache[guildId].ids ??= {};
+  return cache[guildId];
+}
+
+export function setData(guildId, patch) {
+  Object.assign(guildData(guildId), patch);
+  persist();
+}
+
+/** ID salvo de um canal/cargo do layout (ex.: "ch:regras", "role:membro"). */
+export function savedId(guildId, key) {
+  return guildData(guildId).ids[key] || "";
+}
+
+export function saveId(guildId, key, id) {
+  guildData(guildId).ids[key] = id;
+  persist();
+}
+
+/** Guarda qualquer coisa de um servidor (votos, avisos...). */
+export function bucket(guildId, name) {
+  const d = guildData(guildId);
+  d[name] ??= {};
+  return d[name];
+}
+
+export function touch() {
+  persist();
+}
+
+/** Atalhos usados por tickets, registros e boas-vindas (com nomes antigos como reserva). */
+export function guildSettings(guild) {
+  const id = guild?.id ?? guild;
+  const d = guildData(id);
+  const g = typeof guild === "object" ? guild : null;
+  const ch = (key, ...names) =>
+    d.ids[key] || d[`${key}Legacy`] || g?.channels.cache.find((c) => names.includes(c.name))?.id || "";
+  return {
+    staffRoleId: d.ids["role:equipe"] || d.staffRoleId || process.env.STAFF_ROLE_ID || g?.roles.cache.find((r) => r.name === "Equipe Goat Filter")?.id || "",
+    ticketCategoryId: d.ids["cat:tickets"] || d.ticketCategoryId || process.env.TICKET_CATEGORY_ID || "",
+    logChannelId: d.ids["ch:registros"] || d.logChannelId || process.env.LOG_CHANNEL_ID || ch("ch:registros", "📜・registros", "registros"),
+    welcomeChannelId: d.ids["ch:boas-vindas"] || d.welcomeChannelId || process.env.WELCOME_CHANNEL_ID || ch("ch:boas-vindas", "👋・boas-vindas", "boas-vindas"),
+    supportChannelId: d.ids["ch:abrir-ticket"] || d.supportChannelId || ch("ch:abrir-ticket", "🎫・abrir-ticket", "suporte"),
+  };
 }

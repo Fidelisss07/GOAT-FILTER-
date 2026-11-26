@@ -5,16 +5,20 @@ FAQ por comando e aviso de versão. Feito em [discord.js](https://discord.js.org
 
 ## O que ele faz
 
-- **Tickets** (`/painel`): um menu fixo onde a pessoa escolhe o assunto (Suporte, Erro,
-  Pagamento/Pro, Sugestão), descreve o problema e o bot cria um **canal privado** só com ela
-  e a equipe. Ao fechar, ele **salva a conversa** (transcrição) no canal de registros e apaga o canal.
-- **Ajuda automática:** quando alguém escreve uma dúvida comum no chat ("deu aviso ao instalar",
-  "vai tomar ban?", "funciona com AMD?"), o bot responde sozinho com a resposta certa (sem spam:
-  no máximo 1 vez por minuto por pessoa, e nunca dentro de um ticket).
-- **Comandos:** `/ajuda` (menu de dúvidas), `/faq assunto:` (resposta direta), `/versao`
-  (versão mais nova, lida do site), `/baixar` (link oficial), `/painel` (equipe: publica o painel de tickets).
-- **Boas-vindas:** mensagem para quem entra no servidor.
-- **Confiável:** registra erros num canal, trata quedas de conexão e não cai por um erro solto.
+- **Monta o servidor inteiro com `/configurar`**: cargos (Admin, Moderador, Equipe, Criador de Conteúdo,
+  Parceiro, Goat Pro, Membro, elos do Valorant e cargos de aviso), categorias **Início, Comunidade,
+  Suporte, Voz, Equipe e Tickets**, uns 20 canais com as permissões certas, e as mensagens fixas
+  (regras com botão de aceitar, como baixar, escolha de cargos, apresentação e painel de tickets).
+  Pode rodar de novo quando quiser: ajusta o que existe e não duplica nada.
+- **Verificação**: quem entra só vê #boas-vindas e #regras até clicar em *Li e aceito as regras*.
+- **Cargos por botão**: avisos de atualização, eventos e vídeos (liga/desliga) e elo do Valorant.
+- **Aviso automático de versão nova** do app em #atualizações (lê o site a cada 10 min).
+- **Sugestões com votação** (👍/👎) e tópico de discussão; **clipes** ganham 🔥 e tópico de comentários.
+- **Tickets privados**, **ajuda automática** (responde dúvidas comuns) e `/ajuda`, `/faq`, `/versao`, `/baixar`.
+- **Moderação**: anti-convite, anti-spam, anti-menção em massa, `/limpar`, `/castigo`, `/aviso`
+  (3 avisos = 1 h de castigo), `/expulsar`, `/banir`, e `/anunciar` (formulário que posta em #anúncios).
+- **Registros** em #registros: entradas, saídas, mensagens apagadas/editadas, moderação e tickets.
+- **Contador de membros** num canal de voz trancado.
 
 ## Passo a passo (do zero)
 
@@ -24,9 +28,9 @@ FAQ por comando e aviso de versão. Feito em [discord.js](https://discord.js.org
 3. Ainda em **Bot**, ligue **Privileged Gateway Intents**:
    - **Server Members Intent** (boas-vindas)
    - **Message Content Intent** (ajuda automática)
-4. Em **OAuth2 → URL Generator**: marque **bot** e **applications.commands**; nas permissões do bot,
-   marque **Manage Channels**, **Manage Roles**, **Send Messages**, **Embed Links**, **Attach Files**,
-   **Read Message History**. Abra a URL gerada e **adicione o bot ao seu servidor**.
+4. Convide com **Administrador** (o bot cria cargos, permissões e o cargo Admin):
+   `https://discord.com/oauth2/authorize?client_id=SEU_CLIENT_ID&permissions=8&integration_type=0&scope=bot+applications.commands`
+   Depois, em Configurações do servidor › Cargos, **arraste o cargo do bot para o topo**.
 
 ### 2. Configurar
 Só precisa de duas coisas no `.env` (copie de `.env.example`): **DISCORD_TOKEN** e **CLIENT_ID**.
@@ -37,10 +41,9 @@ O bot registra os comandos sozinho em cada servidor quando liga.
 npm install
 npm start
 ```
-No Discord, rode **/configurar** (só administradores veem). O bot cria o cargo **Equipe Goat Filter**,
-a categoria **Tickets** e os canais **#suporte** (já com o painel de tickets), **#registros** e
-**#boas-vindas**. Pode rodar de novo quando quiser: nada é duplicado. Depois, dê o cargo da equipe
-para quem vai atender.
+No Discord, rode **/configurar** (só administradores veem). Opções:
+`verificacao` (padrão: sim) e `limpar_padrao` (apaga o #geral e o canal de voz Geral que o Discord cria).
+Depois, dê os cargos **Admin**, **Moderador** ou **Equipe Goat Filter** para a sua equipe.
 
 ## Hospedar de graça na Discloud
 1. Entre em <https://discloud.com> com a sua conta do Discord.
