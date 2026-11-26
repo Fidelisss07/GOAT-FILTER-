@@ -17,11 +17,19 @@ async function ensureRole(guild, spec, report) {
     mentionable: !!spec.mentionable || !!spec.notify,
     permissions: spec.perms ?? [],
   };
-  if (!role) {
-    role = await guild.roles.create({ ...data, reason: "Goat Filter: montagem do servidor" });
-    report.created.push(`cargo **${spec.name}**`);
-  } else if (role.editable) {
-    await role.edit(data).catch(() => {});
+  // Sem Administrador, o bot só pode dar ao cargo as permissões que ele mesmo tem.
+  const mine = guild.members.me.permissions;
+  data.permissions = data.permissions.filter((p) => mine.has(p));
+  try {
+    if (!role) {
+      role = await guild.roles.create({ ...data, reason: "Goat Filter: montagem do servidor" });
+      report.created.push(`cargo **${spec.name}**`);
+    } else if (role.editable) {
+      await role.edit(data).catch((e) => report.warn.push(`cargo ${spec.name}: ${e.message}`));
+    }
+  } catch (e) {
+    report.warn.push(`não consegui criar o cargo ${spec.name}: ${e.message}`);
+    return null;
   }
   saveId(guild.id, `role:${spec.key}`, role.id);
   return role;
@@ -31,8 +39,8 @@ async function ensureRole(guild, spec, report) {
 function overwrites(guild, mode, roles, gate) {
   const everyone = guild.roles.everyone.id;
   const me = guild.members.me.id;
-  const member = roles.membro.id;
-  const staff = STAFF.map((k) => roles[k].id);
+  const member = roles.membro?.id ?? everyone;
+  const staff = STAFF.map((k) => roles[k]?.id).filter(Boolean);
   const view = [P.ViewChannel, P.ReadMessageHistory];
   const talk = [P.SendMessages, P.AddReactions, P.AttachFiles, P.EmbedLinks, P.CreatePublicThreads, P.SendMessagesInThreads, P.UseApplicationCommands];
   const voice = [P.Connect, P.Speak, P.Stream, P.UseVAD];
@@ -62,8 +70,13 @@ async function ensureCategory(guild, spec, report) {
     guild.channels.cache.get(savedId(guild.id, spec.key)) ||
     guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && [spec.name, ...(spec.aliases ?? [])].includes(c.name));
   if (!cat) {
-    cat = await guild.channels.create({ name: spec.name, type: ChannelType.GuildCategory });
-    report.created.push(`categoria **${spec.name}**`);
+    try {
+      cat = await guild.channels.create({ name: spec.name, type: ChannelType.GuildCategory });
+      report.created.push(`categoria **${spec.name}**`);
+    } catch (e) {
+      report.warn.push(`não consegui criar a categoria ${spec.name}: ${e.message}`);
+      return null;
+    }
   } else if (cat.name !== spec.name) {
     await cat.setName(spec.name).catch(() => {});
   }
@@ -82,14 +95,19 @@ async function ensureChannel(guild, spec, parent, roles, gate, report) {
   const opts = {
     name: spec.name,
     type,
-    parent: parent.id,
+    parent: parent?.id,
     permissionOverwrites: overwrites(guild, spec.mode, roles, gate),
     ...(type === ChannelType.GuildText ? { topic: spec.topic ?? null, rateLimitPerUser: spec.slowmode ?? 0 } : {}),
     ...(spec.limit ? { userLimit: spec.limit } : {}),
   };
   if (!ch) {
-    ch = await guild.channels.create(opts);
-    report.created.push(`${type === ChannelType.GuildVoice ? "voz" : "canal"} ${ch}`);
+    try {
+      ch = await guild.channels.create(opts);
+      report.created.push(`${type === ChannelType.GuildVoice ? "voz" : "canal"} ${ch}`);
+    } catch (e) {
+      report.warn.push(`não consegui criar ${spec.name}: ${e.message}`);
+      return null;
+    }
   } else {
     const { type: _t, ...edit } = opts;
     if (spec.mode === "contador") delete edit.name; // o nome é o contador
@@ -101,6 +119,16 @@ async function ensureChannel(guild, spec, parent, roles, gate, report) {
 
 /** Posta (ou atualiza) uma mensagem fixa do bot, marcada pelo rodapé. */
 async function ensurePinned(channel, key, payload, report) {
+  if (!channel) return null;
+  try {
+    return await postPinned(channel, key, payload, report);
+  } catch (e) {
+    report.warn.push(`mensagem fixa em ${channel}: ${e.message}`);
+    return null;
+  }
+}
+
+async function postPinned(channel, key, payload, report) {
   const msgs = await channel.messages.fetch({ limit: 30 }).catch(() => null);
   const mine = msgs?.find((m) => m.author.id === channel.client.user.id && m.embeds[0]?.footer?.text?.includes(MARK(key)));
   payload.embeds?.forEach((e) => e.setFooter({ text: `Goat Filter · ${MARK(key)}` }));
@@ -128,14 +156,16 @@ export async function buildServer(guild, { gate = true, cleanup = false } = {}, 
   for (const spec of ROLES) roles[spec.key] = await ensureRole(guild, spec, report);
   // Ordem dos cargos: logo abaixo do cargo do bot, na ordem da lista.
   const top = guild.members.me.roles.highest.position;
-  const positions = ROLES.map((spec, i) => ({ role: roles[spec.key].id, position: Math.max(1, top - 1 - i) })).filter((p) => guild.roles.cache.get(p.role)?.editable);
+  const positions = ROLES.filter((spec) => roles[spec.key])
+    .map((spec, i) => ({ role: roles[spec.key].id, position: Math.max(1, top - 1 - i) }))
+    .filter((p) => guild.roles.cache.get(p.role)?.editable);
   await guild.roles.setPositions(positions).catch((e) => report.warn.push(`ordem dos cargos: ${e.message}`));
 
   await progress("Criando categorias e canais…");
   const channels = {};
   for (const cat of LAYOUT) {
     const parent = await ensureCategory(guild, cat, report);
-    if (cat.ticketCategory) {
+    if (cat.ticketCategory && parent) {
       await parent.edit({ permissionOverwrites: overwrites(guild, "equipe", roles, gate) }).catch(() => {});
     }
     for (const spec of cat.channels) channels[spec.key] = await ensureChannel(guild, spec, parent, roles, gate, report);
@@ -176,21 +206,22 @@ export async function buildServer(guild, { gate = true, cleanup = false } = {}, 
   if (gate) {
     await progress("Liberando quem já está no servidor…");
     const members = await guild.members.fetch().catch(() => null);
-    for (const m of members?.values() ?? []) if (!m.user.bot && !m.roles.cache.has(roles.membro.id)) await m.roles.add(roles.membro).catch(() => {});
+    if (roles.membro)
+      for (const m of members?.values() ?? []) if (!m.user.bot && !m.roles.cache.has(roles.membro.id)) await m.roles.add(roles.membro).catch(() => {});
   }
   return { report, roles, channels };
 }
 
 export function buildSummary(guild, { report, roles, channels }, gate) {
   const lines = [
-    `**Canais:** ${channels["ch:regras"]} · ${channels["ch:anuncios"]} · ${channels["ch:atualizacoes"]} · ${channels["ch:baixar"]} · ${channels["ch:cargos"]} · ${channels["ch:geral"]} · ${channels["ch:clipes"]} · ${channels["ch:sugestoes"]} · ${channels["ch:duvidas"]} · ${channels["ch:abrir-ticket"]} · ${channels["ch:registros"]}`,
-    `**Cargos da equipe:** ${roles.admin} ${roles.mod} ${roles.equipe}`,
+    `**Canais:** ${["ch:regras", "ch:anuncios", "ch:atualizacoes", "ch:baixar", "ch:cargos", "ch:geral", "ch:clipes", "ch:sugestoes", "ch:duvidas", "ch:abrir-ticket", "ch:registros"].map((k) => channels[k]).filter(Boolean).join(" · ")}`,
+    `**Cargos da equipe:** ${[roles.admin, roles.mod, roles.equipe].filter(Boolean).join(" ")}`,
     gate
       ? `**Verificação ligada:** quem entrar só vê ${channels["ch:regras"]} até clicar em *Aceitar*. Quem já estava aqui ganhou ${roles.membro}.`
       : "**Verificação desligada:** todo mundo vê tudo ao entrar.",
     report.created.length ? `\n**Criado agora (${report.created.length}):** ${report.created.slice(0, 25).join(", ")}${report.created.length > 25 ? "…" : ""}` : "\nNada novo para criar: tudo já existia e foi ajustado.",
     report.warn.length ? `\n⚠️ ${report.warn.slice(0, 5).join("\n⚠️ ")}` : "",
-    `\n**Falta você:** dar ${roles.admin}, ${roles.mod} ou ${roles.equipe} para a sua equipe (Configurações › Membros).`,
+    `\n**Falta você:** dar os cargos da equipe para quem vai ajudar (Configurações › Membros).`,
   ];
   return new EmbedBuilder().setColor(config.brand.color).setTitle("✅ Servidor da comunidade montado").setDescription(lines.join("\n").slice(0, 4000));
 }

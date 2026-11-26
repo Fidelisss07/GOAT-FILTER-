@@ -1,7 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits as P } from "discord.js";
 import { config } from "./config.js";
 import { STAFF } from "./layout.js";
-import { bucket, guildData, savedId, setData, touch } from "./store.js";
+import { bucket, guildData, guildSettings, savedId, setData, touch } from "./store.js";
 
 const brand = () => new EmbedBuilder().setColor(config.brand.color);
 const ch = (guild, key) => guild.channels.cache.get(savedId(guild.id, key));
@@ -10,7 +10,8 @@ const isStaff = (member) =>
 
 /* ------------------------------------------------------------------ registros */
 export function logTo(guild, payload) {
-  const c = ch(guild, "ch:registros");
+  if (!guild) return;
+  const c = ch(guild, "ch:registros") || guild.channels.cache.get(guildSettings(guild).logChannelId);
   if (c) c.send(typeof payload === "string" ? { content: payload, allowedMentions: { parse: [] } } : { ...payload, allowedMentions: { parse: [] } }).catch(() => {});
 }
 
