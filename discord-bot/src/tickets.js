@@ -128,6 +128,7 @@ export async function handleModalSubmit(interaction, log) {
     .setTimestamp();
 
   const closeRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("ticket_claim").setLabel("Assumir").setEmoji("🙋").setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId("ticket_close").setLabel("Fechar ticket").setEmoji("🔒").setStyle(ButtonStyle.Danger),
   );
 
@@ -171,6 +172,39 @@ export async function handleCloseConfirm(interaction, log) {
   );
 
   setTimeout(() => channel.delete().catch(() => {}), 4000);
+
+  // Pede uma nota para quem abriu o ticket (mensagem direta).
+  const owner = await interaction.client.users.fetch(ownerId).catch(() => null);
+  if (owner && owner.id !== interaction.user.id) {
+    const stars = new ActionRowBuilder().addComponents(
+      [1, 2, 3, 4, 5].map((n) =>
+        new ButtonBuilder().setCustomId(`rate:${interaction.guild.id}:${n}`).setLabel("⭐".repeat(n)).setStyle(n >= 4 ? ButtonStyle.Success : ButtonStyle.Secondary),
+      ),
+    );
+    await owner
+      .send({ content: `Seu ticket em **${interaction.guild.name}** foi fechado. Como foi o atendimento?`, components: [stars] })
+      .catch(() => {});
+  }
+}
+
+/** Equipe assume o ticket (todo mundo vê quem está atendendo). */
+export async function handleClaim(interaction, staffRoleId) {
+  const isStaff = interaction.member.permissions.has(PermissionFlagsBits.ManageMessages) || (staffRoleId && interaction.member.roles.cache.has(staffRoleId));
+  if (!isStaff) return interaction.reply({ content: "Só a equipe pode assumir um ticket.", ephemeral: true });
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("ticket_claim").setLabel(`Atendido por ${interaction.user.username}`.slice(0, 80)).setEmoji("🙋").setStyle(ButtonStyle.Success).setDisabled(true),
+    new ButtonBuilder().setCustomId("ticket_close").setLabel("Fechar ticket").setEmoji("🔒").setStyle(ButtonStyle.Danger),
+  );
+  await interaction.update({ components: [row] });
+  await interaction.channel.send(`🙋 ${interaction.user} assumiu este ticket e já vai te ajudar.`);
+}
+
+/** Nota dada na mensagem direta -> vai para os registros do servidor. */
+export async function handleRating(interaction, logTo) {
+  const [, guildId, n] = interaction.customId.split(":");
+  const guild = interaction.client.guilds.cache.get(guildId);
+  await interaction.update({ content: `Obrigado pela nota: ${"⭐".repeat(+n)}`, components: [] });
+  if (guild) logTo(guild, `⭐ **Avaliação de ticket:** ${"⭐".repeat(+n)} (${n}/5) de ${interaction.user.tag}`);
 }
 
 /** Junta as mensagens do canal num texto simples para arquivar. */
