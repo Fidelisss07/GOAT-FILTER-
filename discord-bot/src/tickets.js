@@ -24,6 +24,7 @@ const CATEGORIES = {
 export function panelComponents() {
   const embed = new EmbedBuilder()
     .setColor(config.brand.color)
+    .setImage(config.art("tickets.jpg"))
     .setTitle("🎫 Central de Suporte · Goat Filter")
     .setDescription(
       "Precisa de ajuda? Abra um ticket e a equipe fala com você **em particular**.\n\n" +

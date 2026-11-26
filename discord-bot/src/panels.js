@@ -10,6 +10,7 @@ const NOTIFS = ROLES.filter((r) => r.notify);
 /** #regras: lista de regras + botão de aceitar (libera o servidor). */
 export function rulesPanel(gate) {
   const embed = brand()
+    .setImage(config.art("regras.jpg"))
     .setTitle("📜 Regras da comunidade Goat Filter")
     .setDescription(
       RULES.map(([emoji, title, text], i) => `**${i + 1}. ${emoji} ${title}**\n${text}`).join("\n\n") +
@@ -24,6 +25,7 @@ export function rulesPanel(gate) {
 /** #baixar: link oficial, passo a passo e o aviso do Windows. */
 export function downloadPanel() {
   const embed = brand()
+    .setImage(config.art("baixar.jpg"))
     .setTitle("⬇️ Baixar o Goat Filter")
     .setDescription(
       "**Grátis, sem conta e sem anúncio.** Windows 10 e 11, NVIDIA, AMD e Intel.\n\n" +
@@ -44,6 +46,7 @@ export function downloadPanel() {
 /** #cargos: notificações (liga/desliga) e elo (um só). */
 export function rolesPanel() {
   const embed = brand()
+    .setImage(config.art("cargos.jpg"))
     .setTitle("🎭 Escolha seus cargos")
     .setDescription(
       "**🔔 Avisos:** clique para ligar ou desligar.\n" +
@@ -71,11 +74,29 @@ export function rolesPanel() {
 /** #boas-vindas: apresentação do servidor (fixada). */
 export function welcomeIntro(ch) {
   const embed = brand()
+    .setImage(config.art("bemvindo.jpg"))
     .setTitle("🐐 Bem-vindo à comunidade Goat Filter")
     .setDescription(
       "O Goat Filter deixa as cores do Valorant mais vivas (Digital Vibrance até 200%), otimiza o PC, grava seus melhores lances e treina sua mira.\n\n" +
         `**Comece por aqui**\n• ${ch["ch:regras"]}: leia e aceite para liberar o servidor\n• ${ch["ch:baixar"]}: link oficial e como instalar\n• ${ch["ch:cargos"]}: escolha seu elo e os avisos\n• ${ch["ch:duvidas"]}: pergunte o que quiser\n• ${ch["ch:abrir-ticket"]}: problema com o app? fale com a equipe`,
     );
+  return { embeds: [embed], components: [] };
+}
+
+/** Cabeçalho fixo de #sugestões e #clipes (explica como o canal funciona). */
+export function suggestionsIntro() {
+  const embed = brand()
+    .setImage(config.art("sugestoes.jpg"))
+    .setTitle("💡 Como funcionam as sugestões")
+    .setDescription("Escreva sua ideia aqui embaixo. O bot transforma em votação 👍/👎 e abre um tópico para a conversa. As mais votadas vão para a fila da equipe.");
+  return { embeds: [embed], components: [] };
+}
+
+export function clipsIntro() {
+  const embed = brand()
+    .setImage(config.art("clipes.jpg"))
+    .setTitle("🎬 Mande seus melhores lances")
+    .setDescription("Poste o vídeo (ou o link). Cada clipe ganha 🔥 e um tópico de comentários. Os melhores podem aparecer nas redes do Goat Filter, com o seu nome.");
   return { embeds: [embed], components: [] };
 }
 

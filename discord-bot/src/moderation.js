@@ -95,7 +95,7 @@ export async function handleAnnounceModal(interaction) {
     .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
     .setTimestamp();
   const img = interaction.fields.getTextInputValue("imagem")?.trim();
-  if (img && /^https?:\/\//.test(img)) embed.setImage(img);
+  embed.setImage(img && /^https?:\/\//.test(img) ? img : config.art("anuncios.jpg"));
   let content;
   const allowed = { parse: [], roles: [] };
   if (ping === "todos") {

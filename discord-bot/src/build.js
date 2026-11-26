@@ -1,7 +1,7 @@
 import { ChannelType, EmbedBuilder, PermissionFlagsBits as P } from "discord.js";
 import { config } from "./config.js";
 import { LAYOUT, ROLES, STAFF } from "./layout.js";
-import { downloadPanel, rolesPanel, rulesPanel, welcomeIntro } from "./panels.js";
+import { clipsIntro, downloadPanel, rolesPanel, rulesPanel, suggestionsIntro, welcomeIntro } from "./panels.js";
 import { guildData, savedId, saveId, setData } from "./store.js";
 import { panelComponents } from "./tickets.js";
 
@@ -146,7 +146,7 @@ async function postPinned(channel, key, payload, report) {
  * Monta o servidor inteiro. `gate` = verificação por regras; `cleanup` = apaga os
  * canais padrão do Discord ("geral", "Geral" e suas categorias) se estiverem vazios.
  */
-export async function buildServer(guild, { gate = true, cleanup = false } = {}, progress = async () => {}) {
+export async function buildServer(guild, { gate = true, cleanup = false, look = true } = {}, progress = async () => {}) {
   const report = { created: [], warn: [] };
   await guild.channels.fetch();
   await guild.roles.fetch();
@@ -197,6 +197,16 @@ export async function buildServer(guild, { gate = true, cleanup = false } = {}, 
   await ensurePinned(channels["ch:cargos"], "cargos", rolesPanel(), report);
   await ensurePinned(channels["ch:boas-vindas"], "intro", welcomeIntro(channels), report);
   await ensurePinned(channels["ch:abrir-ticket"], "tickets", panelComponents(), report);
+  await ensurePinned(channels["ch:sugestoes"], "sugestoes", suggestionsIntro(), report);
+  await ensurePinned(channels["ch:clipes"], "clipes", clipsIntro(), report);
+
+  if (look) {
+    await progress("Aplicando ícone, banner e imagem de convite…");
+    await guild.setIcon(config.art("icone.png")).then(() => report.created.push("ícone do servidor")).catch((e) => report.warn.push(`ícone: ${e.message}`));
+    // Banner e imagem de convite dependem dos impulsos do servidor (nível 2 e 1).
+    if (guild.premiumTier >= 2) await guild.setBanner(config.art("banner.jpg")).then(() => report.created.push("banner")).catch((e) => report.warn.push(`banner: ${e.message}`));
+    if (guild.premiumTier >= 1) await guild.setSplash(config.art("convite.jpg")).then(() => report.created.push("imagem de convite")).catch((e) => report.warn.push(`imagem de convite: ${e.message}`));
+  }
 
   // Canal do sistema do Discord (mensagens automáticas de entrada) -> boas-vindas do bot cuida disso.
   await guild.setSystemChannel(null).catch(() => {});
