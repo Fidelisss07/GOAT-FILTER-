@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { dailyBest, loadResults, streak, trainedToday, TrainMode } from "../lib/trainStats";
+import { flushRawMouse, pumpRawMouse, rawMouseAvailable } from "../lib/rawMouse";
 import { useT } from "../lib/useT";
 
 const CHART_MODES: { mode: TrainMode; label: string; unit: string }[] = [
@@ -88,19 +89,35 @@ export function DpiCalc() {
   const acc = useRef(0);
 
   useEffect(() => {
+    // Contagens do Windows (as mesmas do jogo) quando o app tem acesso ao Raw Input.
+    let rawOk = false;
+    let stopRaw = () => {};
+    rawMouseAvailable().then((okRaw) => {
+      rawOk = okRaw;
+      if (okRaw)
+        stopRaw = pumpRawMouse(
+          () => document.pointerLockElement === area.current,
+          (dx) => {
+            acc.current += Math.abs(dx);
+            setCounts(acc.current);
+          },
+        );
+    });
     const onMove = (e: MouseEvent) => {
-      if (document.pointerLockElement !== area.current) return;
+      if (rawOk || document.pointerLockElement !== area.current) return;
       acc.current += Math.abs(e.movementX);
       setCounts(acc.current);
     };
     const onLock = () => {
       const on = document.pointerLockElement === area.current;
+      if (on) void flushRawMouse();
       setActive(on);
       if (!on && acc.current > 0) setResult(Math.round(acc.current / (cm / 2.54)));
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("pointerlockchange", onLock);
     return () => {
+      stopRaw();
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("pointerlockchange", onLock);
     };

@@ -53,6 +53,8 @@ export interface NativeApi {
   onUpdate(cb: (u: UpdateInfo) => void): Promise<() => void>;
   /** Abre o jogo do perfil (Valorant pelo Riot Client). */
   launchGame(profileId: string): Promise<void>;
+  /** Movimento bruto do mouse (contagens) desde a última leitura; null = indisponível. */
+  mouseDelta(): Promise<[number, number] | null>;
   displayModes(): Promise<MonitorMode[]>;
   setRefreshRate(monitorId: string, hz: number): Promise<void>;
   windowsTweaks(): Promise<WindowsTweaks>;
@@ -148,6 +150,7 @@ async function tauriApi(): Promise<NativeApi> {
     findValorant: () => invoke<string | null>("find_valorant"),
     findGames: () => invoke<FoundGame[]>("find_games"),
     launchGame: (profileId) => invoke<void>("launch_game", { profileId }),
+    mouseDelta: () => invoke<[number, number] | null>("mouse_delta"),
     displayModes: () => invoke<MonitorMode[]>("display_modes"),
     setRefreshRate: (monitorId, hz) => invoke<void>("set_refresh_rate", { monitorId, hz }),
     windowsTweaks: () => invoke<WindowsTweaks>("windows_tweaks"),
@@ -338,6 +341,7 @@ export function createDemoApi(): NativeApi {
     monitorHw: async (id) => (find(id).primary ? { brightness: 70, contrast: 50, saturation: null } : { brightness: null, contrast: null, saturation: null }),
     findValorant: async () => null,
     launchGame: async () => {},
+    mouseDelta: async () => null,
     recorderStatus: async () => {
       const r = loadDemoSettings().recorder;
       const on = r.replay || demoRec.recording != null;

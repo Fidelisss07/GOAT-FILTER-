@@ -801,4 +801,7 @@ export const EN: Record<string, string> = {
   "Oceano": "Ocean",
   "Vazio": "Void",
   "Dracônica": "Draconic",
+  "Tela cheia (igual ao jogo)": "Fullscreen (same as in game)",
+  "Esticada {w}x{h} (do seu perfil)": "Stretched {w}x{h} (from your profile)",
+  "Resolução esticada 4:3": "Stretched 4:3 resolution",
 };
