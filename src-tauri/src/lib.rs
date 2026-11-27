@@ -187,6 +187,16 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 // Comandos chamados pela interface (src/lib/native.ts)
 // ---------------------------------------------------------------------------
 
+/// Movimento bruto do mouse (contagens, como o Valorant lê) desde a última
+/// chamada. `None` se o Raw Input não estiver disponível: a tela usa o do navegador.
+#[tauri::command]
+fn mouse_delta() -> Option<(i64, i64)> {
+    if !goat_core::input::raw_mouse_ok() {
+        return None;
+    }
+    Some(goat_core::input::take_mouse_delta())
+}
+
 #[tauri::command]
 fn get_snapshot(app: AppHandle, state: Shared) -> Snapshot {
     let mut settings = lock(&state.settings).clone();
@@ -1487,6 +1497,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            mouse_delta,
             get_snapshot,
             apply_vibrance,
             apply_tuned,

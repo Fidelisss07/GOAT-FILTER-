@@ -20,6 +20,7 @@ import {
   VALORANT_HFOV,
 } from "../lib/sensFinder";
 import { cmPer360, eDpi, formatSens, gameOf, round, sensForGame } from "../lib/sens";
+import { flushRawMouse, pumpRawMouse, rawMouseAvailable } from "../lib/rawMouse";
 import { useT } from "../lib/useT";
 
 const TIMEOUT_MS = 3000;
@@ -201,12 +202,27 @@ export function SensFinder({ start, dpi, game, comma = false, onDone }: { start:
 
   // Mouse: contagens brutas viram graus pela sensibilidade do teste.
   useEffect(() => {
+    const turn = (s: Sim, dx: number, dy: number) => {
+      const d = degPerCount(s.sens);
+      s.yaw += dx * d;
+      s.pitch = Math.max(-85, Math.min(85, s.pitch - dy * d));
+    };
+    // Contagens do Windows (iguais às do Valorant) quando o app tem acesso ao Raw Input.
+    let rawOk = false;
+    let stopRaw = () => {};
+    rawMouseAvailable().then((okRaw) => {
+      rawOk = okRaw;
+      if (okRaw)
+        stopRaw = pumpRawMouse(
+          () => !!sim.current && !sim.current.paused && document.pointerLockElement === canvas.current,
+          (dx, dy) => sim.current && turn(sim.current, dx, dy),
+        );
+    });
     const onMove = (e: MouseEvent) => {
+      if (rawOk) return;
       const s = sim.current;
       if (!s || s.paused || document.pointerLockElement !== canvas.current) return;
-      const d = degPerCount(s.sens);
-      s.yaw += e.movementX * d;
-      s.pitch = Math.max(-85, Math.min(85, s.pitch - e.movementY * d));
+      turn(s, e.movementX, e.movementY);
     };
     const onDown = (e: MouseEvent) => {
       const s = sim.current;
@@ -215,6 +231,7 @@ export function SensFinder({ start, dpi, game, comma = false, onDone }: { start:
       else s.misses += 1;
     };
     const onLock = () => {
+      if (document.pointerLockElement === canvas.current) void flushRawMouse();
       const s = sim.current;
       if (!s) return;
       const locked = document.pointerLockElement === canvas.current;
@@ -231,6 +248,7 @@ export function SensFinder({ start, dpi, game, comma = false, onDone }: { start:
     document.addEventListener("mousedown", onDown);
     document.addEventListener("pointerlockchange", onLock);
     return () => {
+      stopRaw();
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("pointerlockchange", onLock);

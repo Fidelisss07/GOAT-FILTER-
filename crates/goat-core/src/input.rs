@@ -1,8 +1,34 @@
-//! Botões laterais do mouse (4 e 5) como atalho de clipe.
+//! Botões laterais do mouse (4 e 5) como atalho de clipe, e o movimento bruto
+//! do mouse para o treino de mira.
 //!
 //! Usa Raw Input do Windows numa janela invisível do próprio Goat Filter: só
-//! LÊ os cliques, não bloqueia nem muda nada. O jogo continua recebendo o
-//! botão normalmente (no Valorant os botões laterais vêm sem função).
+//! LÊ os cliques e o movimento, não bloqueia nem muda nada. O jogo continua
+//! recebendo tudo normalmente (no Valorant os botões laterais vêm sem função).
+//!
+//! O movimento bruto é o mesmo que o Valorant usa: contagens do sensor, sem
+//! aceleração do Windows e sem efeito da escala de tela (125%, 150%...).
+
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+
+static DX: AtomicI64 = AtomicI64::new(0);
+static DY: AtomicI64 = AtomicI64::new(0);
+static RAW_OK: AtomicBool = AtomicBool::new(false);
+
+/// Soma de movimento relativo (contagens do mouse).
+pub fn add_mouse_delta(dx: i64, dy: i64) {
+    DX.fetch_add(dx, Ordering::Relaxed);
+    DY.fetch_add(dy, Ordering::Relaxed);
+}
+
+/// Pega e zera o movimento acumulado desde a última leitura.
+pub fn take_mouse_delta() -> (i64, i64) {
+    (DX.swap(0, Ordering::Relaxed), DY.swap(0, Ordering::Relaxed))
+}
+
+/// O Raw Input do mouse está funcionando?
+pub fn raw_mouse_ok() -> bool {
+    RAW_OK.load(Ordering::Relaxed)
+}
 
 /// Nome do botão no formato dos atalhos.
 pub fn button_name(button: u8) -> Option<&'static str> {
@@ -53,6 +79,11 @@ pub fn spawn_mouse_listener(on_press: impl Fn(u8) + Send + 'static) {
                 std::mem::size_of::<RAWINPUTHEADER>() as u32,
             );
             if n != u32::MAX && raw.header.dwType == RIM_TYPEMOUSE.0 {
+                // Movimento relativo (MOUSE_MOVE_ABSOLUTE = 1 é de tablet/área remota: ignora).
+                let move_flags: u16 = std::mem::transmute_copy(&raw.data.mouse.usFlags);
+                if move_flags & 0x01 == 0 {
+                    add_mouse_delta(raw.data.mouse.lLastX as i64, raw.data.mouse.lLastY as i64);
+                }
                 let flags = raw.data.mouse.Anonymous.Anonymous.usButtonFlags;
                 let pressed = if flags & B4_DOWN != 0 {
                     Some(4)
@@ -100,6 +131,7 @@ pub fn spawn_mouse_listener(on_press: impl Fn(u8) + Send + 'static) {
             log::warn!("Botões do mouse: Raw Input indisponível");
             return;
         }
+        RAW_OK.store(true, Ordering::Relaxed);
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             DispatchMessageW(&msg);
@@ -113,6 +145,15 @@ pub fn spawn_mouse_listener(_on_press: impl Fn(u8) + Send + 'static) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn movimento_acumula_e_zera() {
+        let _ = take_mouse_delta();
+        add_mouse_delta(10, -3);
+        add_mouse_delta(5, 1);
+        assert_eq!(take_mouse_delta(), (15, -2));
+        assert_eq!(take_mouse_delta(), (0, 0));
+    }
 
     #[test]
     fn nomes() {

@@ -21,7 +21,9 @@ import {
 import { crosshairRects, parseCrosshair, Rect } from "../lib/crosshair";
 import { convertSens } from "../lib/sens";
 import { angularDistance, Approach, degPerCount, loadProfile, VALORANT_HFOV } from "../lib/sensFinder";
+import { flushRawMouse, pumpRawMouse, rawMouseAvailable } from "../lib/rawMouse";
 import { saveResult, TrainMode } from "../lib/trainStats";
+import { VALORANT_ID } from "../lib/types";
 import { useT } from "../lib/useT";
 import { skinById, WeaponSkin, WEAPON_SKINS } from "../lib/weaponSkins";
 import { useStore } from "../state/store";
@@ -1084,7 +1086,22 @@ function drawPattern(ctx: CanvasRenderingContext2D, skin: WeaponSkin) {
   }
 }
 
-function drawScene(ctx: CanvasRenderingContext2D, w: number, h: number, s: Sim, look: { accent: string; enemy: string; xh: Rect[]; skin: WeaponSkin | null }, now: number) {
+type Look = { accent: string; enemy: string; xh: Rect[]; skin: WeaponSkin | null; stretch: number | null };
+
+/**
+ * Resolução esticada (ex.: 1440x1080): o Valorant desenha a imagem em 4:3 com
+ * o mesmo campo de visão horizontal e o monitor estica para a tela toda. Aqui
+ * é igual: desenha numa largura "virtual" 4:3 e estica na horizontal.
+ */
+function drawScene(ctx: CanvasRenderingContext2D, wReal: number, h: number, s: Sim, look: Look, now: number) {
+  const w = look.stretch ? Math.round(h * look.stretch) : wReal;
+  ctx.save();
+  if (w !== wReal) ctx.scale(wReal / w, 1);
+  drawSceneInner(ctx, w, h, s, look, now);
+  ctx.restore();
+}
+
+function drawSceneInner(ctx: CanvasRenderingContext2D, w: number, h: number, s: Sim, look: Look, now: number) {
   const c = camera(s.yaw, s.pitch, w, h);
   const horizon = h / 2 + Math.tan(s.pitch * R) * c.F;
   drawSky(ctx, c, w, h, horizon);
@@ -1407,6 +1424,8 @@ type Phase = "setup" | "ready" | "running" | "result" | "summary";
 
 const SENS_KEY = "goat-filter:arena-sens";
 const XH_KEY = "goat-filter:arena-xh";
+const STRETCH_KEY = "goat-filter:arena-stretch";
+const FULL_KEY = "goat-filter:arena-fullscreen";
 const SKIN_KEY = "goat-filter:arena-skin";
 const DEFAULT_XH = "0;P;c;5;h;0;0l;4;0o;2;0a;1;0f;0;1b;0";
 
@@ -1474,6 +1493,26 @@ export function AimArena({
   const [last, setLast] = useState<{ session: ArenaSession; record: number | null; from: number; to: number } | null>(null);
   const [done, setDone] = useState<ArenaSession[]>([]);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const rawOk = useRef(false);
+  const profiles = useStore((s) => s.settings.profiles);
+  const profileStretch = profiles.find((p) => p.id === VALORANT_ID)?.stretch ?? null;
+  const [stretchOn, setStretchOn] = useState(() => {
+    try {
+      const v = localStorage.getItem(STRETCH_KEY);
+      return v == null ? !!profileStretch : v === "1";
+    } catch {
+      return !!profileStretch;
+    }
+  });
+  const [fullOn, setFullOn] = useState(() => {
+    try {
+      return localStorage.getItem(FULL_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const stretchAspect = stretchOn ? (profileStretch ? profileStretch.width / profileStretch.height : 4 / 3) : null;
   const sim = useRef<Sim | null>(null);
   const raf = useRef(0);
   const ignoreUntil = useRef(0);
@@ -1497,7 +1536,13 @@ export function AimArena({
     const ctx = el?.getContext("2d");
     if (!el || !ctx) return;
     const css = getComputedStyle(document.documentElement);
-    const look = { accent: css.getPropertyValue("--accent").trim() || "#ff48a8", enemy: "#ff4655", xh: xhRects, skin: skinId === "none" ? null : skinById(skinId) };
+    const look: Look = {
+      accent: css.getPropertyValue("--accent").trim() || "#ff48a8",
+      enemy: "#ff4655",
+      xh: xhRects,
+      skin: skinId === "none" ? null : skinById(skinId),
+      stretch: stretchAspect && stretchAspect < 1.7 ? stretchAspect : null,
+    };
     let hudAt = 0;
     const loop = () => {
       const s = sim.current;
@@ -1542,7 +1587,25 @@ export function AimArena({
 
   // Mouse bruto → graus, como no jogo.
   useEffect(() => {
+    const turn = (s: Sim, dx: number, dy: number) => {
+      const d = degPerCount(s.sens);
+      s.yaw += dx * d;
+      if (s.yaw > 180) s.yaw -= 360;
+      if (s.yaw < -180) s.yaw += 360;
+      s.pitch = Math.max(-88, Math.min(88, s.pitch - dy * d));
+    };
+    // Contagens brutas do Windows (iguais às do Valorant), quando o app tem acesso.
+    let stopRaw = () => {};
+    rawMouseAvailable().then((okRaw) => {
+      rawOk.current = okRaw;
+      if (okRaw)
+        stopRaw = pumpRawMouse(
+          () => !!sim.current && !sim.current.paused && document.pointerLockElement === canvas.current,
+          (dx, dy) => sim.current && turn(sim.current, dx, dy),
+        );
+    });
     const onMove = (e: MouseEvent) => {
+      if (rawOk.current) return;
       const s = sim.current;
       if (!s || s.paused || document.pointerLockElement !== canvas.current) return;
       // Logo depois de travar, o navegador às vezes manda um salto falso.
@@ -1550,11 +1613,7 @@ export function AimArena({
         skipNext.current = false;
         return;
       }
-      const d = degPerCount(s.sens);
-      s.yaw += e.movementX * d;
-      if (s.yaw > 180) s.yaw -= 360;
-      if (s.yaw < -180) s.yaw += 360;
-      s.pitch = Math.max(-88, Math.min(88, s.pitch - e.movementY * d));
+      turn(s, e.movementX, e.movementY);
     };
     const onDown = (e: MouseEvent) => {
       const s = sim.current;
@@ -1565,6 +1624,7 @@ export function AimArena({
       if (document.pointerLockElement === canvas.current) {
         ignoreUntil.current = performance.now() + 120;
         skipNext.current = true;
+        void flushRawMouse();
       }
       const s = sim.current;
       if (!s || s.paused) return;
@@ -1578,6 +1638,7 @@ export function AimArena({
     document.addEventListener("mousedown", onDown);
     document.addEventListener("pointerlockchange", onLock);
     return () => {
+      stopRaw();
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("pointerlockchange", onLock);
@@ -1590,6 +1651,10 @@ export function AimArena({
 
   async function lock() {
     const el = canvas.current as LockEl | null;
+    // Tela cheia: mesma escala do jogo (o campo de visão ocupa o monitor todo).
+    if (fullOn && stage.current && document.fullscreenElement !== stage.current) {
+      await stage.current.requestFullscreen?.().catch(() => {});
+    }
     // O salto falso pode chegar antes do aviso de "travou": ignora o começo.
     ignoreUntil.current = performance.now() + 250;
     skipNext.current = true;
@@ -1658,6 +1723,7 @@ export function AimArena({
 
   function finish(s: Sim) {
     if (document.pointerLockElement) document.exitPointerLock();
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
     sim.current = null;
     const fr = Math.max(1, s.track.frames);
     const session: ArenaSession = {
@@ -1741,7 +1807,7 @@ export function AimArena({
           </div>
         </div>
       )}
-      <div className="finder-stage arena-stage">
+      <div ref={stage} className="finder-stage arena-stage">
         <canvas ref={canvas} className="finder-canvas" aria-label={t("Arena de treino")} />
         {(phase === "setup" || phase === "ready") && (
           <div className="finder-overlay">
@@ -1763,6 +1829,36 @@ export function AimArena({
                   onChange={(e) => changeSens(Number(e.target.value))}
                   aria-label={t("Sensibilidade do Valorant")}
                 />
+              </label>
+              <label className="arena-check">
+                <input
+                  type="checkbox"
+                  checked={fullOn}
+                  onChange={(e) => {
+                    setFullOn(e.target.checked);
+                    try {
+                      localStorage.setItem(FULL_KEY, e.target.checked ? "1" : "0");
+                    } catch {
+                      /* ignora */
+                    }
+                  }}
+                />
+                {t("Tela cheia (igual ao jogo)")}
+              </label>
+              <label className="arena-check">
+                <input
+                  type="checkbox"
+                  checked={stretchOn}
+                  onChange={(e) => {
+                    setStretchOn(e.target.checked);
+                    try {
+                      localStorage.setItem(STRETCH_KEY, e.target.checked ? "1" : "0");
+                    } catch {
+                      /* ignora */
+                    }
+                  }}
+                />
+                {profileStretch ? t("Esticada {w}x{h} (do seu perfil)", { w: profileStretch.width, h: profileStretch.height }) : t("Resolução esticada 4:3")}
               </label>
               <label>
                 {t("Skin da arma")}
